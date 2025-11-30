@@ -1681,6 +1681,10 @@
       "percentage": "Percentage",
       "export": "Export",
       "noDataAvailable": "No data available",
+      "totalConsumption": "Total Consumption",
+      "totalRequests": "Total Requests",
+      "totalPromptTokens": "Total Prompt Tokens",
+      "totalTokens": "Total Tokens",
       "selectModelPrompt": "Please select a model to view statistics"
     }
   },
@@ -1826,17 +1830,20 @@
     "of": "of",
     "previous": "Previous",
     "next": "Next",
+    "sort": {
+      "label": "Sort",
+      "asc": "Ascending",
+      "desc": "Descending",
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "hide": "Hide"
+    },
     "moveUp": "Move Up",
     "moveDown": "Move Down",
     "moveToTop": "Move to top",
     "moveToBottom": "Move to bottom",
     "dragging": "Dragging",
     "unsavedChanges": "You have unsaved changes",
-    "sort": {
-      "ascending": "Ascending",
-      "descending": "Descending",
-      "hide": "Hide"
-    },
     "messages": {
       "errorMessage": "Error Message",
       "success": "Success",

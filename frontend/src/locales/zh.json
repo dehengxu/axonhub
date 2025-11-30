@@ -1710,6 +1710,10 @@
       "percentage": "百分比",
       "export": "导出",
       "noDataAvailable": "暂无数据",
+      "totalConsumption": "总消耗",
+      "totalRequests": "总请求数",
+      "totalPromptTokens": "总输入令牌",
+      "totalTokens": "总令牌数",
       "selectModelPrompt": "请选择模型查看统计"
     }
   },
@@ -1855,17 +1859,20 @@
     "of": "共",
     "previous": "上一页",
     "next": "下一页",
+    "sort": {
+      "label": "排序",
+      "asc": "升序",
+      "desc": "降序",
+      "ascending": "升序",
+      "descending": "降序",
+      "hide": "隐藏"
+    },
     "moveUp": "上移",
     "moveDown": "下移",
     "moveToTop": "移动到顶部",
     "moveToBottom": "移动到底部",
     "dragging": "拖拽中",
     "unsavedChanges": "您有未保存的更改",
-    "sort": {
-      "ascending": "升序",
-      "descending": "降序",
-      "hide": "隐藏"
-    },
     "messages": {
       "errorMessage": "错误信息",
       "success": "成功",
