@@ -23,6 +23,15 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
   const permissions = useRequestPermissions()
   const { navigateWithSearch } = usePaginationSearch({ defaultPageSize: 20 })
 
+  // Helper function to get usage data
+  const getUsageData = (row: any) => {
+    const usageLogs = row.original.usageLogs
+    if (!usageLogs || !usageLogs.edges || usageLogs.edges.length === 0) {
+      return null
+    }
+    return usageLogs.edges[0].node
+  }
+
   // Define all columns
   const columns: ColumnDef<Request>[] = [
     {
@@ -42,6 +51,33 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       },
     },
 
+    {
+      id: 'totalTokens',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.totalTokens')} />,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const usage = getUsageData(row)
+        return <div className='font-mono text-xs'>{usage?.totalTokens ?? '-'}</div>
+      },
+    },
+    {
+      id: 'promptTokens',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.promptTokens')} />,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const usage = getUsageData(row)
+        return <div className='font-mono text-xs'>{usage?.promptTokens ?? '-'}</div>
+      },
+    },
+    {
+      id: 'completionTokens',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.completionTokens')} />,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const usage = getUsageData(row)
+        return <div className='font-mono text-xs'>{usage?.completionTokens ?? '-'}</div>
+      },
+    },
     {
       id: 'stream',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.stream')} />,

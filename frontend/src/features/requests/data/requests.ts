@@ -19,7 +19,7 @@ function buildRequestsQuery(permissions: { canViewApiKeys: boolean; canViewChann
             id
             name
           }` : ''
-  
+
   const channelFields = permissions.canViewChannels ? `
                 channel {
                   id
@@ -45,6 +45,15 @@ function buildRequestsQuery(permissions: { canViewApiKeys: boolean; canViewChann
             modelID
             stream
             status
+            usageLogs(first: 1) {
+              edges {
+                node {
+                  promptTokens
+                  completionTokens
+                  totalTokens
+                }
+              }
+            }
           }
           cursor
         }

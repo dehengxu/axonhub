@@ -1300,6 +1300,9 @@
     "columns": {
       "id": "ID",
       "modelId": "模型ID",
+      "promptTokens": "输入",
+      "completionTokens": "输出",
+      "totalTokens": "总Tokens",
       "status": "状态",
       "stream": "流式",
       "source": "来源",

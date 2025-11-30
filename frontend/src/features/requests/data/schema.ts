@@ -50,6 +50,14 @@ export const requestExecutionSchema = z.object({
 })
 export type RequestExecution = z.infer<typeof requestExecutionSchema>
 
+// Usage Log Schema
+export const usageLogSchema = z.object({
+  promptTokens: z.number().default(0),
+  completionTokens: z.number().default(0),
+  totalTokens: z.number().default(0),
+})
+export type UsageLog = z.infer<typeof usageLogSchema>
+
 // Request
 export const requestSchema = z.object({
   id: z.string(),
@@ -65,6 +73,15 @@ export const requestSchema = z.object({
   responseBody: z.any().nullable().optional(), // JSONRawMessage
   status: requestStatusSchema,
   stream: z.boolean().nullable(),
+  usageLogs: z
+    .object({
+      edges: z.array(
+        z.object({
+          node: usageLogSchema,
+        })
+      ),
+    })
+    .optional(),
   executions: z
     .object({
       edges: z.array(
