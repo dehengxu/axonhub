@@ -706,9 +706,9 @@
       "batchCreateError": "批量创建失败：{{error}}",
       "errorResolvedSuccess": "渠道错误解决成功",
       "errorResolvedError": "解决渠道错误失败：{{error}}",
-      "Unauthorized":"无权限访问，请检查渠道的 API 密钥",
-      "Not Found":"未找到端点，请检查渠道的 base url",
-      "Interval Server Error":"服务器错误，请确认渠道配置"
+      "Unauthorized": "无权限访问，请检查渠道的 API 密钥",
+      "Not Found": "未找到端点，请检查渠道的 base url",
+      "Interval Server Error": "服务器错误，请确认渠道配置"
     },
     "errors": {
       "fetchList": "获取渠道列表失败",
@@ -886,7 +886,6 @@
         "addSelected": "添加选中",
         "fetchModels": "获取模型"
       },
-
       "status": {
         "enable": {
           "title": "启用频道",
@@ -1956,7 +1955,8 @@
       "modelDeleted": "模型删除成功",
       "systemSettingsUpdated": "系统设置更新成功",
       "systemUpdated": "系统设置更新成功"
-    }
+    },
+    "total": "总计"
   },
   "initialization": {
     "title": "初始化系统",

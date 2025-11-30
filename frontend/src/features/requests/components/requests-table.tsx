@@ -16,6 +16,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -142,6 +143,26 @@ export function RequestsTable({
     manualPagination: true,
     manualFiltering: true, // Enable manual filtering for server-side filtering
   })
+
+  // Calculate token totals for current page data
+  const tokenTotals = useMemo(() => {
+    const rows = table.getRowModel().rows
+    let totalTokens = 0
+    let promptTokens = 0
+    let completionTokens = 0
+
+    rows.forEach((row) => {
+      const usageLogs = (row.original as any).usageLogs
+      if (usageLogs && usageLogs.edges && usageLogs.edges.length > 0) {
+        const usage = usageLogs.edges[0].node
+        totalTokens += usage.totalTokens || 0
+        promptTokens += usage.promptTokens || 0
+        completionTokens += usage.completionTokens || 0
+      }
+    })
+
+    return { totalTokens, promptTokens, completionTokens }
+  }, [table.getRowModel().rows])
 
   return (
     <div className='flex flex-1 flex-col overflow-hidden'>

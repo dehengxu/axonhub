@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePaginationSearch } from '@/hooks/use-pagination-search'
 import { Header } from '@/components/layout/header'
@@ -6,8 +6,10 @@ import { Main } from '@/components/layout/main'
 import { RequestsTable } from './components'
 import { RequestsProvider } from './context'
 import { useRequests } from './data'
+import { Badge } from '@/components/ui/badge'
 
 function RequestsContent() {
+  const { t } = useTranslation()
   const { pageSize, setCursors, setPageSize, resetCursor, paginationArgs, cursorHistory } = usePaginationSearch({
     defaultPageSize: 20,
   })
@@ -43,6 +45,25 @@ function RequestsContent() {
 
   const requests = data?.edges?.map((edge) => edge.node) || []
   const pageInfo = data?.pageInfo
+
+  // Calculate token totals for all displayed requests
+  const pageTokenTotals = useMemo(() => {
+    let totalTokens = 0
+    let promptTokens = 0
+    let completionTokens = 0
+
+    requests.forEach((request) => {
+      const usageLogs = (request as any).usageLogs
+      if (usageLogs && usageLogs.edges && usageLogs.edges.length > 0) {
+        const usage = usageLogs.edges[0].node
+        totalTokens += usage.totalTokens || 0
+        promptTokens += usage.promptTokens || 0
+        completionTokens += usage.completionTokens || 0
+      }
+    })
+
+    return { totalTokens, promptTokens, completionTokens }
+  }, [requests])
 
   const isFirstPage = !paginationArgs.after && cursorHistory.length === 0
 
@@ -84,6 +105,36 @@ function RequestsContent() {
 
   return (
     <div className='flex flex-1 flex-col overflow-hidden'>
+      <div className='mb-4 flex flex-wrap items-center justify-between'>
+        <div>
+          <h2 className='text-2xl font-bold tracking-tight'>{t('requests.title')}</h2>
+          <p className='text-muted-foreground'>{t('requests.description')}</p>
+        </div>
+        <div className='flex items-center gap-4'>
+          {requests.length > 0 && (
+            <>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm text-muted-foreground'>{t('common.total')}:</span>
+                <Badge variant='secondary' className='font-mono text-xs'>
+                  {pageTokenTotals.totalTokens.toLocaleString()}
+                </Badge>
+              </div>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm text-muted-foreground'>{t('requests.columns.promptTokens')}:</span>
+                <Badge variant='secondary' className='font-mono text-xs'>
+                  {pageTokenTotals.promptTokens.toLocaleString()}
+                </Badge>
+              </div>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm text-muted-foreground'>{t('requests.columns.completionTokens')}:</span>
+                <Badge variant='secondary' className='font-mono text-xs'>
+                  {pageTokenTotals.completionTokens.toLocaleString()}
+                </Badge>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
       <RequestsTable
         data={requests}
         loading={isLoading}
@@ -114,12 +165,6 @@ export default function RequestsManagement() {
       {/* <Header fixed></Header> */}
 
       <Main fixed>
-        <div className='mb-2 flex flex-wrap items-center justify-between space-y-2'>
-          <div>
-            <h2 className='text-2xl font-bold tracking-tight'>{t('requests.title')}</h2>
-            <p className='text-muted-foreground'>{t('requests.description')}</p>
-          </div>
-        </div>
         <RequestsContent />
       </Main>
     </RequestsProvider>

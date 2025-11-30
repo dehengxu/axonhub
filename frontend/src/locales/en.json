@@ -686,9 +686,9 @@
       "batchCreateError": "Failed to create channels: {{error}}",
       "errorResolvedSuccess": "Channel error resolved successfully",
       "errorResolvedError": "Failed to resolve channel error: {{error}}",
-      "Unauthorized":"Unauthorized, please check the API key of the channel",
-      "Not Found":"Endpoint not found, pleast check the base url of the channel",
-      "Interval Server Error":"Interval server error, please confirm the channel configuration"
+      "Unauthorized": "Unauthorized, please check the API key of the channel",
+      "Not Found": "Endpoint not found, pleast check the base url of the channel",
+      "Interval Server Error": "Interval server error, please confirm the channel configuration"
     },
     "errors": {
       "fetchList": "Failed to load channels",
@@ -858,7 +858,6 @@
         "addSelected": "Add Selected",
         "fetchModels": "Fetch Models"
       },
-
       "status": {
         "enable": {
           "title": "Enable Channel",
@@ -1921,7 +1920,8 @@
       "modelUpdated": "Model updated successfully",
       "modelDeleted": "Model deleted successfully",
       "systemUpdated": "System settings updated successfully"
-    }
+    },
+    "total": "Total"
   },
   "initialization": {
     "title": "Initialize System",
