@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/andreazorzetto/yh/highlight"
 	"github.com/hokaccha/go-prettyjson"
@@ -39,6 +40,12 @@ func main() {
 			return
 		}
 	}
+	fmt.Println("==========================")
+	config, _ := conf.Load()
+	if strings.HasPrefix(config.DB.DSN, "file:") {
+		fmt.Printf("DB DSN is set: %v\n", config.DB.DSN)
+	}
+	fmt.Println("==========================")
 
 	startServer()
 }
