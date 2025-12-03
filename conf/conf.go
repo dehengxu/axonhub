@@ -132,7 +132,7 @@ func setDefaults(v *viper.Viper) {
 
 	// Database defaults
 	v.SetDefault("db.dialect", "sqlite3")
-	v.SetDefault("db.dsn", "file:axonhub.db?cache=shared&_fk=1&journal_mode=WAL")
+	v.SetDefault("db.dsn", "file:axonhub.db?cache=shared&_fk=1&journal_mode=WAL&busy_timeout=30000&synchronous=NORMAL&cache_size=10000&temp_store=memory&mmap_size=268435456")
 	v.SetDefault("db.debug", false)
 
 	// Log defaults

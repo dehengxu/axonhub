@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eko/gocache/lib/v4/store"
+	"go.uber.org/zap"
 
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/dumper"
@@ -21,6 +22,8 @@ import (
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/pkg/sqlite"
+	"github.com/looplj/axonhub/internal/pkg/transaction"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
 	"github.com/looplj/axonhub/internal/pkg/xjson"
 )
@@ -33,10 +36,12 @@ type RequestService struct {
 	UsageLogService    *UsageLogService
 	DataStorageService *DataStorageService
 	channelCache       xcache.Cache[int]
+	txManager         *transaction.TransactionManager
 }
 
 // NewRequestService creates a new RequestService.
 func NewRequestService(ent *ent.Client, systemService *SystemService, usageLogService *UsageLogService, dataStorageService *DataStorageService) *RequestService {
+	logger, _ := zap.NewProduction()
 	return &RequestService{
 		AbstractService: &AbstractService{
 			db: ent,
@@ -44,6 +49,7 @@ func NewRequestService(ent *ent.Client, systemService *SystemService, usageLogSe
 		SystemService:      systemService,
 		UsageLogService:    usageLogService,
 		DataStorageService: dataStorageService,
+		txManager:         transaction.NewTransactionManager(ent, logger),
 		channelCache: xcache.NewFromConfig[int](xcache.Config{
 			Mode: xcache.ModeMemory,
 			Memory: xcache.MemoryConfig{
@@ -183,8 +189,46 @@ func (s *RequestService) CreateRequest(
 		mut = mut.SetTraceID(trace.ID)
 	}
 
-	// Create request
-	req, err := mut.Save(ctx)
+	// Create request within transaction
+	var req *ent.Request
+	err := s.txManager.WithTransaction(ctx, func(tx *ent.Tx) error {
+		client := tx.Client()
+		mut := client.Request.Create().
+			SetProjectID(projectID).
+			SetModelID(llmRequest.Model).
+			SetFormat(string(format)).
+			SetSource(contexts.GetSourceOrDefault(ctx, request.SourceAPI)).
+			SetStatus(request.StatusProcessing).
+			SetStream(isStream)
+
+		// Determine if we should store in database or external storage
+		useExternalStorage := storeRequestBody && s.shouldUseExternalStorage(ctx, dataStorage)
+
+		if useExternalStorage {
+			// Set empty JSON for database, actual data will be in external storage
+			mut = mut.SetRequestBody([]byte("{}"))
+		} else {
+			// Store in database
+			mut = mut.SetRequestBody(requestBodyBytes)
+		}
+
+		if dataStorage != nil {
+			mut = mut.SetDataStorageID(dataStorage.ID)
+		}
+
+		if apiKey, ok := contexts.GetAPIKey(ctx); ok && apiKey != nil {
+			mut = mut.SetAPIKeyID(apiKey.ID)
+		}
+
+		if trace, ok := contexts.GetTrace(ctx); ok && trace != nil {
+			mut = mut.SetTraceID(trace.ID)
+		}
+
+		var createErr error
+		req, createErr = mut.Save(ctx)
+		return createErr
+	})
+
 	if err != nil {
 		return nil, err
 	}
