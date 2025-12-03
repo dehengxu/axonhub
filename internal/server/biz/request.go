@@ -22,7 +22,6 @@ import (
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/sqlite"
 	"github.com/looplj/axonhub/internal/pkg/transaction"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
 	"github.com/looplj/axonhub/internal/pkg/xjson"
@@ -191,7 +190,7 @@ func (s *RequestService) CreateRequest(
 
 	// Create request within transaction
 	var req *ent.Request
-	err := s.txManager.WithTransaction(ctx, func(tx *ent.Tx) error {
+	err = s.txManager.WithTransaction(ctx, func(tx *ent.Tx) error {
 		client := tx.Client()
 		mut := client.Request.Create().
 			SetProjectID(projectID).

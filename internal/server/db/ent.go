@@ -66,7 +66,7 @@ func NewEntClient(cfg Config) *ent.Client {
 
 	// Setup connection pool optimizations for SQLite
 	if cfg.Dialect == "sqlite3" || cfg.Dialect == "sqlite" {
-		if err := sqlitesetup.SetupSQLiteConnectionPool(sqlDB); err != nil {
+		if err := sqlite.SetupSQLiteConnectionPool(sqlDB); err != nil {
 			panic(fmt.Errorf("failed to setup sqlite connection pool: %w", err))
 		}
 	}

@@ -3,22 +3,20 @@ package transaction
 import (
 	"context"
 	"database/sql"
-	"strings"
 
-	"entgo.io/ent"
-	"github.com/looplj/axonhub/internal/ent"
+	entclient "github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/pkg/sqlite"
 	"go.uber.org/zap"
 )
 
 // TransactionManager provides safe transaction handling with proper state management
 type TransactionManager struct {
-	client *ent.Client
+	client *entclient.Client
 	logger *zap.Logger
 }
 
 // NewTransactionManager creates a new transaction manager
-func NewTransactionManager(client *ent.Client, logger *zap.Logger) *TransactionManager {
+func NewTransactionManager(client *entclient.Client, logger *zap.Logger) *TransactionManager {
 	return &TransactionManager{
 		client: client,
 		logger: logger,
@@ -27,7 +25,7 @@ func NewTransactionManager(client *ent.Client, logger *zap.Logger) *TransactionM
 
 // WithTransaction executes a function within a transaction with proper error handling
 // and state management to prevent duplicate commits/rollbacks
-func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*ent.Tx) error) error {
+func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*entclient.Tx) error) error {
 	// Use serializable isolation for better consistency in high concurrency
 	tx, err := tm.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelSerializable,
@@ -42,7 +40,7 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*ent.
 	defer func() {
 		if !committed {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				tm.logger.Error(ctx, "Failed to rollback transaction",
+				tm.logger.Error("Failed to rollback transaction",
 					zap.String("error", rollbackErr.Error()))
 			}
 		}
@@ -67,7 +65,7 @@ func (tm *TransactionManager) WithTransaction(ctx context.Context, fn func(*ent.
 }
 
 // WithReadOnlyTransaction executes a function within a read-only transaction
-func (tm *TransactionManager) WithReadOnlyTransaction(ctx context.Context, fn func(*ent.Client) error) error {
+func (tm *TransactionManager) WithReadOnlyTransaction(ctx context.Context, fn func(*entclient.Client) error) error {
 	tx, err := tm.client.BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelRepeatableRead,
 		ReadOnly:  true,
@@ -78,7 +76,7 @@ func (tm *TransactionManager) WithReadOnlyTransaction(ctx context.Context, fn fu
 
 	defer func() {
 		if err := tx.Rollback(); err != nil {
-			tm.logger.Error(ctx, "Failed to rollback read-only transaction",
+			tm.logger.Error("Failed to rollback read-only transaction",
 				zap.String("error", err.Error()))
 		}
 	}()
@@ -90,17 +88,17 @@ func (tm *TransactionManager) WithReadOnlyTransaction(ctx context.Context, fn fu
 // handleError processes transaction errors with context and applies SQLite error handling
 func (tm *TransactionManager) handleError(ctx context.Context, message string, err error) error {
 	if err == nil {
-		tm.logger.Warn(ctx, message+": no error provided")
+		tm.logger.Warn(message+": no error provided")
 		return nil
 	}
 
 	// Apply SQLite-specific error handling
 	if handledErr := sqlite.HandleTransactionError(err); handledErr == nil {
 		// Error was handled (not really an error), return nil
-		tm.logger.Debug(ctx, message+": error handled gracefully", zap.String("error", err.Error()))
+		tm.logger.Debug(message+": error handled gracefully", zap.String("error", err.Error()))
 		return nil
 	}
 
-	tm.logger.Error(ctx, message, zap.String("error", err.Error()))
+	tm.logger.Error(message, zap.String("error", err.Error()))
 	return err
 }
