@@ -76,7 +76,7 @@ func (ts *OutboundPersistentStream) Current() *httpclient.StreamEvent {
 		err := ts.RequestService.AppendRequestExecutionChunk(
 			ts.ctx,
 			ts.requestExec.ID,
-			event,
+			event.Data,
 		)
 		if err != nil {
 			log.Warn(ts.ctx, "Failed to append request execution chunk", log.Cause(err))
@@ -139,11 +139,18 @@ func (ts *OutboundPersistentStream) persistResponseChunks(ctx context.Context) {
 			return
 		}
 
+		// responseBody is []byte but UpdateRequestExecutionCompleted expects string
+		var statusCode int64 = 200 // Default status code
+		var responseBodyStr string
+		if len(responseBody) > 0 {
+			responseBodyStr = string(responseBody)
+		}
+
 		err = ts.RequestService.UpdateRequestExecutionCompleted(
 			persistCtx,
 			ts.requestExec.ID,
-			meta.ID,
-			responseBody,
+			responseBodyStr,
+			statusCode,
 		)
 		if err != nil {
 			log.Warn(

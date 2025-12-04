@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
@@ -380,6 +381,31 @@ func (r *queryResolver) QueryChannels(ctx context.Context, input biz.QueryChanne
 	return r.channelService.QueryChannels(ctx, input)
 }
 
+// ItemCount is the resolver for the itemCount field.
+func (r *requestMetadataResolver) ItemCount(ctx context.Context, obj *biz.RequestMetadata) (*int, error) {
+	panic(fmt.Errorf("not implemented: ItemCount - itemCount"))
+}
+
+// InputTokens is the resolver for the inputTokens field.
+func (r *requestMetadataResolver) InputTokens(ctx context.Context, obj *biz.RequestMetadata) (*int, error) {
+	panic(fmt.Errorf("not implemented: InputTokens - inputTokens"))
+}
+
+// OutputTokens is the resolver for the outputTokens field.
+func (r *requestMetadataResolver) OutputTokens(ctx context.Context, obj *biz.RequestMetadata) (*int, error) {
+	panic(fmt.Errorf("not implemented: OutputTokens - outputTokens"))
+}
+
+// TotalTokens is the resolver for the totalTokens field.
+func (r *requestMetadataResolver) TotalTokens(ctx context.Context, obj *biz.RequestMetadata) (*int, error) {
+	panic(fmt.Errorf("not implemented: TotalTokens - totalTokens"))
+}
+
+// CachedTokens is the resolver for the cachedTokens field.
+func (r *requestMetadataResolver) CachedTokens(ctx context.Context, obj *biz.RequestMetadata) (*int, error) {
+	panic(fmt.Errorf("not implemented: CachedTokens - cachedTokens"))
+}
+
 // ID is the resolver for the id field.
 func (r *segmentResolver) ID(ctx context.Context, obj *biz.Segment) (*objects.GUID, error) {
 	return &objects.GUID{Type: ent.TypeRequest, ID: obj.ID}, nil
@@ -392,6 +418,166 @@ func (r *segmentResolver) ParentID(ctx context.Context, obj *biz.Segment) (*obje
 	}
 
 	return &objects.GUID{Type: ent.TypeRequest, ID: *obj.ParentID}, nil
+}
+
+// Model is the resolver for the model field.
+func (r *segmentResolver) Model(ctx context.Context, obj *biz.Segment) (string, error) {
+	panic(fmt.Errorf("not implemented: Model - model"))
+}
+
+// Children is the resolver for the children field.
+func (r *segmentResolver) Children(ctx context.Context, obj *biz.Segment) ([]*biz.Segment, error) {
+	panic(fmt.Errorf("not implemented: Children - children"))
+}
+
+// RequestSpans is the resolver for the requestSpans field.
+func (r *segmentResolver) RequestSpans(ctx context.Context, obj *biz.Segment) ([]*biz.Span, error) {
+	panic(fmt.Errorf("not implemented: RequestSpans - requestSpans"))
+}
+
+// ResponseSpans is the resolver for the responseSpans field.
+func (r *segmentResolver) ResponseSpans(ctx context.Context, obj *biz.Segment) ([]*biz.Span, error) {
+	panic(fmt.Errorf("not implemented: ResponseSpans - responseSpans"))
+}
+
+// Metadata is the resolver for the metadata field.
+func (r *segmentResolver) Metadata(ctx context.Context, obj *biz.Segment) (*biz.RequestMetadata, error) {
+	panic(fmt.Errorf("not implemented: Metadata - metadata"))
+}
+
+// StartTime is the resolver for the startTime field.
+func (r *segmentResolver) StartTime(ctx context.Context, obj *biz.Segment) (*time.Time, error) {
+	panic(fmt.Errorf("not implemented: StartTime - startTime"))
+}
+
+// EndTime is the resolver for the endTime field.
+func (r *segmentResolver) EndTime(ctx context.Context, obj *biz.Segment) (*time.Time, error) {
+	panic(fmt.Errorf("not implemented: EndTime - endTime"))
+}
+
+// Duration is the resolver for the duration field.
+func (r *segmentResolver) Duration(ctx context.Context, obj *biz.Segment) (int, error) {
+	panic(fmt.Errorf("not implemented: Duration - duration"))
+}
+
+// ID is the resolver for the id field.
+func (r *spanResolver) ID(ctx context.Context, obj *biz.Span) (string, error) {
+	panic(fmt.Errorf("not implemented: ID - id"))
+}
+
+// Type is the resolver for the type field.
+func (r *spanResolver) Type(ctx context.Context, obj *biz.Span) (string, error) {
+	panic(fmt.Errorf("not implemented: Type - type"))
+}
+
+// StartTime is the resolver for the startTime field.
+func (r *spanResolver) StartTime(ctx context.Context, obj *biz.Span) (*time.Time, error) {
+	panic(fmt.Errorf("not implemented: StartTime - startTime"))
+}
+
+// EndTime is the resolver for the endTime field.
+func (r *spanResolver) EndTime(ctx context.Context, obj *biz.Span) (*time.Time, error) {
+	panic(fmt.Errorf("not implemented: EndTime - endTime"))
+}
+
+// Value is the resolver for the value field.
+func (r *spanResolver) Value(ctx context.Context, obj *biz.Span) (*biz.SpanValue, error) {
+	panic(fmt.Errorf("not implemented: Value - value"))
+}
+
+// URL is the resolver for the url field.
+func (r *spanImageURLResolver) URL(ctx context.Context, obj *biz.SpanImageURL) (*string, error) {
+	panic(fmt.Errorf("not implemented: URL - url"))
+}
+
+// Text is the resolver for the text field.
+func (r *spanTextResolver) Text(ctx context.Context, obj *biz.SpanText) (*string, error) {
+	panic(fmt.Errorf("not implemented: Text - text"))
+}
+
+// Thinking is the resolver for the thinking field.
+func (r *spanThinkingResolver) Thinking(ctx context.Context, obj *biz.SpanThinking) (*string, error) {
+	panic(fmt.Errorf("not implemented: Thinking - thinking"))
+}
+
+// ToolCallID is the resolver for the toolCallID field.
+func (r *spanToolResultResolver) ToolCallID(ctx context.Context, obj *biz.SpanToolResult) (*string, error) {
+	panic(fmt.Errorf("not implemented: ToolCallID - toolCallID"))
+}
+
+// IsError is the resolver for the isError field.
+func (r *spanToolResultResolver) IsError(ctx context.Context, obj *biz.SpanToolResult) (*bool, error) {
+	panic(fmt.Errorf("not implemented: IsError - isError"))
+}
+
+// Text is the resolver for the text field.
+func (r *spanToolResultResolver) Text(ctx context.Context, obj *biz.SpanToolResult) (*string, error) {
+	panic(fmt.Errorf("not implemented: Text - text"))
+}
+
+// ID is the resolver for the id field.
+func (r *spanToolUseResolver) ID(ctx context.Context, obj *biz.SpanToolUse) (*string, error) {
+	panic(fmt.Errorf("not implemented: ID - id"))
+}
+
+// Name is the resolver for the name field.
+func (r *spanToolUseResolver) Name(ctx context.Context, obj *biz.SpanToolUse) (string, error) {
+	panic(fmt.Errorf("not implemented: Name - name"))
+}
+
+// Arguments is the resolver for the arguments field.
+func (r *spanToolUseResolver) Arguments(ctx context.Context, obj *biz.SpanToolUse) (*string, error) {
+	panic(fmt.Errorf("not implemented: Arguments - arguments"))
+}
+
+// URL is the resolver for the url field.
+func (r *spanUserImageURLResolver) URL(ctx context.Context, obj *biz.SpanUserImageURL) (*string, error) {
+	panic(fmt.Errorf("not implemented: URL - url"))
+}
+
+// Text is the resolver for the text field.
+func (r *spanUserQueryResolver) Text(ctx context.Context, obj *biz.SpanUserQuery) (*string, error) {
+	panic(fmt.Errorf("not implemented: Text - text"))
+}
+
+// UserQuery is the resolver for the userQuery field.
+func (r *spanValueResolver) UserQuery(ctx context.Context, obj *biz.SpanValue) (*biz.SpanUserQuery, error) {
+	panic(fmt.Errorf("not implemented: UserQuery - userQuery"))
+}
+
+// UserImageURL is the resolver for the userImageUrl field.
+func (r *spanValueResolver) UserImageURL(ctx context.Context, obj *biz.SpanValue) (*biz.SpanUserImageURL, error) {
+	panic(fmt.Errorf("not implemented: UserImageURL - userImageUrl"))
+}
+
+// Text is the resolver for the text field.
+func (r *spanValueResolver) Text(ctx context.Context, obj *biz.SpanValue) (*biz.SpanText, error) {
+	panic(fmt.Errorf("not implemented: Text - text"))
+}
+
+// Thinking is the resolver for the thinking field.
+func (r *spanValueResolver) Thinking(ctx context.Context, obj *biz.SpanValue) (*biz.SpanThinking, error) {
+	panic(fmt.Errorf("not implemented: Thinking - thinking"))
+}
+
+// ImageURL is the resolver for the imageUrl field.
+func (r *spanValueResolver) ImageURL(ctx context.Context, obj *biz.SpanValue) (*biz.SpanImageURL, error) {
+	panic(fmt.Errorf("not implemented: ImageURL - imageUrl"))
+}
+
+// ToolUse is the resolver for the toolUse field.
+func (r *spanValueResolver) ToolUse(ctx context.Context, obj *biz.SpanValue) (*biz.SpanToolUse, error) {
+	panic(fmt.Errorf("not implemented: ToolUse - toolUse"))
+}
+
+// ToolResult is the resolver for the toolResult field.
+func (r *spanValueResolver) ToolResult(ctx context.Context, obj *biz.SpanValue) (*biz.SpanToolResult, error) {
+	panic(fmt.Errorf("not implemented: ToolResult - toolResult"))
+}
+
+// SystemInstruction is the resolver for the systemInstruction field.
+func (r *spanValueResolver) SystemInstruction(ctx context.Context, obj *biz.SpanValue) (*biz.SpanSystemInstruction, error) {
+	panic(fmt.Errorf("not implemented: SystemInstruction - systemInstruction"))
 }
 
 // FirstUserQuery is the resolver for the firstUserQuery field.
@@ -432,8 +618,48 @@ func (r *traceResolver) FirstText(ctx context.Context, obj *ent.Trace) (*string,
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// RequestMetadata returns RequestMetadataResolver implementation.
+func (r *Resolver) RequestMetadata() RequestMetadataResolver { return &requestMetadataResolver{r} }
+
 // Segment returns SegmentResolver implementation.
 func (r *Resolver) Segment() SegmentResolver { return &segmentResolver{r} }
 
+// Span returns SpanResolver implementation.
+func (r *Resolver) Span() SpanResolver { return &spanResolver{r} }
+
+// SpanImageURL returns SpanImageURLResolver implementation.
+func (r *Resolver) SpanImageURL() SpanImageURLResolver { return &spanImageURLResolver{r} }
+
+// SpanText returns SpanTextResolver implementation.
+func (r *Resolver) SpanText() SpanTextResolver { return &spanTextResolver{r} }
+
+// SpanThinking returns SpanThinkingResolver implementation.
+func (r *Resolver) SpanThinking() SpanThinkingResolver { return &spanThinkingResolver{r} }
+
+// SpanToolResult returns SpanToolResultResolver implementation.
+func (r *Resolver) SpanToolResult() SpanToolResultResolver { return &spanToolResultResolver{r} }
+
+// SpanToolUse returns SpanToolUseResolver implementation.
+func (r *Resolver) SpanToolUse() SpanToolUseResolver { return &spanToolUseResolver{r} }
+
+// SpanUserImageURL returns SpanUserImageURLResolver implementation.
+func (r *Resolver) SpanUserImageURL() SpanUserImageURLResolver { return &spanUserImageURLResolver{r} }
+
+// SpanUserQuery returns SpanUserQueryResolver implementation.
+func (r *Resolver) SpanUserQuery() SpanUserQueryResolver { return &spanUserQueryResolver{r} }
+
+// SpanValue returns SpanValueResolver implementation.
+func (r *Resolver) SpanValue() SpanValueResolver { return &spanValueResolver{r} }
+
 type mutationResolver struct{ *Resolver }
+type requestMetadataResolver struct{ *Resolver }
 type segmentResolver struct{ *Resolver }
+type spanResolver struct{ *Resolver }
+type spanImageURLResolver struct{ *Resolver }
+type spanTextResolver struct{ *Resolver }
+type spanThinkingResolver struct{ *Resolver }
+type spanToolResultResolver struct{ *Resolver }
+type spanToolUseResolver struct{ *Resolver }
+type spanUserImageURLResolver struct{ *Resolver }
+type spanUserQueryResolver struct{ *Resolver }
+type spanValueResolver struct{ *Resolver }

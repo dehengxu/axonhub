@@ -283,7 +283,7 @@ func (r *requestResolver) RequestBody(ctx context.Context, obj *ent.Request) (ob
 		return nil, fmt.Errorf("failed to load request body: %w", err)
 	}
 
-	return value, nil
+	return objects.JSONRawMessage(value), nil
 }
 
 // ResponseBody is the resolver for the responseBody field.
@@ -294,7 +294,7 @@ func (r *requestResolver) ResponseBody(ctx context.Context, obj *ent.Request) (o
 		return nil, fmt.Errorf("failed to load response body: %w", err)
 	}
 
-	return value, nil
+	return objects.JSONRawMessage(value), nil
 }
 
 // ResponseChunks is the resolver for the responseChunks field.
@@ -311,7 +311,12 @@ func (r *requestResolver) ResponseChunks(ctx context.Context, obj *ent.Request) 
 		return []objects.JSONRawMessage{}, nil
 	}
 
-	return value, nil
+	// Convert []string to []objects.JSONRawMessage
+	var jsonChunks []objects.JSONRawMessage
+	for _, chunk := range value {
+		jsonChunks = append(jsonChunks, objects.JSONRawMessage(chunk))
+	}
+	return jsonChunks, nil
 }
 
 // ChannelID is the resolver for the channelID field.
@@ -377,7 +382,7 @@ func (r *requestExecutionResolver) RequestBody(ctx context.Context, obj *ent.Req
 		return nil, fmt.Errorf("failed to load request body: %w", err)
 	}
 
-	return value, nil
+	return objects.JSONRawMessage(value), nil
 }
 
 // ResponseBody is the resolver for the responseBody field.
@@ -388,7 +393,7 @@ func (r *requestExecutionResolver) ResponseBody(ctx context.Context, obj *ent.Re
 		return nil, fmt.Errorf("failed to load response body: %w", err)
 	}
 
-	return value, nil
+	return objects.JSONRawMessage(value), nil
 }
 
 // ResponseChunks is the resolver for the responseChunks field.
@@ -403,7 +408,12 @@ func (r *requestExecutionResolver) ResponseChunks(ctx context.Context, obj *ent.
 		return []objects.JSONRawMessage{}, nil
 	}
 
-	return value, nil
+	// Convert []string to []objects.JSONRawMessage
+	var jsonChunks []objects.JSONRawMessage
+	for _, chunk := range value {
+		jsonChunks = append(jsonChunks, objects.JSONRawMessage(chunk))
+	}
+	return jsonChunks, nil
 }
 
 // Channel is the resolver for the channel field.

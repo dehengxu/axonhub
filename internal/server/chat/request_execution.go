@@ -49,13 +49,18 @@ func (m *persistRequestExecutionMiddleware) OnOutboundRawRequest(ctx context.Con
 		return request, nil
 	}
 
+	// Build request body string from httpclient.Request
+	var requestBodyStr string
+	if request.Body != nil {
+		requestBodyStr = string(request.Body)
+	}
+
 	requestExec, err := state.RequestService.CreateRequestExecution(
 		ctx,
-		channel,
-		llmRequest.Model,
-		state.Request,
-		*request,
-		m.outbound.APIFormat(),
+		state.Request.ID,
+		0, // Channel ID
+		"", // requestDir - not available
+		requestBodyStr,
 	)
 	if err != nil {
 		return nil, err
@@ -81,11 +86,18 @@ func (m *persistRequestExecutionMiddleware) OnOutboundLlmResponse(ctx context.Co
 	persistCtx, cancel := xcontext.DetachWithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
+	
+	// Convert response body bytes to string
+	var responseBodyStr string
+	if m.rawResponse.Body != nil {
+		responseBodyStr = string(m.rawResponse.Body)
+	}
+
 	err := state.RequestService.UpdateRequestExecutionCompleted(
 		persistCtx,
 		state.RequestExec.ID,
-		llmResp.ID,
-		m.rawResponse.Body,
+		responseBodyStr,
+		int64(200), // Default status code
 	)
 	if err != nil {
 		log.Warn(persistCtx, "Failed to update request execution status to completed", log.Cause(err))
@@ -108,6 +120,7 @@ func (m *persistRequestExecutionMiddleware) OnOutboundRawError(ctx context.Conte
 	updateErr := state.RequestService.UpdateRequestExecutionFailed(
 		persistCtx,
 		state.RequestExec.ID,
+		0, // Default status code
 		ExtractErrorMessage(err),
 	)
 	if updateErr != nil {

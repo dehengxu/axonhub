@@ -108,5 +108,5 @@ func (s *ThreadService) FirstText(ctx context.Context, id int) (*string, error) 
 		return nil, nil
 	}
 
-	return s.traceService.GetFirstText(ctx, trace.ID)
+	return s.traceService.FirstText(ctx, trace.ID)
 }

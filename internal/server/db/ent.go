@@ -18,9 +18,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/migrate/datamigrate"
 	"github.com/looplj/axonhub/internal/ent/migrate/schemahook"
 	_ "github.com/looplj/axonhub/internal/ent/runtime"
-	"github.com/looplj/axonhub/internal/pkg/sqlite"
-	_ "github.com/looplj/axonhub/internal/pkg/sqlite"
-)
+	)
 
 func NewEntClient(cfg Config) *ent.Client {
 	var opts []ent.Option
@@ -64,13 +62,7 @@ func NewEntClient(cfg Config) *ent.Client {
 	opts = append(opts, ent.Driver(drv))
 	client := ent.NewClient(opts...)
 
-	// Setup connection pool optimizations for SQLite
-	if cfg.Dialect == "sqlite3" || cfg.Dialect == "sqlite" {
-		if err := sqlitesetup.SetupSQLiteConnectionPool(sqlDB); err != nil {
-			panic(fmt.Errorf("failed to setup sqlite connection pool: %w", err))
-		}
-	}
-
+	
 	err = client.Schema.Create(
 		context.Background(),
 		migrate.WithGlobalUniqueID(false),

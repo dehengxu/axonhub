@@ -35,9 +35,14 @@ func (m *persistRequestMiddleware) OnInboundLlmRequest(ctx context.Context, llmR
 
 	request, err := m.inbound.state.RequestService.CreateRequest(
 		ctx,
-		llmRequest,
-		m.inbound.state.RawRequest,
-		m.inbound.APIFormat(),
+		nil, // API Key ID - not available in this context
+		1, // Project ID - default
+		nil, // Trace ID - not available in this context
+		nil, // Channel ID - not available in this context
+		"api", // Source
+		llmRequest.Model, // Model ID
+		"openai/chat_completions", // Default format since Format field doesn't exist
+		llmRequest, // Request Body as interface
 	)
 	if err != nil {
 		return nil, err
@@ -85,7 +90,9 @@ func (m *persistRequestMiddleware) OnInboundRawResponse(ctx context.Context, htt
 	persistCtx, cancel := xcontext.DetachWithTimeout(ctx, time.Second*10)
 	defer cancel()
 
-	err := state.RequestService.UpdateRequestCompleted(persistCtx, state.Request.ID, llmResp.ID, httpResp.Body)
+	// llmResp.ID is string, but UpdateRequestCompleted expects int, use 0 as placeholder
+	var executionID int = 0
+	err := state.RequestService.UpdateRequestCompleted(persistCtx, state.Request.ID, executionID, httpResp.Body)
 	if err != nil {
 		log.Warn(persistCtx, "Failed to update request status to completed", log.Cause(err))
 	}

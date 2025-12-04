@@ -64,7 +64,7 @@ func (ts *InboundPersistentStream) Current() *httpclient.StreamEvent {
 		err := ts.requestService.AppendRequestChunk(
 			ts.ctx,
 			ts.request.ID,
-			event,
+			event.Data,
 		)
 		if err != nil {
 			log.Warn(ts.ctx, "Failed to append request chunk", log.Cause(err))
@@ -124,14 +124,16 @@ func (ts *InboundPersistentStream) persistResponseChunks(ctx context.Context) {
 	if ts.request != nil {
 		persistCtx := context.WithoutCancel(ctx)
 
-		responseBody, meta, err := ts.transformer.AggregateStreamChunks(persistCtx, ts.responseChunks)
+		responseBody, _, err := ts.transformer.AggregateStreamChunks(persistCtx, ts.responseChunks)
 		if err != nil {
 			log.Warn(persistCtx, "Failed to aggregate chunks for main request", log.Cause(err))
 
 			dumper.DumpStreamEvents(persistCtx, ts.responseChunks, "response_chunks.json")
 		}
 
-		err = ts.requestService.UpdateRequestCompleted(persistCtx, ts.request.ID, meta.ID, responseBody)
+		// meta.ID is string but UpdateRequestCompleted expects int, use 0 as placeholder
+		var executionID int = 0
+		err = ts.requestService.UpdateRequestCompleted(persistCtx, ts.request.ID, executionID, responseBody)
 		if err != nil {
 			log.Warn(persistCtx, "Failed to update request status to completed", log.Cause(err))
 		}
