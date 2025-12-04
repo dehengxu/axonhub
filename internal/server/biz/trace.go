@@ -130,12 +130,14 @@ func (s *TraceService) FirstUserQuery(ctx context.Context, traceID int) (*string
 }
 
 // GetOrCreateTrace gets an existing trace or creates a new one
-func (s *TraceService) GetOrCreateTrace(ctx context.Context, projectID int, traceID string, threadID *int) (*ent.Trace, error) {
+func (s *TraceService) GetOrCreateTrace(ctx context.Context, projectID int, traceIDStr string, threadID *int) (*ent.Trace, error) {
 	// Get trace ID from context
-	traceID, ok := contexts.GetTraceID(ctx)
+	traceIDFromCtx, ok := contexts.GetTraceID(ctx)
 	if !ok {
 		return nil, fmt.Errorf("trace ID not found in context")
 	}
+
+	traceID := traceIDFromCtx
 
 	
 	client := s.entFromContext(ctx)

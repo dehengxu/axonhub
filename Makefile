@@ -6,12 +6,13 @@ generate:
 	cd internal/server/gql && go generate
 	@echo "Generation completed!"
 
+
 # Build the backend application
 build-backend:
 	@echo "Building axonhub backend..."
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
-	upx -9 $$(if [ "$(GOOS)" != "linux" ]; then echo "--force-macos"; fi) axonhub && \
-	ls -lsh axonhub*
+	CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
+	ls -lsh axonhub* && \
+	if [ "$(GOOS)" = "linux" ]; then upx -9 axonhub; fi
 	@echo "Backend build completed!"
 
 # Build the frontend application
