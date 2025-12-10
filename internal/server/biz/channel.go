@@ -49,7 +49,9 @@ func NewChannelService(params ChannelServiceParams) *ChannelService {
 		AbstractService: &AbstractService{
 			db: params.Ent,
 		},
-		Executors:          params.Executor,
+		Executors: executors.NewPoolScheduleExecutor(
+			executors.WithMaxConcurrent(1),
+		),
 		channelPerfMetrics: make(map[int]*channelMetrics),
 		perfCh:             make(chan *PerformanceRecord, 1024),
 	}
@@ -476,6 +478,9 @@ func (svc *ChannelService) asyncReloadChannels() {
 
 		reloadCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+
+		// Force reload by resetting latestUpdate timestamp
+		svc.latestUpdate = time.Time{}
 
 		if reloadErr := svc.loadChannels(reloadCtx); reloadErr != nil {
 			log.Error(reloadCtx, "failed to reload channels after bulk update", log.Cause(reloadErr))

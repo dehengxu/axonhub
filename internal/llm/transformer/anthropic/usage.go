@@ -27,7 +27,7 @@ type Usage struct {
 // convertToLlmUsage converts Anthropic Usage to unified Usage format.
 // The platformType parameter determines how cache tokens are calculated:
 // - For Anthropic official (direct, bedrock, vertex): input_tokens does NOT include cached tokens
-// - For DeepSeek/Moonshot: input_tokens INCLUDES cached tokens.
+// - For Moonshot: input_tokens INCLUDES cached tokens.
 func convertToLlmUsage(usage *Usage, platformType PlatformType) *llm.Usage {
 	if usage == nil {
 		return nil
@@ -43,8 +43,8 @@ func convertToLlmUsage(usage *Usage, platformType PlatformType) *llm.Usage {
 	// Different calculation logic based on platform type
 	//nolint:exhaustive
 	switch platformType {
-	case PlatformDeepSeek, PlatformMoonshot:
-		// For DeepSeek/Moonshot: InputTokens already includes cached tokens
+	case PlatformMoonshot:
+		// For Moonshot: InputTokens already includes cached tokens
 		// So we don't add cache tokens again
 		promptTokens = usage.InputTokens
 	default:
@@ -54,12 +54,12 @@ func convertToLlmUsage(usage *Usage, platformType PlatformType) *llm.Usage {
 	}
 
 	u := llm.Usage{
-		PromptTokens:     promptTokens,
-		CompletionTokens: usage.OutputTokens,
-		TotalTokens:      promptTokens + usage.OutputTokens,
+		PromptTokens:            promptTokens,
+		CompletionTokens:        usage.OutputTokens,
+		CompletionTokensDetails: &llm.CompletionTokensDetails{},
+		TotalTokens:             promptTokens + usage.OutputTokens,
 	}
 
-	// Map detailed token information from Anthropic format to unified model
 	if usage.CacheReadInputTokens > 0 || usage.CacheCreationInputTokens > 0 {
 		u.PromptTokensDetails = &llm.PromptTokensDetails{
 			CachedTokens: usage.CacheReadInputTokens + usage.CacheCreationInputTokens,
@@ -67,4 +67,26 @@ func convertToLlmUsage(usage *Usage, platformType PlatformType) *llm.Usage {
 	}
 
 	return &u
+}
+
+func convertToAnthropicUsage(llmUsage *llm.Usage) *Usage {
+	usage := &Usage{
+		InputTokens:  llmUsage.PromptTokens,
+		OutputTokens: llmUsage.CompletionTokens,
+	}
+
+	// Map detailed token information from unified model to Anthropic format
+	if llmUsage.PromptTokensDetails != nil {
+		usage.CacheReadInputTokens = llmUsage.PromptTokensDetails.CachedTokens
+		usage.InputTokens -= usage.CacheReadInputTokens
+	}
+
+	// Note: Anthropic doesn't have a direct equivalent for reasoning tokens in their current API
+	// but we can store it in cache_creation_input_tokens as a workaround if needed
+	if llmUsage.CompletionTokensDetails != nil {
+		// For now, we don't map reasoning tokens as Anthropic doesn't have a direct field
+		// This could be extended in the future if Anthropic adds support
+	}
+
+	return usage
 }
