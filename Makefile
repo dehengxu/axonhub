@@ -6,10 +6,20 @@ generate:
 	cd internal/server/gql && go generate
 	@echo "Generation completed!"
 
-# Build the backend application
+# Build the backend application (release mode)
 build-backend:
-	@echo "Building axonhub backend..."
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
+	@echo "Building axonhub backend (release mode)..."
+	@BUILD_TIME=$$(date +"%Y-%m-%d %H:%M:%S"); \
+	BUILD_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_VERSION=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	CGO_ENABLED=0 go build -ldflags "\
+		-X 'github.com/looplj/axonhub/internal/build.BuildTime=$$BUILD_TIME' \
+		-X 'github.com/looplj/axonhub/internal/build.Commit=$$BUILD_COMMIT' \
+		-X 'github.com/looplj/axonhub/internal/build.Version=$$BUILD_VERSION' \
+		-s -w -buildid= \
+		-extldflags '-static'" \
+		-trimpath \
+		-o axonhub ./cmd/axonhub && \
 	ls -lsh axonhub*
 	@echo "Backend build completed!"
 
