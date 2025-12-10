@@ -81,12 +81,6 @@ function buildRequestDetailQuery(permissions: { canViewApiKeys: boolean; canView
             id
             name
           }` : ''
-  
-  const executionChannelFields = permissions.canViewChannels ? `
-              channel {
-                id
-                name
-              }` : ''
 
   return `
     query GetRequestDetail($id: ID!) {
@@ -104,6 +98,7 @@ function buildRequestDetailQuery(permissions: { canViewApiKeys: boolean; canView
           }
           requestBody
           responseBody
+          responseChunks
           status
         }
       }

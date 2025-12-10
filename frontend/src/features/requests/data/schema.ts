@@ -71,6 +71,7 @@ export const requestSchema = z.object({
   modelID: z.string(),
   requestBody: z.any().nullable().optional(), // JSONRawMessage
   responseBody: z.any().nullable().optional(), // JSONRawMessage
+  responseChunks: z.array(z.any()).nullable().optional(), // [JSONRawMessage!]
   status: requestStatusSchema,
   stream: z.boolean().nullable(),
   usageLogs: z

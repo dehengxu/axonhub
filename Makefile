@@ -10,14 +10,13 @@ generate:
 build-backend:
 	@echo "Building axonhub backend..."
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
-	upx -9 $$(if [ "$(GOOS)" != "linux" ]; then echo "--force-macos"; fi) axonhub && \
 	ls -lsh axonhub*
 	@echo "Backend build completed!"
 
 # Build the frontend application
 build-frontend:
 	@echo "Building axonhub frontend..."
-	cd frontend && pnpm vite build
+	cd frontend && pnpm install && pnpm vite build
 	@echo "Copying frontend dist to server static directory..."
 	mkdir -p internal/server/static/dist
 	cp -r frontend/dist/* internal/server/static/dist/
