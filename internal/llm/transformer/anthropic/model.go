@@ -3,8 +3,6 @@ package anthropic
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/looplj/axonhub/internal/llm"
 )
 
 // MessageRequest represents the Anthropic Messages API request format.
@@ -173,17 +171,6 @@ type CacheControl struct {
 	TTL string `json:"ttl,omitempty"`
 }
 
-func (c *CacheControl) ToLLMCacheControl() *llm.CacheControl {
-	if c == nil {
-		return nil
-	}
-
-	return &llm.CacheControl{
-		Type: c.Type,
-		TTL:  c.TTL,
-	}
-}
-
 // InputSchema represents the JSON schema for tool input.
 type InputSchema struct {
 	Type       string                 `json:"type"`
@@ -201,6 +188,29 @@ type MessageParam struct {
 type MessageContent struct {
 	Content         *string               `json:"content,omitempty"`
 	MultipleContent []MessageContentBlock `json:"multiple_content,omitempty"`
+}
+
+func (m MessageContent) ExtractTrivalBlocks(cacheControl *CacheControl) []MessageContentBlock {
+	var contentBlocks []MessageContentBlock
+	if m.Content != nil && *m.Content != "" {
+		contentBlocks = append(contentBlocks, MessageContentBlock{
+			Type:         "text",
+			Text:         *m.Content,
+			CacheControl: cacheControl,
+		})
+	} else if len(m.MultipleContent) > 0 {
+		for _, part := range m.MultipleContent {
+			if part.Type == "text" && part.Text != "" {
+				contentBlocks = append(contentBlocks, part)
+			}
+
+			if part.Type == "image_url" {
+				contentBlocks = append(contentBlocks, part)
+			}
+		}
+	}
+
+	return contentBlocks
 }
 
 func (c MessageContent) MarshalJSON() ([]byte, error) {
@@ -243,11 +253,11 @@ type MessageContentBlock struct {
 	// Text will be present if type is "text".
 	Text string `json:"text,omitempty"`
 
-	// Signature will be present if type is "thinking".
-	Signature string `json:"signature,omitempty"`
-
 	// Thinking will be present if type is "thinking".
 	Thinking string `json:"thinking,omitempty"`
+
+	// Signature will be present if type is "thinking".
+	Signature string `json:"signature,omitempty"`
 
 	// Data will be present if type is "redacted_thinking".
 	Data string `json:"data,omitempty"`

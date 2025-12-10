@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/gin-contrib/sse"
 	"github.com/gin-gonic/gin"
 
-	"github.com/looplj/axonhub/internal/llm/transformer/aisdk"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
@@ -14,17 +14,30 @@ import (
 	"github.com/looplj/axonhub/internal/server/chat"
 )
 
-type ChatCompletionSSEHandlers struct {
+// StreamWriter is a function type for writing stream events to the response.
+type StreamWriter func(c *gin.Context, stream streams.Stream[*httpclient.StreamEvent])
+
+type ChatCompletionHandlers struct {
 	ChatCompletionProcessor *chat.ChatCompletionProcessor
+	StreamWriter            StreamWriter
 }
 
-func NewChatCompletionHandlers(processor *chat.ChatCompletionProcessor) *ChatCompletionSSEHandlers {
-	return &ChatCompletionSSEHandlers{
+func NewChatCompletionHandlers(processor *chat.ChatCompletionProcessor) *ChatCompletionHandlers {
+	return &ChatCompletionHandlers{
 		ChatCompletionProcessor: processor,
+		StreamWriter:            WriteSSEStream,
 	}
 }
 
-func (handlers *ChatCompletionSSEHandlers) ChatCompletion(c *gin.Context) {
+// WithStreamWriter returns a new ChatCompletionHandlers with the specified stream writer.
+func (handlers *ChatCompletionHandlers) WithStreamWriter(writer StreamWriter) *ChatCompletionHandlers {
+	return &ChatCompletionHandlers{
+		ChatCompletionProcessor: handlers.ChatCompletionProcessor,
+		StreamWriter:            writer,
+	}
+}
+
+func (handlers *ChatCompletionHandlers) ChatCompletion(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Use ReadHTTPRequest to parse the request
@@ -82,24 +95,19 @@ func (handlers *ChatCompletionSSEHandlers) ChatCompletion(c *gin.Context) {
 			}
 		}()
 
-		// Set appropriate headers based on transformer type
-		if _, isDataStream := handlers.ChatCompletionProcessor.Inbound.(*aisdk.DataStreamTransformer); isDataStream {
-			// Set AI SDK data stream headers
-			aisdk.SetDataStreamHeaders(c.Writer.Header())
-		} else {
-			// Set SSE headers
-			c.Header("Content-Type", "text/event-stream")
-			c.Header("Cache-Control", "no-cache")
-			c.Header("Connection", "keep-alive")
-		}
-
 		c.Header("Access-Control-Allow-Origin", "*")
 
-		writeSSEStream(c, result.ChatCompletionStream)
+		streamWriter := handlers.StreamWriter
+		if streamWriter == nil {
+			streamWriter = WriteSSEStream
+		}
+
+		streamWriter(c, result.ChatCompletionStream)
 	}
 }
 
-func writeSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEvent]) {
+// WriteSSEStream writes stream events as Server-Sent Events (SSE).
+func WriteSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEvent]) {
 	ctx := c.Request.Context()
 	clientDisconnected := false
 
@@ -109,18 +117,16 @@ func writeSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEven
 		}
 	}()
 
-	clientGone := c.Writer.CloseNotify()
+	// Set SSE headers
+	c.Header("Content-Type", sse.ContentType)
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
 
 	for {
 		select {
-		case <-clientGone:
+		case <-ctx.Done():
 			clientDisconnected = true
 
-			log.Warn(ctx, "Client disconnected, stopping stream")
-
-			return
-
-		case <-ctx.Done():
 			log.Warn(ctx, "Context done, stopping stream")
 
 			return
@@ -129,12 +135,13 @@ func writeSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEven
 				cur := stream.Current()
 				c.SSEvent(cur.Type, cur.Data)
 				log.Debug(ctx, "write stream event", log.Any("event", cur))
-				c.Writer.Flush()
 			} else {
 				if stream.Err() != nil {
 					log.Error(ctx, "Error in stream", log.Cause(stream.Err()))
 					c.SSEvent("error", stream.Err())
 				}
+
+				c.Writer.Flush()
 
 				return
 			}

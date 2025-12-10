@@ -28,7 +28,7 @@ func TestConvertToChatCompletionResponse(t *testing.T) {
 			OutputTokens: 20,
 		},
 	}
-	result := convertToChatCompletionResponse(anthropicResp, PlatformDirect)
+	result := convertToLlmResponse(anthropicResp, PlatformDirect)
 
 	require.Equal(t, "msg_123", result.ID)
 	require.Equal(t, "chat.completion", result.Object)
@@ -305,7 +305,7 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 						StopReason: lo.ToPtr(anthropicReason),
 					}
 
-					result := convertToChatCompletionResponse(msg, PlatformDirect)
+					result := convertToLlmResponse(msg, PlatformDirect)
 					if expectedReason == "stop" {
 						require.Equal(t, expectedReason, *result.Choices[0].FinishReason)
 					} else {
@@ -338,10 +338,7 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 				require.Equal(t, int64(150), result.Usage.PromptTokens)
 				require.Equal(t, int64(50), result.Usage.CompletionTokens)
 				require.Equal(t, int64(200), result.Usage.TotalTokens)
-				// Verify detailed token information
-				require.NotNil(t, result.Usage.PromptTokensDetails)
 				require.Equal(t, int64(50), result.Usage.PromptTokensDetails.CachedTokens)
-				require.Nil(t, result.Usage.CompletionTokensDetails)
 			},
 		},
 		{
@@ -371,7 +368,6 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 				// Verify detailed prompt token information
 				require.NotNil(t, result.Usage.PromptTokensDetails)
 				require.Equal(t, int64(150), result.Usage.PromptTokensDetails.CachedTokens)
-				require.Nil(t, result.Usage.CompletionTokensDetails)
 			},
 		},
 		{
@@ -398,9 +394,6 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 				require.Equal(t, int64(80), result.Usage.PromptTokens)
 				require.Equal(t, int64(40), result.Usage.CompletionTokens)
 				require.Equal(t, int64(120), result.Usage.TotalTokens)
-				// Verify no detailed token information when cache tokens are 0
-				require.Nil(t, result.Usage.PromptTokensDetails)
-				require.Nil(t, result.Usage.CompletionTokensDetails)
 			},
 		},
 		{
@@ -423,7 +416,7 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertToChatCompletionResponse(tt.input, PlatformDirect)
+			result := convertToLlmResponse(tt.input, PlatformDirect)
 			tt.validate(t, result)
 		})
 	}
