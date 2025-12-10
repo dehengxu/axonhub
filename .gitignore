@@ -76,6 +76,7 @@ tmp/
 *.csv
 *.sqlite
 *.db
+*-journal
 
 *.code-workspace
 
@@ -137,4 +138,5 @@ scripts/migration-test/
 
 .serena/
 .roo/
+tools
 
