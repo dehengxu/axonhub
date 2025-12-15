@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { IconArchive, IconBan, IconCheck, IconTrash, IconTemplate, IconX } from '@tabler/icons-react'
 import {
   ColumnDef,
   ColumnFiltersState,
+  ExpandedState,
   RowData,
   RowSelectionState,
   SortingState,
   VisibilityState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
   getFilteredRowModel,
@@ -15,10 +18,15 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { format } from 'date-fns'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { ServerSidePagination } from '@/components/server-side-pagination'
+import { formatDuration } from '@/utils/format-duration'
+import { Button } from '@/components/ui/button'
 import { useChannels } from '../context/channels-context'
 import { Channel, ChannelConnection } from '../data/schema'
+import { CHANNEL_CONFIGS } from '../data/config_channels'
 import { DataTableToolbar } from './data-table-toolbar'
 
 declare module '@tanstack/react-table' {
@@ -82,8 +90,9 @@ export function ChannelsTable({
   onModelFilterChange,
 }: DataTableProps) {
   const { t } = useTranslation()
-  const { setSelectedChannels, setResetRowSelection } = useChannels()
+  const { setSelectedChannels, setResetRowSelection, setOpen } = useChannels()
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [expanded, setExpanded] = useState<ExpandedState>({})
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     tags: false, // Hide tags column by default but keep it for filtering
   })
@@ -97,7 +106,7 @@ export function ChannelsTable({
       newColumnFilters.push({ id: 'name', value: nameFilter })
     }
     if (typeFilter.length > 0) {
-      newColumnFilters.push({ id: 'type', value: typeFilter })
+      newColumnFilters.push({ id: 'provider', value: typeFilter })
     }
     if (statusFilter.length > 0) {
       newColumnFilters.push({ id: 'status', value: statusFilter })
@@ -121,7 +130,7 @@ export function ChannelsTable({
 
     // Extract filter values
     const nameFilterValue = newFilters.find((filter) => filter.id === 'name')?.value as string
-    const typeFilterValue = newFilters.find((filter) => filter.id === 'type')?.value as string[]
+    const typeFilterValue = newFilters.find((filter) => filter.id === 'provider')?.value as string[]
     const statusFilterValue = newFilters.find((filter) => filter.id === 'status')?.value as string[]
     const tagFilterValue = newFilters.find((filter) => filter.id === 'tags')?.value as string
     const modelFilterValue = newFilters.find((filter) => filter.id === 'model')?.value as string
@@ -162,10 +171,12 @@ export function ChannelsTable({
       columnVisibility,
       rowSelection,
       columnFilters,
+      expanded,
     },
     enableRowSelection: true,
     getRowId: (row) => row.id,
     onRowSelectionChange: setRowSelection,
+    onExpandedChange: setExpanded,
     onSortingChange,
     onColumnFiltersChange: handleColumnFiltersChange,
     onColumnVisibilityChange: setColumnVisibility,
@@ -174,6 +185,7 @@ export function ChannelsTable({
     getSortedRowModel: getSortedRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    getExpandedRowModel: getExpandedRowModel(),
     // Enable server-side pagination and filtering
     manualPagination: true,
     manualFiltering: true, // Enable manual filtering for server-side filtering
@@ -182,6 +194,17 @@ export function ChannelsTable({
   const filteredSelectedRows = useMemo(
     () => table.getFilteredSelectedRowModel().rows,
     [table, rowSelection, data]
+  )
+
+  const getApiFormatLabel = useCallback(
+    (apiFormat?: string) => {
+      if (!apiFormat) return '-'
+
+      const key = `channels.dialogs.fields.apiFormat.formats.${apiFormat}`
+      const label = t(key)
+      return label === key ? apiFormat : label
+    },
+    [t]
   )
   const selectedCount = filteredSelectedRows.length
   const isFiltered = columnFilters.length > 0
@@ -228,7 +251,7 @@ export function ChannelsTable({
         showErrorOnly={showErrorOnly}
         onExitErrorOnlyMode={onExitErrorOnlyMode}
       />
-      <div className='mt-4 flex-1 overflow-auto rounded-md border'>
+      <div className='mt-4 flex-1 overflow-auto rounded-md border relative'>
         <Table data-testid='channels-table'>
           <TableHeader className='bg-background sticky top-0 z-10'>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -255,15 +278,147 @@ export function ChannelsTable({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className='group/row'>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={cell.column.columnDef.meta?.className ?? ''}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const channel = row.original
+                const config = CHANNEL_CONFIGS[channel.type]
+                const performance = channel.channelPerformance
+                return (
+                  <React.Fragment key={row.id}>
+                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className='group/row'>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className={cell.column.columnDef.meta?.className ?? ''}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {row.getIsExpanded() && (
+                      <TableRow key={`${row.id}-expanded`} className='bg-muted/30 hover:bg-muted/50'>
+                        <TableCell colSpan={columns.length} className='p-6 whitespace-normal'>
+                          <div className='space-y-6'>
+                            {/* Top Section: Basic Info (left) + Additional Info & Performance (right, stacked) */}
+                            <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+                              {/* Basic Info */}
+                              <div className='space-y-3'>
+                                <h4 className='text-sm font-semibold'>{t('channels.expandedRow.basic')}</h4>
+                                <div className='space-y-2 text-sm'>
+                                  <div className='flex items-start gap-2'>
+                                    <span className='text-muted-foreground shrink-0'>
+                                      {t('channels.columns.baseURL')}:
+                                    </span>
+                                    <span className='flex-1 min-w-0 font-mono text-xs break-all text-right'>{channel.baseURL}</span>
+                                  </div>
+                                  <div className='flex justify-between items-center'>
+                                    <span className='text-muted-foreground'>{t('channels.columns.type')}:</span>
+                                    <Badge variant='outline' className={config?.color}>
+                                      {t(`channels.types.${channel.type}`)}
+                                    </Badge>
+                                  </div>
+                                  <div className='flex justify-between items-center'>
+                                    <span className='text-muted-foreground'>{t('channels.expandedRow.apiFormat')}:</span>
+                                    <span className='font-mono text-xs'>{getApiFormatLabel(config?.apiFormat)}</span>
+                                  </div>
+                                  <div className='flex justify-between'>
+                                    <span className='text-muted-foreground'>{t('channels.columns.createdAt')}:</span>
+                                    <span>{format(channel.createdAt, 'yyyy-MM-dd HH:mm')}</span>
+                                  </div>
+                                  <div className='flex justify-between'>
+                                    <span className='text-muted-foreground'>{t('channels.columns.updatedAt')}:</span>
+                                    <span>{format(channel.updatedAt, 'yyyy-MM-dd HH:mm')}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Side: Additional Info (top) + Performance (bottom) */}
+                              <div className='space-y-6'>
+                                {/* Additional Info */}
+                                <div className='space-y-3'>
+                                  <h4 className='text-sm font-semibold'>{t('channels.expandedRow.additional')}</h4>
+                                  <div className='space-y-2 text-sm'>
+                                    <div className='flex justify-between items-center'>
+                                      <span className='text-muted-foreground'>{t('channels.columns.weight')}:</span>
+                                      <span className='font-mono text-xs'>{channel.orderingWeight ?? 0}</span>
+                                    </div>
+                                    <div className='flex justify-between'>
+                                      <span className='text-muted-foreground'>{t('channels.expandedRow.remark')}:</span>
+                                      <span className='max-w-[200px] truncate text-right' title={channel.remark || undefined}>
+                                        {channel.remark || '-'}
+                                      </span>
+                                    </div>
+                                    <div className='flex justify-between items-start'>
+                                      <span className='text-muted-foreground shrink-0'>{t('channels.expandedRow.tags')}:</span>
+                                      <div className='flex flex-wrap gap-1 justify-end max-w-[200px]'>
+                                        {channel.tags && channel.tags.length > 0 ? (
+                                          channel.tags.map((tag) => (
+                                            <Badge key={tag} variant='outline' className='text-xs'>
+                                              {tag}
+                                            </Badge>
+                                          ))
+                                        ) : (
+                                          <span>-</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Performance */}
+                                <div className='space-y-3'>
+                                  <h4 className='text-sm font-semibold'>{t('channels.expandedRow.performance')}</h4>
+                                  <div className='space-y-2 text-sm'>
+                                    {performance ? (
+                                      <>
+                                        <div className='flex justify-between'>
+                                          <span className='text-muted-foreground'>{t('channels.columns.firstTokenLatencyFull')}:</span>
+                                          <span>{formatDuration(performance.avgStreamFirstTokenLatencyMs || performance.avgLatencyMs || 0)}</span>
+                                        </div>
+                                        <div className='flex justify-between'>
+                                          <span className='text-muted-foreground'>{t('channels.columns.tokensPerSecondFull')}:</span>
+                                          <span>{(performance.avgStreamTokenPerSecond || performance.avgTokenPerSecond || 0).toFixed(1)}</span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <span className='text-muted-foreground'>{t('channels.expandedRow.noPerformanceData')}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bottom Section: Model Info (single column, full width) */}
+                            <div className='space-y-3 border-t pt-4'>
+                              <h4 className='text-sm font-semibold'>{t('channels.expandedRow.modes')}</h4>
+                              <div className='space-y-3'>
+                                <div className='flex items-center gap-6 text-sm'>
+                                  <div className='flex items-center gap-2'>
+                                    <span className='text-muted-foreground'>{t('channels.expandedRow.totalModels')}:</span>
+                                    <span className='font-medium'>{channel.supportedModels.length}</span>
+                                  </div>
+                                  <div className='flex items-center gap-2'>
+                                    <span className='text-muted-foreground'>{t('channels.expandedRow.defaultTestModel')}:</span>
+                                    <span className='font-medium'>{channel.defaultTestModel || '-'}</span>
+                                  </div>
+                                </div>
+                                <div className='flex flex-wrap gap-1'>
+                                  {channel.supportedModels.slice(0, 20).map((model) => (
+                                    <Badge key={model} variant='secondary' className='text-xs'>
+                                      {model}
+                                    </Badge>
+                                  ))}
+                                  {channel.supportedModels.length > 20 && (
+                                    <Badge variant='outline' className='text-xs'>
+                                      +{channel.supportedModels.length - 20} {t('channels.expandedRow.more')}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className='h-24 text-center'>
@@ -286,6 +441,75 @@ export function ChannelsTable({
           onPageSizeChange={onPageSizeChange}
         />
       </div>
+      {/* Floating Bulk Actions Bar */}
+      {selectedCount > 0 && (
+        <div className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50'>
+          <div className='flex items-center gap-2 rounded-lg border bg-background px-4 py-2 shadow-lg'>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8'
+              onClick={() => setRowSelection({})}
+            >
+              <IconX className='h-4 w-4' />
+            </Button>
+            <div className='flex items-center gap-1.5 px-2'>
+              <span className='flex h-6 min-w-6 items-center justify-center rounded bg-primary px-1.5 text-xs font-medium text-primary-foreground'>
+                {selectedCount}
+              </span>
+              <span className='text-sm text-muted-foreground'>
+                {t('common.selected')}
+              </span>
+            </div>
+            <div className='mx-2 h-6 w-px bg-border' />
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8 text-blue-600 hover:bg-blue-100 hover:text-blue-700'
+              onClick={() => setOpen('bulkApplyTemplate')}
+              title={t('channels.templates.bulk.applyButton')}
+            >
+              <IconTemplate className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8 text-green-600 hover:bg-green-100 hover:text-green-700'
+              onClick={() => setOpen('bulkEnable')}
+              title={t('common.buttons.enable')}
+            >
+              <IconCheck className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8 text-amber-600 hover:bg-amber-100 hover:text-amber-700'
+              onClick={() => setOpen('bulkDisable')}
+              title={t('common.buttons.disable')}
+            >
+              <IconBan className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8 text-orange-600 hover:bg-orange-100 hover:text-orange-700'
+              onClick={() => setOpen('bulkArchive')}
+              title={t('common.buttons.archive')}
+            >
+              <IconArchive className='h-4 w-4' />
+            </Button>
+            <Button
+              variant='ghost'
+              size='icon'
+              className='h-8 w-8 text-destructive hover:bg-red-100 hover:text-red-700'
+              onClick={() => setOpen('bulkDelete')}
+              title={t('common.buttons.delete')}
+            >
+              <IconTrash className='h-4 w-4' />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

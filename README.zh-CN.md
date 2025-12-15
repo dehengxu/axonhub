@@ -152,6 +152,7 @@ AxonHub 可以在不改动现有 OpenAI 兼容客户端的前提下，为每一�
 | 格式 Format | 状态 Status | 兼容性 Compatibility | Modalities |
 |-------------|------------|---------------------|----------|
 | **OpenAI Chat Completions** | ✅ Done | 完全兼容 | Text, Image |
+| **OpenAI Responses** | ⚠️ Partial | 不支持 `previous_response_id` | Text |
 | **Anthropic API** | ✅ Done | 完全支持 | Text |
 | **Gemini** | ✅ Done | 完全支持 | Text, Image |
 | **AI SDK** | ⚠️ Partial | 部分支持 | Text |
@@ -431,7 +432,7 @@ const completion = await openai.chat.completions.create({
 
 ## 🛠️ 开发指南
 
-详细的开发说明、架构设计和贡献指南，请查看 [DEVELOPMENT.md](DEVELOPMENT.md)。
+详细的开发说明、架构设计和贡献指南，请查看 [docs/zh/guides/development.md](docs/zh/guides/development.md)。
 
 ---
 

@@ -350,7 +350,6 @@ func TestChannelService_ListEnabledModels(t *testing.T) {
 func setupTestChannelService(t *testing.T) (*ChannelService, *ent.Client) {
 	t.Helper()
 
-	asyncReloadDisabled = true
 	client := enttest.NewEntClient(t, "sqlite3", "file:ent?mode=memory&_fk=1")
 
 	svc := &ChannelService{
@@ -777,182 +776,6 @@ func TestChannelService_BulkImportChannels(t *testing.T) {
 	}
 }
 
-func TestChannel_IsModelSupported_WithExtraModelPrefix(t *testing.T) {
-	tests := []struct {
-		name      string
-		channel   *Channel
-		model     string
-		supported bool
-	}{
-		{
-			name: "model without prefix is supported",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					SupportedModels: []string{"deepseek-chat", "deepseek-reasoner"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			model:     "deepseek-chat",
-			supported: true,
-		},
-		{
-			name: "model with prefix is supported",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					SupportedModels: []string{"deepseek-chat", "deepseek-reasoner"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			model:     "deepseek/deepseek-chat",
-			supported: true,
-		},
-		{
-			name: "model with prefix but not in supported models",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					SupportedModels: []string{"deepseek-chat"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			model:     "deepseek/gpt-4",
-			supported: false,
-		},
-		{
-			name: "model with wrong prefix",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					SupportedModels: []string{"deepseek-chat"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			model:     "openai/deepseek-chat",
-			supported: false,
-		},
-		{
-			name: "no extra prefix configured",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					SupportedModels: []string{"gpt-4"},
-					Settings:        &objects.ChannelSettings{},
-				},
-			},
-			model:     "openai/gpt-4",
-			supported: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.channel.IsModelSupported(tt.model)
-			require.Equal(t, tt.supported, result)
-		})
-	}
-}
-
-func TestChannel_ChooseModel_WithExtraModelPrefix(t *testing.T) {
-	tests := []struct {
-		name          string
-		channel       *Channel
-		inputModel    string
-		expectedModel string
-		expectError   bool
-	}{
-		{
-			name: "model without prefix returns as-is",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					Name:            "Test Channel",
-					SupportedModels: []string{"deepseek-chat", "deepseek-reasoner"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			inputModel:    "deepseek-chat",
-			expectedModel: "deepseek-chat",
-			expectError:   false,
-		},
-		{
-			name: "model with prefix strips prefix",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					Name:            "Test Channel",
-					SupportedModels: []string{"deepseek-chat", "deepseek-reasoner"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			inputModel:    "deepseek/deepseek-chat",
-			expectedModel: "deepseek-chat",
-			expectError:   false,
-		},
-		{
-			name: "model with prefix but not supported returns error",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					Name:            "Test Channel",
-					SupportedModels: []string{"deepseek-chat"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			inputModel:  "deepseek/gpt-4",
-			expectError: true,
-		},
-		{
-			name: "unsupported model returns error",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					Name:            "Test Channel",
-					SupportedModels: []string{"deepseek-chat"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			inputModel:  "gpt-4",
-			expectError: true,
-		},
-		{
-			name: "model with wrong prefix returns error",
-			channel: &Channel{
-				Channel: &ent.Channel{
-					Name:            "Test Channel",
-					SupportedModels: []string{"deepseek-chat"},
-					Settings: &objects.ChannelSettings{
-						ExtraModelPrefix: "deepseek",
-					},
-				},
-			},
-			inputModel:  "openai/deepseek-chat",
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := tt.channel.ChooseModel(tt.inputModel)
-
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedModel, result)
-			}
-		})
-	}
-}
-
 func TestChannelService_BulkUpdateChannelOrdering(t *testing.T) {
 	svc, client := setupTestChannelService(t)
 	defer client.Close()
@@ -1264,6 +1087,7 @@ func TestChannelService_BulkCreateChannels(t *testing.T) {
 			channels, err := svc.BulkCreateChannels(ctx, BulkCreateChannelsInput{
 				Type:             tt.channelType,
 				Name:             tt.baseName,
+				Tags:             nil,
 				BaseURL:          tt.baseURL,
 				APIKeys:          tt.apiKeys,
 				SupportedModels:  tt.supportedModels,

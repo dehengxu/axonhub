@@ -1,12 +1,13 @@
 import { z } from 'zod'
 
-const apiFormatSchema = z.enum(['openai/chat_completions', 'anthropic/messages', 'gemini/contents'])
+const apiFormatSchema = z.enum(['openai/chat_completions', 'openai/responses', 'anthropic/messages', 'gemini/contents'])
 
 export type ApiFormat = z.infer<typeof apiFormatSchema>
 
 // Channel Types
 export const channelTypeSchema = z.enum([
   'openai',
+  'openai_responses',
   'anthropic',
   'anthropic_aws',
   'anthropic_gcp',
@@ -84,7 +85,8 @@ export type ChannelPerformance = z.infer<typeof channelPerformanceSchema>
 // Channel Settings
 export const channelSettingsSchema = z.object({
   extraModelPrefix: z.string().optional(),
-  modelMappings: z.array(modelMappingSchema),
+  modelMappings: z.array(modelMappingSchema).nullable(),
+  autoTrimedModelPrefixes: z.array(z.string()).optional().nullable(),
   overrideParameters: z.string().optional(),
   overrideHeaders: z.array(headerEntrySchema).optional().nullable(),
   proxy: proxyConfigSchema.optional().nullable(),
@@ -106,6 +108,7 @@ export const channelSchema = z.object({
   settings: channelSettingsSchema.optional().nullable(),
   orderingWeight: z.number().default(0),
   errorMessage: z.string().optional().nullable(),
+  remark: z.string().optional().nullable(),
   channelPerformance: channelPerformanceSchema.optional().nullable(),
 })
 export type Channel = z.infer<typeof channelSchema>
@@ -203,6 +206,7 @@ export const updateChannelInputSchema = z
     defaultTestModel: z.string().min(1, 'Please select a default test model').optional(),
     settings: channelSettingsSchema.optional(),
     errorMessage: z.string().optional().nullable(),
+    remark: z.string().optional().nullable(),
     credentials: z
       .object({
         apiKey: z.string().optional(),
@@ -335,6 +339,7 @@ export const channelOrderingItemSchema = z.object({
   status: channelStatusSchema,
   baseURL: z.string(),
   orderingWeight: z.number(),
+  tags: z.array(z.string()).optional().default([]).nullable(),
 })
 export type ChannelOrderingItem = z.infer<typeof channelOrderingItemSchema>
 
@@ -366,3 +371,13 @@ export const bulkUpdateChannelOrderingResultSchema = z.object({
   channels: z.array(channelSchema),
 })
 export type BulkUpdateChannelOrderingResult = z.infer<typeof bulkUpdateChannelOrderingResultSchema>
+
+// Re-export template types from templates.ts
+export type {
+  ChannelOverrideTemplate,
+  ChannelOverrideTemplateConnection,
+  CreateChannelOverrideTemplateInput,
+  UpdateChannelOverrideTemplateInput,
+  ApplyChannelOverrideTemplateInput,
+  ApplyChannelOverrideTemplatePayload,
+} from './templates'

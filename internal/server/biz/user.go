@@ -104,6 +104,12 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, input ent.UpdateUs
 		SetNillableIsOwner(input.IsOwner).
 		SetNillablePreferLanguage(input.PreferLanguage)
 
+	if input.ClearAvatar {
+		mut.ClearAvatar()
+	} else {
+		mut.SetNillableAvatar(input.Avatar)
+	}
+
 	if input.Password != nil {
 		hashedPassword, err := HashPassword(*input.Password)
 		if err != nil {
@@ -280,6 +286,7 @@ func ConvertUserToUserInfo(ctx context.Context, u *ent.User) *objects.UserInfo {
 	}
 
 	return &objects.UserInfo{
+		ID:             objects.GUID{Type: ent.TypeUser, ID: u.ID},
 		Email:          u.Email,
 		FirstName:      u.FirstName,
 		LastName:       u.LastName,

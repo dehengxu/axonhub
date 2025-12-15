@@ -67,6 +67,7 @@ type CreateChannelInput struct {
 	DefaultTestModel string
 	Settings         *objects.ChannelSettings
 	OrderingWeight   *int
+	Remark           *string
 }
 
 // Mutate applies the CreateChannelInput on the ChannelMutation builder.
@@ -95,6 +96,9 @@ func (i *CreateChannelInput) Mutate(m *ChannelMutation) {
 	if v := i.OrderingWeight; v != nil {
 		m.SetOrderingWeight(*v)
 	}
+	if v := i.Remark; v != nil {
+		m.SetRemark(*v)
+	}
 }
 
 // SetInput applies the change-set in the CreateChannelInput on the ChannelCreate builder.
@@ -121,6 +125,8 @@ type UpdateChannelInput struct {
 	OrderingWeight        *int
 	ClearErrorMessage     bool
 	ErrorMessage          *string
+	ClearRemark           bool
+	Remark                *string
 }
 
 // Mutate applies the UpdateChannelInput on the ChannelMutation builder.
@@ -173,6 +179,12 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 	if v := i.ErrorMessage; v != nil {
 		m.SetErrorMessage(*v)
 	}
+	if i.ClearRemark {
+		m.ClearRemark()
+	}
+	if v := i.Remark; v != nil {
+		m.SetRemark(*v)
+	}
 }
 
 // SetInput applies the change-set in the UpdateChannelInput on the ChannelUpdate builder.
@@ -183,6 +195,84 @@ func (c *ChannelUpdate) SetInput(i UpdateChannelInput) *ChannelUpdate {
 
 // SetInput applies the change-set in the UpdateChannelInput on the ChannelUpdateOne builder.
 func (c *ChannelUpdateOne) SetInput(i UpdateChannelInput) *ChannelUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// CreateChannelOverrideTemplateInput represents a mutation input for creating channeloverridetemplates.
+type CreateChannelOverrideTemplateInput struct {
+	Name               string
+	Description        *string
+	ChannelType        string
+	OverrideParameters *string
+	OverrideHeaders    []objects.HeaderEntry
+}
+
+// Mutate applies the CreateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
+func (i *CreateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMutation) {
+	m.SetName(i.Name)
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	m.SetChannelType(i.ChannelType)
+	if v := i.OverrideParameters; v != nil {
+		m.SetOverrideParameters(*v)
+	}
+	if v := i.OverrideHeaders; v != nil {
+		m.SetOverrideHeaders(v)
+	}
+}
+
+// SetInput applies the change-set in the CreateChannelOverrideTemplateInput on the ChannelOverrideTemplateCreate builder.
+func (c *ChannelOverrideTemplateCreate) SetInput(i CreateChannelOverrideTemplateInput) *ChannelOverrideTemplateCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdateChannelOverrideTemplateInput represents a mutation input for updating channeloverridetemplates.
+type UpdateChannelOverrideTemplateInput struct {
+	Name                  *string
+	ClearDescription      bool
+	Description           *string
+	ChannelType           *string
+	OverrideParameters    *string
+	OverrideHeaders       []objects.HeaderEntry
+	AppendOverrideHeaders []objects.HeaderEntry
+}
+
+// Mutate applies the UpdateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
+func (i *UpdateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if i.ClearDescription {
+		m.ClearDescription()
+	}
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	if v := i.ChannelType; v != nil {
+		m.SetChannelType(*v)
+	}
+	if v := i.OverrideParameters; v != nil {
+		m.SetOverrideParameters(*v)
+	}
+	if v := i.OverrideHeaders; v != nil {
+		m.SetOverrideHeaders(v)
+	}
+	if i.AppendOverrideHeaders != nil {
+		m.AppendOverrideHeaders(i.OverrideHeaders)
+	}
+}
+
+// SetInput applies the change-set in the UpdateChannelOverrideTemplateInput on the ChannelOverrideTemplateUpdate builder.
+func (c *ChannelOverrideTemplateUpdate) SetInput(i UpdateChannelOverrideTemplateInput) *ChannelOverrideTemplateUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdateChannelOverrideTemplateInput on the ChannelOverrideTemplateUpdateOne builder.
+func (c *ChannelOverrideTemplateUpdateOne) SetInput(i UpdateChannelOverrideTemplateInput) *ChannelOverrideTemplateUpdateOne {
 	i.Mutate(c.Mutation())
 	return c
 }

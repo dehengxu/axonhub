@@ -3,12 +3,12 @@ package anthropic
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/samber/lo"
 
 	"github.com/looplj/axonhub/internal/llm"
 	"github.com/looplj/axonhub/internal/pkg/xjson"
+	"github.com/looplj/axonhub/internal/pkg/xurl"
 )
 
 // convertToLLMRequest converts Anthropic MessageRequest to ChatCompletionRequest.
@@ -23,7 +23,7 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 		Stream:              anthropicReq.Stream,
 		Metadata:            map[string]string{},
 		RawAPIFormat:        llm.APIFormatAnthropicMessage,
-		TransformerMetadata: map[string]string{},
+		TransformerMetadata: map[string]any{},
 	}
 	if anthropicReq.Metadata != nil {
 		chatReq.Metadata["user_id"] = anthropicReq.Metadata.UserID
@@ -81,8 +81,9 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 			contentParts := make([]llm.MessageContentPart, 0, len(msg.Content.MultipleContent))
 
 			var (
-				reasoningContent      string
-				hasReasoningInContent bool
+				reasoningContent         string
+				hasReasoningInContent    bool
+				redactedReasoningContent string
 			)
 
 			var reasoningSignature string
@@ -91,18 +92,23 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 				switch block.Type {
 				case "thinking":
 					// Keep thinking content in MultipleContent to preserve order
-					if block.Thinking != "" {
-						reasoningContent = block.Thinking
+					if block.Thinking != nil && *block.Thinking != "" {
+						reasoningContent = *block.Thinking
 						hasReasoningInContent = true
 					}
 
-					if block.Signature != "" {
-						reasoningSignature = block.Signature
+					if block.Signature != nil && *block.Signature != "" {
+						reasoningSignature = *block.Signature
+					}
+				case "redacted_thinking":
+					// Handle redacted thinking content - store the encrypted data
+					if block.Data != "" {
+						redactedReasoningContent = block.Data
 					}
 				case "text":
 					contentParts = append(contentParts, llm.MessageContentPart{
 						Type:         "text",
-						Text:         &block.Text,
+						Text:         block.Text,
 						CacheControl: convertToLLMCacheControl(block.CacheControl),
 					})
 					hasContent = true
@@ -151,7 +157,7 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 								if contentBlock.Type == "text" {
 									toolContentParts = append(toolContentParts, llm.MessageContentPart{
 										Type: "text",
-										Text: &contentBlock.Text,
+										Text: contentBlock.Text,
 									})
 								}
 							}
@@ -203,6 +209,10 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 
 			if reasoningSignature != "" {
 				chatMsg.ReasoningSignature = &reasoningSignature
+			}
+
+			if redactedReasoningContent != "" {
+				chatMsg.RedactedReasoningContent = &redactedReasoningContent
 			}
 		}
 
@@ -288,20 +298,30 @@ func convertToAnthropicResponse(chatResp *llm.Response) *Message {
 			if message.ReasoningContent != nil && *message.ReasoningContent != "" {
 				thinkingBlock := MessageContentBlock{
 					Type:     "thinking",
-					Thinking: *message.ReasoningContent,
+					Thinking: lo.ToPtr(*message.ReasoningContent),
 				}
-				if message.ReasoningSignature != nil && *message.ReasoningSignature != "" {
-					thinkingBlock.Signature = *message.ReasoningSignature
+				if message.ReasoningSignature != nil {
+					thinkingBlock.Signature = message.ReasoningSignature
+				} else {
+					thinkingBlock.Signature = lo.ToPtr("")
 				}
 
 				contentBlocks = append(contentBlocks, thinkingBlock)
+			}
+
+			// Handle redacted reasoning content if present
+			if message.RedactedReasoningContent != nil && *message.RedactedReasoningContent != "" {
+				contentBlocks = append(contentBlocks, MessageContentBlock{
+					Type: "redacted_thinking",
+					Data: *message.RedactedReasoningContent,
+				})
 			}
 
 			// Handle regular content
 			if message.Content.Content != nil && *message.Content.Content != "" {
 				contentBlocks = append(contentBlocks, MessageContentBlock{
 					Type: "text",
-					Text: *message.Content.Content,
+					Text: message.Content.Content,
 				})
 			} else if len(message.Content.MultipleContent) > 0 {
 				for _, part := range message.Content.MultipleContent {
@@ -310,30 +330,22 @@ func convertToAnthropicResponse(chatResp *llm.Response) *Message {
 						if part.Text != nil {
 							contentBlocks = append(contentBlocks, MessageContentBlock{
 								Type: "text",
-								Text: *part.Text,
+								Text: part.Text,
 							})
 						}
 					case "image_url":
 						if part.ImageURL != nil && part.ImageURL.URL != "" {
 							// Convert OpenAI image format to Anthropic format
 							url := part.ImageURL.URL
-							if strings.HasPrefix(url, "data:") {
-								// Extract media type and data from data URL
-								parts := strings.SplitN(url, ",", 2)
-								if len(parts) == 2 {
-									headerParts := strings.Split(parts[0], ";")
-									if len(headerParts) >= 2 {
-										mediaType := strings.TrimPrefix(headerParts[0], "data:")
-										contentBlocks = append(contentBlocks, MessageContentBlock{
-											Type: "image",
-											Source: &ImageSource{
-												Type:      "base64",
-												MediaType: mediaType,
-												Data:      parts[1],
-											},
-										})
-									}
-								}
+							if parsed := xurl.ParseDataURL(url); parsed != nil {
+								contentBlocks = append(contentBlocks, MessageContentBlock{
+									Type: "image",
+									Source: &ImageSource{
+										Type:      "base64",
+										MediaType: parsed.MediaType,
+										Data:      parsed.Data,
+									},
+								})
 							} else {
 								contentBlocks = append(contentBlocks, MessageContentBlock{
 									Type: "image",

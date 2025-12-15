@@ -19,6 +19,7 @@ import (
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
 	"github.com/looplj/axonhub/internal/pkg/xerrors"
+	"github.com/looplj/axonhub/internal/pkg/xmap"
 )
 
 type Channel struct {
@@ -35,6 +36,18 @@ type Channel struct {
 
 	// CachedOverrideHeaders stores the parsed override headers to avoid repeated JSON parsing
 	CachedOverrideHeaders []objects.HeaderEntry
+
+	// modelSupportCache caches IsModelSupported results
+	modelSupportCache *xmap.Map[string, bool]
+
+	// chooseModelCache caches ChooseModel results
+	chooseModelCache *xmap.Map[string, chooseModelResult]
+}
+
+// chooseModelResult stores the cached result of ChooseModel.
+type chooseModelResult struct {
+	model string
+	err   error
 }
 
 type ChannelServiceParams struct {
@@ -426,11 +439,31 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 	}
 
 	if input.Settings != nil {
+		// Always normalize and validate override parameters
+		input.Settings.OverrideParameters = NormalizeOverrideParameters(input.Settings.OverrideParameters)
+		if err := ValidateOverrideParameters(input.Settings.OverrideParameters); err != nil {
+			return nil, fmt.Errorf("invalid override parameters: %w", err)
+		}
+		// Validate override headers
+		if len(input.Settings.OverrideHeaders) > 0 {
+			if err := ValidateOverrideHeaders(input.Settings.OverrideHeaders); err != nil {
+				return nil, fmt.Errorf("invalid override headers: %w", err)
+			}
+		}
+
 		mut.SetSettings(input.Settings)
 	}
 
 	if input.Credentials != nil {
 		mut.SetCredentials(input.Credentials)
+	}
+
+	if input.Remark != nil {
+		mut.SetRemark(*input.Remark)
+	}
+
+	if input.ClearRemark {
+		mut.ClearRemark()
 	}
 
 	if input.ClearErrorMessage {

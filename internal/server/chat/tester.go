@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
 
 	"github.com/looplj/axonhub/internal/llm"
 	"github.com/looplj/axonhub/internal/llm/pipeline"
@@ -65,27 +66,32 @@ func (processor *TestChannelProcessor) TestChannel(
 	ctx context.Context,
 	channelID objects.GUID,
 	modelID *string,
-	proxyConfig *objects.ProxyConfig,
+	proxy *objects.ProxyConfig,
 ) (*TestChannelResult, error) {
+	inbound := openai.NewInboundTransformer()
 	// Create ChatCompletionProcessor for this test request
 	chatProcessor := &ChatCompletionProcessor{
-		ChannelSelector: NewSpecifiedChannelSelector(processor.channelService, channelID),
-		Inbound:         openai.NewInboundTransformer(),
+		channelSelector: NewSpecifiedChannelSelector(processor.channelService, channelID),
 		RequestService:  processor.requestService,
 		ChannelService:  processor.channelService,
 		PipelineFactory: pipeline.NewFactory(processor.httpClient),
 		Middlewares: []pipeline.Middleware{
 			stream.EnsureUsage(),
 		},
-		SystemService:   processor.systemService,
-		UsageLogService: processor.usageLogService,
-		Proxy:           proxyConfig,
+		Inbound:            inbound,
+		SystemService:      processor.systemService,
+		UsageLogService:    processor.usageLogService,
+		proxy:              proxy,
+		ModelMapper:        nil,
+		selectedChannelIds: []int{},
+		loadBalancer:       nil,
+		connectionTracker:  nil,
 	}
 
 	// Create a simple test request
 	testModel := lo.FromPtr(modelID)
 	if testModel == "" {
-		channels, err := chatProcessor.ChannelSelector.Select(ctx, &llm.Request{})
+		channels, err := chatProcessor.channelSelector.Select(ctx, &llm.Request{})
 		if err != nil {
 			return nil, err
 		}
@@ -126,13 +132,16 @@ func (processor *TestChannelProcessor) TestChannel(
 	})
 
 	latency := time.Since(startTime).Seconds()
+	rawErr := inbound.TransformError(ctx, err)
+	message := gjson.GetBytes(rawErr.Body, "error.message").String()
 
+	//nolint:nilerr // Checked.
 	if err != nil {
 		return &TestChannelResult{
 			Latency: latency,
 			Success: false,
 			Message: lo.ToPtr(""),
-			Error:   lo.ToPtr(err.Error()),
+			Error:   lo.ToPtr(message),
 		}, nil
 	}
 

@@ -2,6 +2,7 @@ import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { Row } from '@tanstack/react-table'
 import {
   IconEdit,
+  IconCopy,
   IconToggleLeft,
   IconToggleRight,
   IconArchive,
@@ -11,6 +12,7 @@ import {
   IconNetwork,
   IconCheck,
   IconWeight,
+  IconNote,
 } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -63,6 +65,18 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
         )}
 
+        {channelPermissions.canEdit && (
+          <DropdownMenuItem
+            onClick={() => {
+              setCurrentRow(row.original)
+              setOpen('duplicate')
+            }}
+          >
+            <IconCopy size={16} className='mr-2' />
+            {t('common.actions.duplicate')}
+          </DropdownMenuItem>
+        )}
+
         {/* Model Mapping - requires write permission */}
         {channelPermissions.canWrite && (
           <DropdownMenuItem
@@ -112,6 +126,19 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           >
             <IconWeight size={16} className='mr-2' />
             {t('channels.dialogs.weight.action')}
+          </DropdownMenuItem>
+        )}
+
+        {/* Remark - requires write permission */}
+        {channelPermissions.canWrite && (
+          <DropdownMenuItem
+            onClick={() => {
+              setCurrentRow(row.original)
+              setOpen('remark')
+            }}
+          >
+            <IconNote size={16} className='mr-2' />
+            {t('channels.dialogs.remark.action')}
           </DropdownMenuItem>
         )}
 

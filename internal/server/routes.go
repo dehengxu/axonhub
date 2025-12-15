@@ -38,6 +38,7 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 	// Serve static frontend files
 	server.NoRoute(static.Handler())
 
+	server.Use(middleware.AccessLog())
 	server.Use(middleware.WithEntClient(client))
 	server.Use(middleware.WithLoggingTracing(server.Config.Trace))
 	server.Use(middleware.WithMetrics())
@@ -87,14 +88,11 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		middleware.WithThread(server.Config.Trace, services.ThreadService),
 		middleware.WithTrace(server.Config.Trace, services.TraceService),
 	)
-	{
-		apiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
-		apiGroup.GET("/models", handlers.OpenAI.ListModels)
-	}
 
 	openaiGroup := apiGroup.Group("/v1")
 	{
 		openaiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
+		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
 	}
 

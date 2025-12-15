@@ -189,6 +189,13 @@ type Request struct {
 
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
 
+	// Constrains the verbosity of the model's response. Lower values will result in
+	// more concise responses, while higher values will result in more verbose
+	// responses. Currently supported values are `low`, `medium`, and `high`.
+	//
+	// Any of "low", "medium", "high".
+	Verbosity *string `json:"verbosity,omitempty"`
+
 	// Help fields， will not be sent to the llm service.
 
 	// ExtraBody is helpful to extend the request for different providers.
@@ -204,7 +211,14 @@ type Request struct {
 
 	// TransformerMetadata stores transformer-specific metadata for preserving format during transformations.
 	// This is a help field and will not be sent to the llm service.
-	TransformerMetadata map[string]string `json:"-"`
+	// Keys used:
+	// - "include": []string - additional output data to include in the model response
+	// - "max_tool_calls": *int64 - maximum number of total calls to built-in tools
+	// - "prompt_cache_key": *string - string key used by OpenAI to cache responses
+	// - "prompt_cache_retention": *string - retention policy for the prompt cache ("in-memory", "24h")
+	// - "truncation": *string - truncation strategy ("auto", "disabled")
+	// - "include_obfuscation": *bool - whether to enable stream obfuscation (Responses API specific)
+	TransformerMetadata map[string]any `json:"-"`
 }
 
 func (r *Request) ClearHelpFields() {
@@ -296,7 +310,12 @@ type Message struct {
 	ReasoningContent *string `json:"reasoning_content,omitempty"`
 
 	// Help field, will not be sent to the llm service, to adapt the anthropic think signature.
+	// https://platform.claude.com/docs/en/build-with-claude/extended-thinking
 	ReasoningSignature *string `json:"reasoning_signature,omitempty"`
+
+	// Help field, will not be sent to the llm service, to adapt the anthropic think signature.
+	// https://platform.claude.com/docs/en/build-with-claude/extended-thinking
+	RedactedReasoningContent *string `json:"redacted_reasoning_content,omitempty"`
 
 	// CacheControl is used for provider-specific cache control (e.g., Anthropic).
 	// This field is not serialized in JSON.
@@ -306,6 +325,7 @@ type Message struct {
 func (m *Message) ClearHelpFields() {
 	m.ReasoningContent = nil
 	m.ReasoningSignature = nil
+	m.RedactedReasoningContent = nil
 }
 
 type MessageContent struct {
@@ -362,6 +382,10 @@ type MessageContentPart struct {
 	// CacheControl is used for provider-specific cache control (e.g., Anthropic).
 	// This field is not serialized in JSON.
 	CacheControl *CacheControl `json:"-"`
+
+	// TransformerMetadata stores transformer-specific metadata for preserving format during transformations.
+	// This is a help field and will not be sent to the llm service.
+	TransformerMetadata map[string]any `json:"-"`
 }
 
 // ImageURL represents an image URL with optional detail level.

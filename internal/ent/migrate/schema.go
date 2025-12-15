@@ -65,7 +65,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "deepseek", "deepseek_anthropic", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "deepseek", "deepseek_anthropic", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian"}},
 		{Name: "base_url", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled", "archived"}, Default: "disabled"},
@@ -76,6 +76,7 @@ var (
 		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 		{Name: "ordering_weight", Type: field.TypeInt, Default: 0},
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
+		{Name: "remark", Type: field.TypeString, Nullable: true},
 	}
 	// ChannelsTable holds the schema information for the "channels" table.
 	ChannelsTable = &schema.Table{
@@ -87,6 +88,40 @@ var (
 				Name:    "channels_by_name",
 				Unique:  true,
 				Columns: []*schema.Column{ChannelsColumns[6], ChannelsColumns[3]},
+			},
+		},
+	}
+	// ChannelOverrideTemplatesColumns holds the columns for the "channel_override_templates" table.
+	ChannelOverrideTemplatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+		{Name: "channel_type", Type: field.TypeString},
+		{Name: "override_parameters", Type: field.TypeString, Default: "{}"},
+		{Name: "override_headers", Type: field.TypeJSON},
+		{Name: "user_id", Type: field.TypeInt},
+	}
+	// ChannelOverrideTemplatesTable holds the schema information for the "channel_override_templates" table.
+	ChannelOverrideTemplatesTable = &schema.Table{
+		Name:       "channel_override_templates",
+		Columns:    ChannelOverrideTemplatesColumns,
+		PrimaryKey: []*schema.Column{ChannelOverrideTemplatesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "channel_override_templates_users_channel_override_templates",
+				Columns:    []*schema.Column{ChannelOverrideTemplatesColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channel_override_templates_by_user_type_name",
+				Unique:  true,
+				Columns: []*schema.Column{ChannelOverrideTemplatesColumns[9], ChannelOverrideTemplatesColumns[6], ChannelOverrideTemplatesColumns[4], ChannelOverrideTemplatesColumns[3]},
 			},
 		},
 	}
@@ -668,6 +703,7 @@ var (
 	Tables = []*schema.Table{
 		APIKeysTable,
 		ChannelsTable,
+		ChannelOverrideTemplatesTable,
 		ChannelPerformancesTable,
 		DataStoragesTable,
 		ProjectsTable,
@@ -687,6 +723,7 @@ var (
 func init() {
 	APIKeysTable.ForeignKeys[0].RefTable = ProjectsTable
 	APIKeysTable.ForeignKeys[1].RefTable = UsersTable
+	ChannelOverrideTemplatesTable.ForeignKeys[0].RefTable = UsersTable
 	ChannelPerformancesTable.ForeignKeys[0].RefTable = ChannelsTable
 	RequestsTable.ForeignKeys[0].RefTable = APIKeysTable
 	RequestsTable.ForeignKeys[1].RefTable = ChannelsTable

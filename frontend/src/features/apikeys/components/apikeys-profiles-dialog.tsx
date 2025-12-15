@@ -1,19 +1,25 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { IconPlus, IconTrash, IconSettings } from '@tabler/icons-react'
+import { IconPlus, IconTrash, IconSettings, IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 import { useQueryModels } from '@/gql/models'
 import { useTranslation } from 'react-i18next'
 import { useDebounce } from '@/hooks/use-debounce'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AutoComplete } from '@/components/auto-complete'
 import { useApiKeysContext } from '../context/apikeys-context'
 import { updateApiKeyProfilesInputSchemaFactory, type UpdateApiKeyProfilesInput, type ApiKeyProfile } from '../data/schema'
+import { useAllChannelsForOrdering } from '@/features/channels/data/channels'
+import { extractNumberID } from '@/lib/utils'
+
+type DialogContentRef = HTMLDivElement | null
 
 interface ApiKeyProfilesDialogProps {
   open: boolean
@@ -29,11 +35,24 @@ interface ApiKeyProfilesDialogProps {
 export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = false, initialData }: ApiKeyProfilesDialogProps) {
   const { t } = useTranslation()
   const { selectedApiKey } = useApiKeysContext()
+  const { data: availableModels, mutateAsync: fetchModels } = useQueryModels()
+  // 用于解决 Dialog 内 Popover 无法滚动的问题
+  const [dialogContent, setDialogContent] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      fetchModels({
+        statusIn: ['enabled'],
+        includeMapping: true,
+        includePrefix: true,
+      })
+    }
+  }, [open, fetchModels])
 
   const defaultValues = useMemo(
     () => ({
       activeProfile: '',
-      profiles: [],
+      profiles: [] as ApiKeyProfile[],
     }),
     []
   )
@@ -122,6 +141,8 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
     appendProfile({
       name: `Profile ${profileFields.length + 1}`,
       modelMappings: [],
+      channelIDs: [],
+      channelTags: [],
     })
   }, [appendProfile, profileFields])
 
@@ -145,7 +166,7 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='flex max-h-[90vh] flex-col sm:max-w-4xl'>
+      <DialogContent ref={setDialogContent} className='flex max-h-[90vh] flex-col sm:max-w-4xl'>
         <DialogHeader className='shrink-0 text-left'>
           <DialogTitle className='flex items-center gap-2'>
             <IconSettings className='h-5 w-5' />
@@ -182,14 +203,18 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
                   <div className='space-y-4'>
                     <div className='space-y-4'>
                       {profileFields.map((profile, profileIndex) => (
-                        <ProfileCard
-                          key={profile.id}
-                          profileIndex={profileIndex}
-                          form={form}
-                          onRemove={() => removeProfileHandler(profileIndex)}
-                          canRemove={profileFields.length > 1}
-                          t={t}
-                        />
+                        <div key={profile.id} className={profileIndex === 0 ? 'mt-4' : ''}>
+                          <ProfileCard
+                            profileIndex={profileIndex}
+                            form={form}
+                            onRemove={() => removeProfileHandler(profileIndex)}
+                            canRemove={profileFields.length > 1}
+                            availableModels={availableModels?.map((model) => model.id) || []}
+                            t={t}
+                            defaultExpanded={profileIndex === 0}
+                            portalContainer={dialogContent}
+                          />
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -199,15 +224,15 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
           )}
 
           {/* Fixed Active Profile Section at Bottom */}
-          <div className='bg-background shrink-0 border-t p-4'>
+          <div className='bg-background shrink-0 border-t mt-4 px-4 py-2'>
             <Form {...form}>
               <FormField
                 control={form.control}
                 name='activeProfile'
                 render={({ field }) => (
-                  <FormItem className='grid grid-cols-8 items-start space-y-0 gap-x-6 gap-y-1'>
-                    <FormLabel className='col-span-2 pt-2 text-right font-medium'>{t('apikeys.profiles.activeProfile')}</FormLabel>
-                    <FormControl className='col-span-6'>
+                  <FormItem className='flex items-center space-y-0 gap-x-3'>
+                    <FormLabel className='shrink-0 font-medium'>{t('apikeys.profiles.activeProfile')}</FormLabel>
+                    <FormControl>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger>
                           <SelectValue placeholder={t('apikeys.profiles.selectActiveProfile')} />
@@ -223,9 +248,7 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
                         </SelectContent>
                       </Select>
                     </FormControl>
-                    <div className='col-span-6 col-start-3 min-h-[1.25rem]'>
-                      <FormMessage />
-                    </div>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -261,24 +284,33 @@ export function ApiKeyProfilesDialog({ open, onOpenChange, onSubmit, loading = f
 
 interface ProfileCardProps {
   profileIndex: number
-  form: any
+  form: ReturnType<typeof useForm<UpdateApiKeyProfilesInput>>
   onRemove: () => void
   canRemove: boolean
+  availableModels: string[]
   t: (key: string) => string
+  defaultExpanded?: boolean
+  /** Popover Portal 容器元素，解决 Dialog 内无法滚动的问题 */
+  portalContainer?: HTMLElement | null
 }
 
-function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCardProps) {
+function ProfileCard({ profileIndex, form, onRemove, canRemove, availableModels, t, defaultExpanded = false, portalContainer }: ProfileCardProps) {
   const [localProfileName, setLocalProfileName] = useState('')
-  const { data: availableModels, mutateAsync: fetchModels } = useQueryModels()
-  useEffect(() => {
-    fetchModels({
-      statusIn: ['enabled'],
-      includeMapping: true,
-      includePrefix: true,
-    })
-  }, [])
+  const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded)
+  const { data: channelsData } = useAllChannelsForOrdering({ enabled: true })
 
   const debouncedProfileName = useDebounce(localProfileName, 500)
+
+  // 从所有渠道中提取唯一标签
+  const allTags = useMemo(() => {
+    const tagsSet = new Set<string>()
+    channelsData?.edges?.forEach((edge) => {
+      edge.node.tags?.forEach((tag) => {
+        if (tag) tagsSet.add(tag)
+      })
+    })
+    return Array.from(tagsSet).sort()
+  }, [channelsData])
 
   const {
     fields: mappingFields,
@@ -307,8 +339,8 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
         return
       }
 
-      const otherProfiles = allProfiles.filter((_: any, idx: number) => idx !== profileIndex)
-      const isDuplicate = otherProfiles.some((p: any) => p.name && p.name.trim().toLowerCase() === trimmedValue)
+      const otherProfiles = allProfiles.filter((_profile: ApiKeyProfile, idx: number) => idx !== profileIndex)
+      const isDuplicate = otherProfiles.some((p: ApiKeyProfile) => p.name && p.name.trim().toLowerCase() === trimmedValue)
 
       if (isDuplicate) {
         form.setError(`profiles.${profileIndex}.name`, {
@@ -324,7 +356,7 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
   // Debounced form value update for performance
   useEffect(() => {
     checkDuplicate(debouncedProfileName)
-  }, [debouncedProfileName])
+  }, [debouncedProfileName, checkDuplicate])
 
   const addMapping = useCallback(() => {
     appendMapping({ from: '', to: '' })
@@ -333,8 +365,8 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
   return (
     <Card>
       <CardHeader className='pb-3'>
-        <div className='flex items-center justify-between'>
-          <CardTitle className='text-base'>
+        <div className='flex items-center justify-between gap-2'>
+          <CardTitle className='text-base flex-1 min-w-0'>
             <FormField
               control={form.control}
               name={`profiles.${profileIndex}.name`}
@@ -350,7 +382,7 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
                       }}
                       onBlur={field.onBlur}
                       placeholder={t('apikeys.profiles.profileName')}
-                      className='font-medium'
+                      className='font-medium w-full md:w-[12em]'
                     />
                   </FormControl>
                   <FormMessage />
@@ -358,38 +390,156 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
               )}
             />
           </CardTitle>
-          {canRemove && (
-            <Button type='button' variant='ghost' size='sm' onClick={onRemove} className='text-destructive hover:text-destructive'>
-              <IconTrash className='h-4 w-4' />
+          <div className='flex items-center gap-1 shrink-0'>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              className='hover:bg-accent'
+              aria-expanded={!isCollapsed}
+              aria-label={isCollapsed ? t('apikeys.profiles.expand') : t('apikeys.profiles.collapse')}
+            >
+              {isCollapsed ? <IconChevronDown className='h-4 w-4' /> : <IconChevronUp className='h-4 w-4' />}
             </Button>
-          )}
+            {canRemove && (
+              <Button type='button' variant='ghost' size='sm' onClick={onRemove} className='text-destructive hover:text-destructive'>
+                <IconTrash className='h-4 w-4' />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
-      <CardContent className='space-y-4'>
-        <div className='flex items-center justify-between'>
-          <h4 className='text-sm font-medium'>{t('apikeys.profiles.modelMappings')}</h4>
-          <Button type='button' variant='outline' size='sm' onClick={addMapping} className='flex items-center gap-2'>
-            <IconPlus className='h-4 w-4' />
-            {t('apikeys.profiles.addMapping')}
-          </Button>
-        </div>
+      {!isCollapsed && (
+        <CardContent className='space-y-4'>
+          <div className='flex items-center justify-between'>
+            <h4 className='text-sm font-medium'>{t('apikeys.profiles.modelMappings')}</h4>
+            <Button type='button' variant='outline' size='sm' onClick={addMapping} className='flex items-center gap-2'>
+              <IconPlus className='h-4 w-4' />
+              {t('apikeys.profiles.addMapping')}
+            </Button>
+          </div>
 
-        {mappingFields.length === 0 && <p className='text-muted-foreground py-4 text-center text-sm'>{t('apikeys.profiles.noMappings')}</p>}
+          {mappingFields.length === 0 && <p className='text-muted-foreground py-4 text-center text-sm'>{t('apikeys.profiles.noMappings')}</p>}
 
-        <div className='space-y-3'>
-          {mappingFields.map((mapping, mappingIndex) => (
-            <MappingRow
-              key={mapping.id}
-              profileIndex={profileIndex}
-              mappingIndex={mappingIndex}
-              form={form}
-              onRemove={() => removeMapping(mappingIndex)}
-              availableModels={availableModels?.map((model) => model.id) || []}
-              t={t}
+          <div className='space-y-3'>
+            {mappingFields.map((mapping, mappingIndex) => (
+              <MappingRow
+                key={mapping.id}
+                profileIndex={profileIndex}
+                mappingIndex={mappingIndex}
+                form={form}
+                onRemove={() => removeMapping(mappingIndex)}
+                availableModels={availableModels}
+                t={t}
+                portalContainer={portalContainer}
+              />
+            ))}
+          </div>
+
+          {/* Channel Restrictions Section */}
+          <div className='border-t pt-4'>
+            <h4 className='text-sm font-medium mb-3'>{t('apikeys.profiles.allowedChannels')}</h4>
+            <p className='text-muted-foreground text-xs mb-3'>{t('apikeys.profiles.allowedChannelsDescription')}</p>
+            <FormField
+              control={form.control}
+              name={`profiles.${profileIndex}.channelIDs`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <div className='grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded-md p-2'>
+                      {channelsData?.edges?.map((edge) => {
+                        const channel = edge.node
+                        const channelId = parseInt(extractNumberID(channel.id), 10)
+                        const isChecked = (field.value || []).includes(channelId)
+                        return (
+                          <div key={channel.id} className='flex items-center space-x-2'>
+                            <Checkbox
+                              id={`channel-${profileIndex}-${channel.id}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                const currentValue: number[] = field.value || []
+                                if (checked) {
+                                  field.onChange([...currentValue, channelId])
+                                } else {
+                                  field.onChange(currentValue.filter((id) => id !== channelId))
+                                }
+                              }}
+                            />
+                            <Label
+                              htmlFor={`channel-${profileIndex}-${channel.id}`}
+                              className='text-sm font-normal cursor-pointer truncate'
+                              title={channel.name}
+                            >
+                              {channel.name}
+                            </Label>
+                          </div>
+                        )
+                      })}
+                      {(!channelsData?.edges || channelsData.edges.length === 0) && (
+                        <p className='text-muted-foreground text-sm col-span-2 text-center py-2'>
+                          {t('apikeys.profiles.noChannelsAvailable')}
+                        </p>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          ))}
-        </div>
-      </CardContent>
+          </div>
+
+          {/* Channel Tags Restrictions Section */}
+          <div className='border-t pt-4 mt-4'>
+            <h4 className='text-sm font-medium mb-3'>{t('apikeys.profiles.allowedChannelTags')}</h4>
+            <p className='text-muted-foreground text-xs mb-3'>{t('apikeys.profiles.allowedChannelTagsDescription')}</p>
+            <FormField
+              control={form.control}
+              name={`profiles.${profileIndex}.channelTags`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <div className='grid grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-md p-2'>
+                      {allTags.map((tag) => {
+                        const isChecked = (field.value || []).includes(tag)
+                        return (
+                          <div key={tag} className='flex items-center space-x-2'>
+                            <Checkbox
+                              id={`tag-${profileIndex}-${tag}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                const currentValue: string[] = field.value || []
+                                if (checked) {
+                                  field.onChange([...currentValue, tag])
+                                } else {
+                                  field.onChange(currentValue.filter((t) => t !== tag))
+                                }
+                              }}
+                            />
+                            <Label
+                              htmlFor={`tag-${profileIndex}-${tag}`}
+                              className='text-sm font-normal cursor-pointer truncate'
+                              title={tag}
+                            >
+                              {tag}
+                            </Label>
+                          </div>
+                        )
+                      })}
+                      {allTags.length === 0 && (
+                        <p className='text-muted-foreground text-sm col-span-3 text-center py-2'>
+                          {t('apikeys.profiles.noTagsAvailable')}
+                        </p>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
@@ -397,13 +547,15 @@ function ProfileCard({ profileIndex, form, onRemove, canRemove, t }: ProfileCard
 interface MappingRowProps {
   profileIndex: number
   mappingIndex: number
-  form: any
+  form: ReturnType<typeof useForm<UpdateApiKeyProfilesInput>>
   onRemove: () => void
   availableModels: string[]
   t: (key: string) => string
+  /** Popover Portal 容器元素，解决 Dialog 内无法滚动的问题 */
+  portalContainer?: HTMLElement | null
 }
 
-function MappingRow({ profileIndex, mappingIndex, form, onRemove, availableModels, t }: MappingRowProps) {
+function MappingRow({ profileIndex, mappingIndex, form, onRemove, availableModels, t, portalContainer }: MappingRowProps) {
   const [fromSearch, setFromSearch] = useState('')
   const [toSearch, setToSearch] = useState('')
 
@@ -449,6 +601,7 @@ function MappingRow({ profileIndex, mappingIndex, form, onRemove, availableModel
                 items={filteredFromModels}
                 placeholder={t('apikeys.profiles.sourceModel')}
                 emptyMessage={t('apikeys.profiles.noModelsFound')}
+                portalContainer={portalContainer}
               />
             </FormControl>
             {/* <div className='text-muted-foreground mt-1 text-xs'>{t('apikeys.profiles.regexSupported')}</div> */}
@@ -474,6 +627,7 @@ function MappingRow({ profileIndex, mappingIndex, form, onRemove, availableModel
                 items={filteredToModels}
                 placeholder={t('apikeys.profiles.targetModel')}
                 emptyMessage={t('apikeys.profiles.noModelsFound')}
+                portalContainer={portalContainer}
               />
             </FormControl>
             <FormMessage />

@@ -4,6 +4,7 @@ import { Channel } from '../data/schema'
 
 type ChannelsDialogType =
   | 'add'
+  | 'duplicate'
   | 'edit'
   | 'delete'
   | 'settings'
@@ -19,9 +20,11 @@ type ChannelsDialogType =
   | 'bulkDisable'
   | 'bulkEnable'
   | 'bulkDelete'
+  | 'bulkApplyTemplate'
   | 'errorResolved'
   | 'weight'
   | 'viewModels'
+  | 'remark'
 
 interface ChannelsContextType {
   open: ChannelsDialogType | null

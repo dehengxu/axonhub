@@ -7,6 +7,7 @@ import { AppHeader } from '@/components/layout/app-header'
 import SkipToMain from '@/components/skip-to-main'
 import { useSidebarData } from './sidebar'
 import { OnboardingProvider } from '@/features/onboarding'
+import { useVersionCheck } from '@/hooks/use-version-check'
 
 interface Props {
   children?: React.ReactNode
@@ -15,6 +16,9 @@ interface Props {
 export function AuthenticatedLayout({ children }: Props) {
   const defaultOpen = Cookies.get('sidebar_state') !== 'false'
   const sidebarData = useSidebarData()
+  
+  // Check for new version on mount (only for owners)
+  useVersionCheck()
   
   return (
     <SidebarProvider defaultOpen={defaultOpen} className='h-screen flex-col overflow-hidden'>
@@ -29,7 +33,7 @@ export function AuthenticatedLayout({ children }: Props) {
             'peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon)-1rem)]',
             'peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))]',
             'sm:transition-[width] sm:duration-200 sm:ease-linear',
-            'flex flex-1 flex-col overflow-auto pt-14',
+            'flex flex-1 min-h-0 min-w-0 flex-col overflow-auto pt-14 has-[main.fixed-main]:overflow-hidden',
             'group-data-[scroll-locked=1]/body:h-full',
             'has-[main.fixed-main]:group-data-[scroll-locked=1]/body:h-svh'
           )}

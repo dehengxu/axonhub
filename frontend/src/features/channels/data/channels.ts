@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { graphqlRequest } from '@/gql/graphql'
 import { useTranslation } from 'react-i18next'
@@ -47,6 +48,7 @@ const CHANNELS_QUERY = `
               from
               to
             }
+            autoTrimedModelPrefixes
             overrideParameters
             proxy {
               type
@@ -57,6 +59,7 @@ const CHANNELS_QUERY = `
           }
           orderingWeight
           errorMessage
+          remark
           channelPerformance {
             avgLatencyMs
             avgTokenPerSecond
@@ -76,6 +79,38 @@ const CHANNELS_QUERY = `
     }
   }
 `
+
+const QUERY_CHANNEL_NAMES_QUERY = `
+  query QueryChannelNames($input: QueryChannelInput!) {
+    queryChannels(input: $input) {
+      edges {
+        node {
+          name
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`
+
+const channelNamesConnectionSchema = z.object({
+  edges: z.array(
+    z.object({
+      node: z.object({
+        name: z.string(),
+      }),
+      cursor: z.string(),
+    })
+  ),
+  pageInfo: z.object({
+    hasNextPage: z.boolean(),
+    endCursor: z.string().nullable(),
+  }),
+})
 
 const CREATE_CHANNEL_MUTATION = `
   mutation CreateChannel($input: CreateChannelInput!) {
@@ -97,6 +132,7 @@ const CREATE_CHANNEL_MUTATION = `
           from
           to
         }
+        autoTrimedModelPrefixes
         overrideParameters
         proxy {
           type
@@ -129,6 +165,7 @@ const BULK_CREATE_CHANNELS_MUTATION = `
           from
           to
         }
+        autoTrimedModelPrefixes
         overrideParameters
         proxy {
           type
@@ -161,6 +198,7 @@ const UPDATE_CHANNEL_MUTATION = `
           from
           to
         }
+        autoTrimedModelPrefixes
         overrideParameters
         proxy {
           type
@@ -249,6 +287,7 @@ const BULK_IMPORT_CHANNELS_MUTATION = `
             from
             to
           }
+          autoTrimedModelPrefixes
           overrideParameters
         }
       }
@@ -278,6 +317,7 @@ const BULK_UPDATE_CHANNEL_ORDERING_MUTATION = `
             from
             to
           }
+          autoTrimedModelPrefixes
         }
       }
     }
@@ -287,7 +327,7 @@ const BULK_UPDATE_CHANNEL_ORDERING_MUTATION = `
 const ALL_CHANNELS_QUERY = `
   query GetAllChannels {
     channels(
-      first: 1000, 
+      first: 1000,
       orderBy: { field: ORDERING_WEIGHT, direction: DESC }
       where: { statusIn: [enabled, disabled] }
     ) {
@@ -300,6 +340,7 @@ const ALL_CHANNELS_QUERY = `
           status
           baseURL
           orderingWeight
+          tags
         }
       }
     }
@@ -353,6 +394,7 @@ const QUERY_CHANNELS_QUERY = `
               from
               to
             }
+            autoTrimedModelPrefixes
             overrideParameters
             overrideHeaders{
               key
@@ -367,6 +409,7 @@ const QUERY_CHANNELS_QUERY = `
           }
           orderingWeight
           errorMessage
+          remark
           channelPerformance {
             avgLatencyMs
             avgTokenPerSecond
@@ -418,12 +461,7 @@ export function useChannels(
 }
 
 // Use this hook to query channels with pagination and filtering
-export type ChannelOrderField =
-  | 'CREATED_AT'
-  | 'UPDATED_AT'
-  | 'ORDERING_WEIGHT'
-  | 'NAME'
-  | 'STATUS'
+export type ChannelOrderField = 'CREATED_AT' | 'UPDATED_AT' | 'ORDERING_WEIGHT' | 'NAME' | 'STATUS'
 
 export function useQueryChannels(
   variables?: {
@@ -467,6 +505,49 @@ export function useQueryChannels(
         throw error
       }
     },
+  })
+}
+
+export function useAllChannelNames(options?: { enabled?: boolean }) {
+  const { handleError } = useErrorHandler()
+  const { t } = useTranslation()
+
+  return useQuery({
+    enabled: options?.enabled ?? true,
+    queryKey: ['channels', 'names'],
+    queryFn: async () => {
+      try {
+        const names: string[] = []
+        let after: string | undefined
+
+        for (;;) {
+          const data = await graphqlRequest<{ queryChannels: unknown }>(QUERY_CHANNEL_NAMES_QUERY, {
+            input: {
+              first: 200,
+              after,
+              where: {
+                statusIn: ['enabled', 'disabled', 'archived'],
+              },
+            },
+          })
+
+          const parsed = channelNamesConnectionSchema.parse(data?.queryChannels)
+          names.push(...parsed.edges.map((e) => e.node.name))
+
+          if (!parsed.pageInfo.hasNextPage || !parsed.pageInfo.endCursor) {
+            break
+          }
+
+          after = parsed.pageInfo.endCursor
+        }
+
+        return names
+      } catch (error) {
+        handleError(error, t('channels.errors.fetchNames'))
+        throw error
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
@@ -517,6 +598,7 @@ export interface BulkCreateChannelsInput {
   type: string
   name: string
   baseURL?: string
+  tags?: string[]
   apiKeys: string[]
   supportedModels: string[]
   defaultTestModel: string
@@ -568,9 +650,9 @@ export function useClearChannelErrorMessage() {
 
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      const data = await graphqlRequest<{ updateChannel: Channel }>(UPDATE_CHANNEL_MUTATION, { 
-        id, 
-        input: { clearErrorMessage: true } 
+      const data = await graphqlRequest<{ updateChannel: Channel }>(UPDATE_CHANNEL_MUTATION, {
+        id,
+        input: { clearErrorMessage: true },
       })
       return channelSchema.parse(data.updateChannel)
     },
@@ -752,32 +834,6 @@ export function useTestChannel() {
   })
 }
 
-export function useAllChannelNames() {
-  const { handleError } = useErrorHandler()
-  const { t } = useTranslation()
-
-  return useQuery({
-    queryKey: ['channelNames'],
-    queryFn: async () => {
-      try {
-        const data = await graphqlRequest<{ channels: ChannelConnection }>(CHANNELS_QUERY, {
-          first: 1000, // Get a large number to capture all existing channels
-          orderBy: {
-            field: 'CREATED_AT',
-            direction: 'ASC',
-          },
-        })
-        const channelConnection = channelConnectionSchema.parse(data?.channels)
-        return channelConnection.edges?.map((edge) => edge.node.name) || []
-      } catch (error) {
-        handleError(error, t('channels.errors.fetchNames'))
-        throw error
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
-}
-
 export function useBulkImportChannels() {
   const queryClient = useQueryClient()
   const { t } = useTranslation()
@@ -905,10 +961,7 @@ export function useChannelTypes(statusIn?: string[]) {
         if (statusIn && statusIn.length > 0) {
           input.statusIn = statusIn
         }
-        const data = await graphqlRequest<{ countChannelsByType: ChannelTypeCount[] }>(
-          CHANNEL_TYPES_QUERY,
-          { input }
-        )
+        const data = await graphqlRequest<{ countChannelsByType: ChannelTypeCount[] }>(CHANNEL_TYPES_QUERY, { input })
         return data.countChannelsByType || []
       } catch (error) {
         handleError(error, t('channels.errors.fetchTypes'))

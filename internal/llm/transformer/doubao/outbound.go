@@ -95,7 +95,7 @@ func (t *OutboundTransformer) TransformRequest(
 	}
 
 	if len(chatReq.Messages) == 0 {
-		return nil, fmt.Errorf("messages are required")
+		return nil, fmt.Errorf("%w: messages are required", transformer.ErrInvalidRequest)
 	}
 
 	// If this is an image generation request, use the Doubao Image Generation API
@@ -250,13 +250,13 @@ func (t *OutboundTransformer) buildImageGenerationAPIRequest(chatReq *llm.Reques
 		Auth:        auth,
 	}
 
-	// Add metadata for response transformation
-	if request.Metadata == nil {
-		request.Metadata = map[string]string{}
+	// Add TransformerMetadata for response transformation
+	if request.TransformerMetadata == nil {
+		request.TransformerMetadata = map[string]any{}
 	}
 
-	request.Metadata["outbound_format_type"] = llm.APIFormatOpenAIImageGeneration.String()
-	request.Metadata["model"] = chatReq.Model
+	request.TransformerMetadata["outbound_format_type"] = llm.APIFormatOpenAIImageGeneration.String()
+	request.TransformerMetadata["model"] = chatReq.Model
 
 	return request, nil
 }
