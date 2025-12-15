@@ -120,6 +120,11 @@ test-results
 .qoder
 dumps
 .builds
+.pnpm-store
+.serena
+.claude
+.gomodcache
+.gocache
 
 config.yml
 internal/server/static/dist

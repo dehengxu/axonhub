@@ -34,6 +34,7 @@ type Function struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	Parameters  json.RawMessage `json:"parameters"`
+	Strict      *bool           `json:"strict,omitempty"`
 }
 
 // FunctionCall represents a function call (deprecated).
@@ -57,11 +58,15 @@ type ToolCall struct {
 
 	Function FunctionCall `json:"function"`
 
-	// The index of the tool call in the list of tool calls.
-	Index int `json:"index,omitempty"`
+	// Index is the index of the tool call in the list of tool calls.
+	// Cannot use omitempty, as an index of 0 would be omitted, which can break consumers.
+	Index int `json:"index"`
 
 	// CacheControl is used for provider-specific cache control (e.g., Anthropic).
 	CacheControl *CacheControl `json:"-"`
+
+	// TransformerMetadata is used for provider-specific metadata (e.g., Gemini).
+	TransformerMetadata map[string]any `json:"-"`
 }
 
 type ToolFunction struct {
@@ -113,6 +118,7 @@ func (t *ToolChoice) UnmarshalJSON(data []byte) error {
 // parameters. It mirrors the OpenRouter/OpenAI Responses API fields we care
 // about, but is intentionally loose to allow forward-compatibility.
 type ImageGeneration struct {
+	Model string `json:"model,omitempty"`
 	// One of opaque, transparent.
 	Background     string         `json:"background,omitempty"`
 	InputFidelity  string         `json:"input_fidelity,omitempty"`

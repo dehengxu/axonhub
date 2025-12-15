@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { X, RefreshCw, Search, ChevronRight } from 'lucide-react'
+import { X, RefreshCw, Search, ChevronLeft, ChevronRight, PanelLeft, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -15,9 +15,11 @@ import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { AutoCompleteSelect } from '@/components/auto-complete-select'
 import { SelectDropdown } from '@/components/select-dropdown'
-import { useCreateChannel, useUpdateChannel, useFetchModels, useBulkCreateChannels } from '../data/channels'
+import { TagsInput } from '@/components/ui/tags-input'
+import { useCreateChannel, useUpdateChannel, useFetchModels, useBulkCreateChannels, useAllChannelNames } from '../data/channels'
 import { getDefaultBaseURL, getDefaultModels, CHANNEL_CONFIGS, OPENAI_CHAT_COMPLETIONS } from '../data/config_channels'
 import {
   PROVIDER_CONFIGS,
@@ -29,19 +31,47 @@ import { Channel, ChannelType, ApiFormat, createChannelInputSchema, updateChanne
 
 interface Props {
   currentRow?: Channel
+  duplicateFromRow?: Channel
   open: boolean
   onOpenChange: (open: boolean) => void
   showModelsPanel?: boolean
 }
 
-export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModelsPanel = false }: Props) {
+const MAX_MODELS_DISPLAY = 2
+
+const duplicateNameRegex = /^(.*) \((\d+)\)$/
+
+function getDuplicateBaseName(name: string) {
+  const match = name.match(duplicateNameRegex)
+  if (match?.[1]) {
+    return match[1]
+  }
+  return name
+}
+
+function getNextDuplicateName(name: string, existingNames: Set<string>) {
+  const baseName = getDuplicateBaseName(name)
+  let i = 1
+  for (;;) {
+    const candidate = `${baseName} (${i})`
+    if (!existingNames.has(candidate)) {
+      return candidate
+    }
+    i++
+  }
+}
+
+export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpenChange, showModelsPanel = false }: Props) {
   const { t } = useTranslation()
   const isEdit = !!currentRow
+  const isDuplicate = !!duplicateFromRow && !isEdit
+  const initialRow: Channel | undefined = currentRow || duplicateFromRow
   const createChannel = useCreateChannel()
   const bulkCreateChannels = useBulkCreateChannels()
   const updateChannel = useUpdateChannel()
   const fetchModels = useFetchModels()
-  const [supportedModels, setSupportedModels] = useState<string[]>(currentRow?.supportedModels || [])
+  const { data: allChannelNames = [], isSuccess: allChannelNamesLoaded } = useAllChannelNames({ enabled: open && isDuplicate })
+  const [supportedModels, setSupportedModels] = useState<string[]>(() => initialRow?.supportedModels || [])
   const [newModel, setNewModel] = useState('')
   const [selectedDefaultModels, setSelectedDefaultModels] = useState<string[]>([])
   const [fetchedModels, setFetchedModels] = useState<string[]>([])
@@ -52,20 +82,23 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
   const [showFetchedModelsPanel, setShowFetchedModelsPanel] = useState(false)
   const [showSupportedModelsPanel, setShowSupportedModelsPanel] = useState(false)
   const [fetchedModelsSearch, setFetchedModelsSearch] = useState('')
+  const [supportedModelsSearch, setSupportedModelsSearch] = useState('')
   const [selectedFetchedModels, setSelectedFetchedModels] = useState<string[]>([])
   const [showAddedModelsOnly, setShowAddedModelsOnly] = useState(false)
   const [supportedModelsExpanded, setSupportedModelsExpanded] = useState(false)
+  const [showClearAllPopover, setShowClearAllPopover] = useState(false)
+  const hasAutoSetDuplicateNameRef = useRef(false)
 
   // Provider-based selection state
   const [selectedProvider, setSelectedProvider] = useState<string>(() => {
-    if (currentRow) {
-      return getProviderFromChannelType(currentRow.type) || 'openai'
+    if (initialRow) {
+      return getProviderFromChannelType(initialRow.type) || 'openai'
     }
     return 'openai'
   })
   const [selectedApiFormat, setSelectedApiFormat] = useState<ApiFormat>(() => {
-    if (currentRow) {
-      return CHANNEL_CONFIGS[currentRow.type]?.apiFormat || 'openai/chat_completions'
+    if (initialRow) {
+      return CHANNEL_CONFIGS[initialRow.type as ChannelType]?.apiFormat || 'openai/chat_completions'
     }
     return 'openai/chat_completions'
   })
@@ -78,6 +111,12 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
     const apiFormat = CHANNEL_CONFIGS[currentRow.type]?.apiFormat || OPENAI_CHAT_COMPLETIONS
     setSelectedApiFormat(apiFormat)
   }, [isEdit, currentRow])
+
+  useEffect(() => {
+    if (!open) {
+      hasAutoSetDuplicateNameRef.current = false
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open || !isEdit) return
@@ -120,6 +159,13 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
     return getApiFormatsForProvider(selectedProvider)
   }, [selectedProvider])
 
+  const getApiFormatLabel = useCallback(
+    (format: ApiFormat) => {
+      return t(`channels.dialogs.fields.apiFormat.formats.${format}`)
+    },
+    [t]
+  )
+
   // Determine the actual channel type based on provider and API format
   const derivedChannelType = useMemo(() => {
     if (isEdit && currentRow) {
@@ -140,6 +186,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
             name: currentRow.name,
             supportedModels: currentRow.supportedModels,
             defaultTestModel: currentRow.defaultTestModel,
+            tags: currentRow.tags || [],
             credentials: {
               apiKey: '', // credentials字段是敏感字段，不从API返回
               aws: {
@@ -154,6 +201,28 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
               },
             },
           }
+        : duplicateFromRow
+          ? {
+              type: duplicateFromRow.type,
+              baseURL: duplicateFromRow.baseURL,
+              name: duplicateFromRow.name,
+              supportedModels: duplicateFromRow.supportedModels,
+              defaultTestModel: duplicateFromRow.defaultTestModel,
+              tags: duplicateFromRow.tags || [],
+              credentials: {
+                apiKey: '',
+                aws: {
+                  accessKeyID: '',
+                  secretAccessKey: '',
+                  region: '',
+                },
+                gcp: {
+                  region: '',
+                  projectID: '',
+                  jsonData: '',
+                },
+              },
+            }
         : {
             type: derivedChannelType,
             baseURL: getDefaultBaseURL(derivedChannelType),
@@ -173,10 +242,35 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
             },
             supportedModels: [],
             defaultTestModel: '',
+            tags: [],
           },
   })
 
+  useEffect(() => {
+    if (!open || !isDuplicate || !duplicateFromRow) return
+    if (!allChannelNamesLoaded) return
+    if (hasAutoSetDuplicateNameRef.current) return
+
+    const currentName = form.getValues('name')
+    if (currentName !== duplicateFromRow.name) {
+      return
+    }
+
+    const nextName = getNextDuplicateName(duplicateFromRow.name, new Set(allChannelNames))
+    form.setValue('name', nextName)
+    hasAutoSetDuplicateNameRef.current = true
+  }, [open, isDuplicate, duplicateFromRow, allChannelNamesLoaded, allChannelNames, form])
+
   const selectedType = form.watch('type') as ChannelType | undefined
+
+  const baseURLPlaceholder = useMemo(() => {
+    const currentType = selectedType || derivedChannelType
+    const defaultURL = getDefaultBaseURL(currentType)
+    if (defaultURL) {
+      return defaultURL
+    }
+    return t('channels.dialogs.fields.baseURL.placeholder')
+  }, [selectedType, derivedChannelType, t])
 
   // Sync form type when provider or API format changes (only for create mode)
   const handleProviderChange = useCallback(
@@ -293,15 +387,15 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
           })
         } else {
           // Single create: use existing mutation
-          await createChannel.mutateAsync(dataWithModels as any)
+          await createChannel.mutateAsync(dataWithModels as z.infer<typeof createChannelInputSchema>)
         }
       }
 
       form.reset()
       setSupportedModels([])
       onOpenChange(false)
-    } catch (error) {
-      console.error('Failed to save channel:', error)
+    } catch (_error) {
+      void _error
     }
   }
 
@@ -311,6 +405,28 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
       setNewModel('')
     }
   }
+
+  const batchAddModels = useCallback(() => {
+    const raw = newModel.trim()
+    if (!raw) return
+
+    const models = raw
+      .split(/[,，]+/)
+      .map((m) => m.trim())
+      .filter((m) => m.length > 0)
+
+    if (models.length === 0) {
+      setNewModel('')
+      return
+    }
+
+    setSupportedModels((prev) => {
+      const combinedModels = new Set([...prev, ...models]);
+      if (combinedModels.size === prev.length) return prev;
+      return [...combinedModels];
+    })
+    setNewModel('')
+  }, [newModel])
 
   const removeModel = (model: string) => {
     setSupportedModels(supportedModels.filter((m) => m !== model))
@@ -335,6 +451,10 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
     }
   }
 
+  const handleClearAllSupportedModels = () => {
+    setSupportedModels([])
+  }
+
   const handleFetchModels = useCallback(async () => {
     const channelType = form.getValues('type')
     const baseURL = form.getValues('baseURL')
@@ -346,7 +466,12 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
 
     try {
       // Only use the first API key when multiple keys are provided
-      const firstApiKey = isEdit ? undefined : (apiKey?.split('\n').map(key => key.trim()).filter(key => key.length > 0)[0] || '')
+      const firstApiKey = isEdit
+        ? undefined
+        : apiKey
+            ?.split('\n')
+            .map((key) => key.trim())
+            .filter((key) => key.length > 0)[0] || ''
 
       const result = await fetchModels.mutateAsync({
         channelType,
@@ -369,7 +494,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
         setFetchedModelsSearch('')
         setShowAddedModelsOnly(false)
       }
-    } catch (error) {
+    } catch (_error) {
       // Error is already handled by the mutation
     }
   }, [fetchModels, form, isEdit, currentRow])
@@ -454,21 +579,43 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
     setShowSupportedModelsPanel(false)
   }, [])
 
-  // Models to display (limited to 5 unless expanded)
+  // Remove deprecated models (models in supportedModels but not in fetchedModels)
+  const removeDeprecatedModels = useCallback(() => {
+    const fetchedModelsSet = new Set(fetchedModels)
+    setSupportedModels((prev) => prev.filter((model) => fetchedModelsSet.has(model)))
+  }, [fetchedModels])
+
+  // Count of deprecated models
+  const deprecatedModelsCount = useMemo(() => {
+    const fetchedModelsSet = new Set(fetchedModels)
+    return supportedModels.filter((model) => !fetchedModelsSet.has(model)).length
+  }, [supportedModels, fetchedModels])
+
+  // Models to display (limited to MAX_MODELS_DISPLAY unless expanded)
   const displayedSupportedModels = useMemo(() => {
-    if (supportedModels.length <= 5) {
+    if (supportedModels.length <= MAX_MODELS_DISPLAY) {
       return supportedModels
     }
-    return supportedModels.slice(0, 5)
+    return supportedModels.slice(0, MAX_MODELS_DISPLAY)
   }, [supportedModels])
 
+  // Filtered supported models based on search
+  const filteredSupportedModels = useMemo(() => {
+    if (!supportedModelsSearch.trim()) {
+      return supportedModels
+    }
+    const search = supportedModelsSearch.toLowerCase()
+    return supportedModels.filter((model) => model.toLowerCase().includes(search))
+  }, [supportedModels, supportedModelsSearch])
+
   return (
-    <Dialog
-      open={open}
+    <>
+      <Dialog
+        open={open}
       onOpenChange={(state) => {
         if (!state) {
           form.reset()
-          setSupportedModels(currentRow?.supportedModels || [])
+          setSupportedModels(initialRow?.supportedModels || [])
           setSelectedDefaultModels([])
           setFetchedModels([])
           setUseFetchedModels(false)
@@ -476,13 +623,14 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
           setShowFetchedModelsPanel(false)
           setShowSupportedModelsPanel(false)
           setFetchedModelsSearch('')
+          setSupportedModelsSearch('')
           setSelectedFetchedModels([])
           setShowAddedModelsOnly(false)
           setSupportedModelsExpanded(false)
           // Reset provider and API format state
-          if (currentRow) {
-            setSelectedProvider(getProviderFromChannelType(currentRow.type) || 'openai')
-            setSelectedApiFormat(CHANNEL_CONFIGS[currentRow.type]?.apiFormat || OPENAI_CHAT_COMPLETIONS)
+          if (initialRow) {
+            setSelectedProvider(getProviderFromChannelType(initialRow.type) || 'openai')
+            setSelectedApiFormat(CHANNEL_CONFIGS[initialRow.type as ChannelType]?.apiFormat || OPENAI_CHAT_COMPLETIONS)
           } else {
             setSelectedProvider('openai')
             setSelectedApiFormat(OPENAI_CHAT_COMPLETIONS)
@@ -528,7 +676,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                     ? isSelected
                                       ? 'border-primary bg-muted/80 cursor-not-allowed shadow-sm'
                                       : 'cursor-not-allowed opacity-60'
-                                    : `${isSelected ? 'border-primary bg-accent/40 shadow-sm' : ''} hover:bg-accent/50`
+                                    : (isSelected ? 'border-primary bg-accent/40 shadow-sm' : '') + ' hover:bg-accent/50'
                                 }`}
                               >
                                 <RadioGroupItem
@@ -567,7 +715,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                           isControlled={true}
                           items={availableApiFormats.map((format) => ({
                             value: format,
-                            label: format,
+                            label: getApiFormatLabel(format),
                           }))}
                         />
                         {isEdit && (
@@ -592,8 +740,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                               data-testid='channel-name-input'
                               {...field}
                             />
+                            <FormMessage />
                           </div>
-                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -608,14 +756,14 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                           </FormLabel>
                           <div className='col-span-6 space-y-1'>
                             <Input
-                              placeholder={t('channels.dialogs.fields.baseURL.placeholder')}
+                              placeholder={baseURLPlaceholder}
                               autoComplete='off'
                               aria-invalid={!!fieldState.error}
                               data-testid='channel-base-url-input'
                               {...field}
                             />
+                            <FormMessage />
                           </div>
-                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -653,8 +801,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.apiKey.multiLineHint')}</p>
                                 </>
                               )}
+                              <FormMessage />
                             </div>
-                            <FormMessage />
                           </FormItem>
                         )}
                       />
@@ -679,8 +827,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -702,8 +850,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -724,8 +872,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -750,8 +898,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -772,8 +920,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -805,8 +953,8 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                                   aria-invalid={!!fieldState.error}
                                   {...field}
                                 />
+                                <FormMessage />
                               </div>
-                              <FormMessage />
                             </FormItem>
                           )}
                         />
@@ -838,19 +986,16 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                           <Button type='button' onClick={addModel} size='sm'>
                             {t('channels.dialogs.buttons.add')}
                           </Button>
-                          <Button
-                            type='button'
-                            onClick={handleFetchModels}
-                            size='sm'
-                            variant='outline'
-                            disabled={!canFetchModels() || fetchModels.isPending}
-                          >
-                            <RefreshCw className={`mr-1 h-4 w-4 ${fetchModels.isPending ? 'animate-spin' : ''}`} />
-                            {t('channels.dialogs.buttons.fetchModels')}
+                          <Button type='button' onClick={batchAddModels} size='sm' variant='outline'>
+                            {t('channels.dialogs.buttons.batchAdd')}
                           </Button>
                         </div>
 
-                        {/* Supported models display - limited to 5 with expand button */}
+                        {supportedModels.length === 0 && (
+                          <p className='text-destructive text-sm'>{t('channels.dialogs.fields.supportedModels.required')}</p>
+                        )}
+
+                        {/* Supported models display - limited to 3 with expand button */}
                         <div className='flex flex-wrap items-center gap-1'>
                           {displayedSupportedModels.map((model) => (
                             <Badge key={model} variant='secondary' className='text-xs'>
@@ -860,7 +1005,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                               </button>
                             </Badge>
                           ))}
-                          {supportedModels.length > 5 && !supportedModelsExpanded && (
+                          {supportedModels.length > MAX_MODELS_DISPLAY && !supportedModelsExpanded && (
                             <Button
                               type='button'
                               variant='ghost'
@@ -869,45 +1014,56 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                               onClick={() => setShowSupportedModelsPanel(true)}
                             >
                               <ChevronRight className='mr-1 h-3 w-3' />
-                              {t('channels.dialogs.fields.supportedModels.showMore', { count: supportedModels.length - 5 })}
+                              {t('channels.dialogs.fields.supportedModels.showMore', {
+                                count: supportedModels.length - MAX_MODELS_DISPLAY,
+                              })}
                             </Button>
                           )}
                         </div>
 
                         {/* Quick add models section */}
-                        {quickModels.length > 0 && (
-                          <div className='pt-3'>
-                            <div className='mb-2 flex items-center justify-between'>
-                              <span className='text-sm font-medium'>{t('channels.dialogs.fields.supportedModels.defaultModelsLabel')}</span>
+                        <div className='pt-3'>
+                          <div className='mb-2 flex items-center justify-between'>
+                            <span className='text-sm font-medium'>{t('channels.dialogs.fields.supportedModels.defaultModelsLabel')}</span>
+                            <div className='flex items-center gap-2'>
+                              <Button
+                                type='button'
+                                onClick={handleFetchModels}
+                                size='sm'
+                                variant='outline'
+                                disabled={!canFetchModels() || fetchModels.isPending}
+                              >
+                                <RefreshCw className={`mr-1 h-4 w-4 ${fetchModels.isPending ? 'animate-spin' : ''}`} />
+                                {t('channels.dialogs.buttons.fetchModels')}
+                              </Button>
                               <Button
                                 type='button'
                                 onClick={addSelectedDefaultModels}
                                 size='sm'
                                 variant='outline'
                                 disabled={selectedDefaultModels.length === 0}
+                                data-testid='add-selected-models-button'
                               >
+                                <Plus className='mr-1 h-4 w-4' />
                                 {t('channels.dialogs.buttons.addSelected')}
                               </Button>
                             </div>
-                            <div className='flex flex-wrap gap-2'>
-                              {quickModels.map((model: string) => (
-                                <Badge
-                                  key={model}
-                                  variant={selectedDefaultModels.includes(model) ? 'default' : 'secondary'}
-                                  className='cursor-pointer text-xs'
-                                  onClick={() => toggleDefaultModel(model)}
-                                >
-                                  {model}
-                                  {selectedDefaultModels.includes(model) && <span className='ml-1'>✓</span>}
-                                </Badge>
-                              ))}
-                            </div>
                           </div>
-                        )}
-
-                        {supportedModels.length === 0 && (
-                          <p className='text-muted-foreground text-sm'>{t('channels.dialogs.fields.supportedModels.required')}</p>
-                        )}
+                          <div className='flex flex-wrap gap-2'>
+                            {quickModels.map((model: string) => (
+                              <Badge
+                                key={model}
+                                variant={selectedDefaultModels.includes(model) ? 'default' : 'secondary'}
+                                className='cursor-pointer text-xs'
+                                onClick={() => toggleDefaultModel(model)}
+                                data-testid={`quick-model-${model}`}
+                              >
+                                {model}
+                                {selectedDefaultModels.includes(model) && <span className='ml-1'>✓</span>}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -930,8 +1086,30 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                               isControlled={true}
                               data-testid='default-test-model-select'
                             />
+                            <FormMessage />
                           </div>
-                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name='tags'
+                      render={({ field }) => (
+                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
+                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                            {t('channels.dialogs.fields.tags.label')}
+                          </FormLabel>
+                          <div className='col-span-6 space-y-1'>
+                            <TagsInput
+                              value={field.value || []}
+                              onChange={field.onChange}
+                              placeholder={t('channels.dialogs.fields.tags.placeholder')}
+                              data-testid='channel-tags-input'
+                            />
+                            <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.tags.description')}</p>
+                            <FormMessage />
+                          </div>
                         </FormItem>
                       )}
                     />
@@ -957,7 +1135,7 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
               <div className='mb-3 flex items-center justify-between'>
                 <h3 className='text-sm font-semibold'>{t('channels.dialogs.fields.supportedModels.fetchedModelsLabel')}</h3>
                 <Button type='button' variant='ghost' size='sm' onClick={closeFetchedModelsPanel}>
-                  <X className='h-4 w-4' />
+                  <ChevronLeft className='h-4 w-4' />
                 </Button>
               </div>
 
@@ -1025,11 +1203,11 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                 </div>
               </div>
 
-              {/* Add Selected Button */}
-              <div className='mt-3 border-t pt-3'>
+              {/* Action Buttons */}
+              <div className='mt-3 flex gap-2 border-t pt-3'>
                 <Button
                   type='button'
-                  className='w-full'
+                  className='flex-1'
                   size='sm'
                   onClick={addSelectedFetchedModels}
                   disabled={selectedFetchedModels.length === 0}
@@ -1037,6 +1215,17 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
                   {selectedFetchedModels.some((model) => supportedModels.includes(model))
                     ? t('channels.dialogs.buttons.confirmSelection')
                     : t('channels.dialogs.buttons.addSelectedCount', { count: selectedFetchedModels.length })}
+                </Button>
+                <Button
+                  type='button'
+                  variant='outline'
+                  className='flex-1'
+                  size='sm'
+                  onClick={removeDeprecatedModels}
+                  disabled={deprecatedModelsCount === 0}
+                >
+                  <Trash2 className='mr-1 h-4 w-4' />
+                  {t('channels.dialogs.buttons.removeDeprecated', { count: deprecatedModelsCount })}
                 </Button>
               </div>
             </div>
@@ -1046,18 +1235,74 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
               className={`flex h-full flex-col transition-opacity duration-200 ${showSupportedModelsPanel ? 'opacity-100' : 'pointer-events-none absolute opacity-0'}`}
             >
               <div className='mb-3 flex items-center justify-between'>
-                <h3 className='text-sm font-semibold'>
-                  {t('channels.dialogs.fields.supportedModels.allModels', { count: supportedModels.length })}
-                </h3>
-                <Button type='button' variant='ghost' size='sm' onClick={closeSupportedModelsPanel}>
-                  <X className='h-4 w-4' />
-                </Button>
+                <div className='flex items-center gap-2'>
+                  <Button type='button' variant='ghost' size='sm' className='h-6 w-6 p-0' onClick={closeSupportedModelsPanel}>
+                    <PanelLeft className='h-4 w-4' />
+                  </Button>
+                  <h3 className='text-sm font-semibold'>
+                    {t('channels.dialogs.fields.supportedModels.allModels', { count: supportedModels.length })}
+                  </h3>
+                </div>
+                <Popover open={showClearAllPopover} onOpenChange={setShowClearAllPopover}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      disabled={supportedModels.length === 0}
+                    >
+                      <X className='h-4 w-4' />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className='w-80 border-destructive/50 bg-background' align='end'>
+                    <div className='space-y-3'>
+                      <div className='space-y-1'>
+                        <h4 className='font-medium leading-none'>{t('channels.dialogs.fields.supportedModels.clearAllTitle')}</h4>
+                        <p className='text-muted-foreground text-sm'>
+                          {t('channels.dialogs.fields.supportedModels.clearAllDescription', { count: supportedModels.length })}
+                        </p>
+                      </div>
+                      <div className='flex justify-end gap-2'>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          onClick={() => setShowClearAllPopover(false)}
+                        >
+                          {t('common.buttons.cancel')}
+                        </Button>
+                        <Button
+                          type='button'
+                          variant='destructive'
+                          size='sm'
+                          onClick={() => {
+                            handleClearAllSupportedModels()
+                            setShowClearAllPopover(false)
+                          }}
+                        >
+                          {t('channels.dialogs.buttons.clearAll')}
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Search */}
+              <div className='relative mb-3'>
+                <Search className='text-muted-foreground absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2' />
+                <Input
+                  placeholder={t('channels.dialogs.fields.supportedModels.searchPlaceholder')}
+                  value={supportedModelsSearch}
+                  onChange={(e) => setSupportedModelsSearch(e.target.value)}
+                  className='h-8 pl-8 text-sm'
+                />
               </div>
 
               {/* Model List */}
               <div className='-mr-2 max-h-[400px] flex-1 overflow-y-auto pr-2'>
                 <div className='space-y-1'>
-                  {supportedModels.map((model) => (
+                  {filteredSupportedModels.map((model) => (
                     <div key={model} className='hover:bg-accent flex items-center justify-between gap-2 rounded-md p-2 text-sm'>
                       <span className='flex-1 truncate'>{model}</span>
                       <Button
@@ -1094,5 +1339,6 @@ export function ChannelsActionDialog({ currentRow, open, onOpenChange, showModel
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

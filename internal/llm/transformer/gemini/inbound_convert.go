@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/looplj/axonhub/internal/llm"
+	"github.com/looplj/axonhub/internal/llm/transformer/shared"
 	"github.com/looplj/axonhub/internal/pkg/xjson"
 )
 
@@ -158,6 +159,10 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 	)
 
 	for _, part := range content.Parts {
+		if msg.RedactedReasoningContent == nil && part.ThoughtSignature != "" {
+			msg.RedactedReasoningContent = shared.EncodeGeminiThoughtSignature(&part.ThoughtSignature)
+		}
+
 		switch {
 		case part.Text != "":
 			if part.Thought {
@@ -190,14 +195,16 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 
 		case part.FunctionCall != nil:
 			argsJSON, _ := json.Marshal(part.FunctionCall.Args)
-			toolCalls = append(toolCalls, llm.ToolCall{
+			tc := llm.ToolCall{
 				ID:   part.FunctionCall.ID,
 				Type: "function",
 				Function: llm.FunctionCall{
 					Name:      part.FunctionCall.Name,
 					Arguments: string(argsJSON),
 				},
-			})
+			}
+
+			toolCalls = append(toolCalls, tc)
 
 		case part.FunctionResponse != nil:
 			// Function response is a separate message in unified format
@@ -296,49 +303,80 @@ func convertLLMChoiceToGeminiCandidate(choice *llm.Choice, isStream bool) *Candi
 
 		parts := make([]*Part, 0)
 
+		var (
+			lastPart              *Part
+			firstFunctionCallPart *Part
+		)
+
 		// Add reasoning content (thinking) first if present
 		if msg.ReasoningContent != nil && *msg.ReasoningContent != "" {
-			parts = append(parts, &Part{
+			p := &Part{
 				Text:    *msg.ReasoningContent,
 				Thought: true,
-			})
+			}
+			parts = append(parts, p)
+			lastPart = p
 		}
 
 		// Add text content
 		if msg.Content.Content != nil && *msg.Content.Content != "" {
-			parts = append(parts, &Part{Text: *msg.Content.Content})
+			p := &Part{Text: *msg.Content.Content}
+			parts = append(parts, p)
+			lastPart = p
 		} else if len(msg.Content.MultipleContent) > 0 {
 			for _, part := range msg.Content.MultipleContent {
 				switch part.Type {
 				case "text":
 					if part.Text != nil {
-						parts = append(parts, &Part{Text: *part.Text})
+						p := &Part{Text: *part.Text}
+						parts = append(parts, p)
+						lastPart = p
 					}
 				case "image_url":
 					if part.ImageURL != nil && part.ImageURL.URL != "" {
 						geminiPart := convertImageURLToGeminiPart(part.ImageURL.URL)
 						if geminiPart != nil {
 							parts = append(parts, geminiPart)
+							lastPart = geminiPart
 						}
 					}
 				}
 			}
 		}
 
-		// Add tool calls
 		for _, toolCall := range msg.ToolCalls {
 			var args map[string]any
 			if toolCall.Function.Arguments != "" {
 				_ = json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
 			}
 
-			parts = append(parts, &Part{
+			part := &Part{
 				FunctionCall: &FunctionCall{
 					ID:   toolCall.ID,
 					Name: toolCall.Function.Name,
 					Args: args,
 				},
-			})
+			}
+
+			parts = append(parts, part)
+
+			lastPart = part
+			if firstFunctionCallPart == nil {
+				firstFunctionCallPart = part
+			}
+		}
+
+		msgThoughtSignature := shared.DecodeGeminiThoughtSignature(msg.RedactedReasoningContent)
+		if len(msg.ToolCalls) > 0 && msgThoughtSignature == nil {
+			msgThoughtSignature = lo.ToPtr("context_engineering_is_the_way_to_go")
+		}
+
+		if msgThoughtSignature != nil && lastPart != nil {
+			if firstFunctionCallPart != nil {
+				firstFunctionCallPart.ThoughtSignature = *msgThoughtSignature
+			} else {
+				lastPart.ThoughtSignature = *msgThoughtSignature
+			}
 		}
 
 		content.Parts = parts

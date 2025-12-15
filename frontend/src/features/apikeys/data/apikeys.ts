@@ -77,6 +77,8 @@ function buildApiKeyQuery(permissions: { canViewUsers: boolean }) {
           profiles {
             name
             modelMappings { from to }
+            channelIDs
+            channelTags
           }
         }
       }
@@ -148,6 +150,18 @@ const UPDATE_APIKEY_PROFILES_MUTATION = `
       id
       name
       status
+      profiles {
+        activeProfile
+        profiles {
+          name
+          modelMappings {
+            from
+            to
+          }
+          channelIDs
+          channelTags
+        }
+      }
     }
   }
 `

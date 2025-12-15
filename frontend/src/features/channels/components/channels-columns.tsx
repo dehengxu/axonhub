@@ -1,21 +1,55 @@
 import { format } from 'date-fns'
 import { ColumnDef, Row } from '@tanstack/react-table'
-import { IconPlayerPlay, IconChevronDown, IconAlertTriangle } from '@tabler/icons-react'
+import { IconPlayerPlay, IconChevronDown, IconChevronRight, IconAlertTriangle } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { formatDuration } from '@/utils/format-duration'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import LongText from '@/components/long-text'
 import { useChannels } from '../context/channels-context'
 import { useTestChannel } from '../data/channels'
-import { CHANNEL_CONFIGS } from '../data/config_channels'
+import { CHANNEL_CONFIGS, getProvider } from '../data/config_channels'
 import { Channel, ChannelType } from '../data/schema'
 import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
+import { ChannelsStatusDialog } from './channels-status-dialog'
+
+// Status Switch Cell Component to handle status toggle with confirmation dialog
+function StatusSwitchCell({ row }: { row: Row<Channel> }) {
+  const channel = row.original
+  const [dialogOpen, setDialogOpen] = useState(false)
+  
+  const isEnabled = channel.status === 'enabled'
+  const isArchived = channel.status === 'archived'
+
+  const handleSwitchClick = useCallback(() => {
+    if (!isArchived) {
+      setDialogOpen(true)
+    }
+  }, [isArchived])
+
+  return (
+    <>
+      <Switch
+        checked={isEnabled}
+        onCheckedChange={handleSwitchClick}
+        disabled={isArchived}
+        data-testid="channel-status-switch"
+      />
+      {dialogOpen && (
+        <ChannelsStatusDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          currentRow={channel}
+        />
+      )}
+    </>
+  )
+}
 
 // Test Cell Component to handle hooks properly
 function TestCell({ row }: { row: Row<Channel> }) {
@@ -36,10 +70,10 @@ function TestCell({ row }: { row: Row<Channel> }) {
     }
   }
 
-  const handleOpenTestDialog = () => {
+  const handleOpenTestDialog = useCallback(() => {
     setCurrentRow(channel)
     setOpen('test')
-  }
+  }, [channel, setCurrentRow, setOpen])
 
   return (
     <div className='flex items-center gap-1'>
@@ -57,6 +91,29 @@ function TestCell({ row }: { row: Row<Channel> }) {
 export const createColumns = (t: ReturnType<typeof useTranslation>['t']): ColumnDef<Channel>[] => {
   return [
     {
+      id: 'expand',
+      header: () => null,
+      meta: {
+        className: 'w-8 min-w-8',
+      },
+      cell: ({ row }) => (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-6 w-6 p-0'
+          onClick={() => row.toggleExpanded()}
+        >
+          {row.getIsExpanded() ? (
+            <IconChevronDown className='h-4 w-4' />
+          ) : (
+            <IconChevronRight className='h-4 w-4' />
+          )}
+        </Button>
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
       id: 'select',
       header: ({ table }) => (
         <Checkbox
@@ -66,12 +123,6 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
           className='translate-y-[2px]'
         />
       ),
-      meta: {
-        className: cn(
-          'sticky md:table-cell left-0 z-10 rounded-tl',
-          'bg-background transition-colors duration-200 group-hover/row:bg-muted group-data-[state=selected]/row:bg-muted'
-        ),
-      },
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
@@ -90,51 +141,56 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
         const channel = row.original
         const hasError = !!channel.errorMessage
 
-        return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className='flex max-w-36 items-center gap-2'>
-                {hasError && <IconAlertTriangle className='text-destructive h-4 w-4 shrink-0' />}
-                <LongText className={cn('font-medium', hasError && 'text-destructive')}>{row.getValue('name')}</LongText>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className='space-y-1'>
-                <p className='text-muted-foreground text-sm'>{channel.baseURL}</p>
-                {hasError && <p className='text-destructive text-sm'>{t(`channels.messages.${channel.errorMessage}`)}</p>}
-              </div>
-            </TooltipContent>
-          </Tooltip>
+        const content = (
+          <div className='flex max-w-56 items-center gap-2'>
+            {hasError && <IconAlertTriangle className='text-destructive h-4 w-4 shrink-0' />}
+            <div className={cn('font-medium truncate', hasError && 'text-destructive')}>{row.getValue('name')}</div>
+          </div>
         )
+
+        if (hasError) {
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {content}
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className='space-y-1'>
+                  <p className='text-destructive text-sm'>{t(`channels.messages.${channel.errorMessage}`)}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )
+        }
+
+        return content
       },
       meta: {
-        className: cn(
-          'drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.1)] dark:drop-shadow-[0_1px_2px_rgb(255_255_255_/_0.1)] lg:drop-shadow-none',
-          'bg-background transition-colors duration-200 group-hover/row:bg-muted group-data-[state=selected]/row:bg-muted',
-          'sticky left-6 md:table-cell'
-        ),
+        className: 'md:table-cell min-w-48',
       },
       enableHiding: false,
       enableSorting: false,
     },
     {
+      id: 'provider',
       accessorKey: 'type',
-      header: ({ column }) => <DataTableColumnHeader column={column} title={t('channels.columns.type')} />,
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('channels.columns.provider')} />,
       cell: ({ row }) => {
-        const type = row.getValue('type') as ChannelType
+        const type = row.original.type
         const config = CHANNEL_CONFIGS[type]
+        const provider = getProvider(type)
         const IconComponent = config.icon
         return (
           <Badge variant='outline' className={cn('capitalize', config.color)}>
             <div className='flex items-center gap-2'>
               <IconComponent size={16} className='shrink-0' />
-              <span>{t(`channels.types.${type}`)}</span>
+              <span>{t(`channels.providers.${provider}`)}</span>
             </div>
           </Badge>
         )
       },
       filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
+        return value.includes(row.original.type)
       },
       enableSorting: false,
       enableHiding: false,
@@ -142,30 +198,7 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
     {
       accessorKey: 'status',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('channels.columns.status')} />,
-      cell: ({ row }) => {
-        const status = row.getValue('status') as string
-        const getBadgeVariant = () => {
-          switch (status) {
-            case 'enabled':
-              return 'default'
-            case 'archived':
-              return 'outline'
-            default:
-              return 'secondary'
-          }
-        }
-        const getStatusText = () => {
-          switch (status) {
-            case 'enabled':
-              return t('channels.status.enabled')
-            case 'archived':
-              return t('channels.status.archived')
-            default:
-              return t('channels.status.disabled')
-          }
-        }
-        return <Badge variant={getBadgeVariant()}>{getStatusText()}</Badge>
-      },
+      cell: StatusSwitchCell,
       enableSorting: false,
       enableHiding: false,
     },
@@ -273,8 +306,8 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
                 </Badge>
               ))}
               {models.length > 2 && (
-                <Badge 
-                  variant='secondary' 
+                <Badge
+                  variant='secondary'
                   className='text-xs cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors'
                   onClick={handleOpenModelsDialog}
                   title={t('channels.actions.viewModels')}
@@ -307,7 +340,7 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
         return <span className='font-mono text-sm'>{weight}</span>
       },
       meta: {
-        className: 'text-right',
+        className: 'w-20 min-w-20 text-right',
       },
       sortingFn: 'alphanumeric',
       enableSorting: true,
@@ -317,8 +350,21 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
       accessorKey: 'createdAt',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('channels.columns.createdAt')} />,
       cell: ({ row }) => {
-        const date = row.getValue('createdAt') as Date
-        return <div className='text-muted-foreground text-sm'>{format(date, 'yyyy-MM-dd HH:mm')}</div>
+        const raw = row.getValue('createdAt') as unknown
+        const date = raw instanceof Date ? raw : new Date(raw as string)
+
+        if (Number.isNaN(date.getTime())) {
+          return <span className='text-muted-foreground text-xs'>-</span>
+        }
+
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className='text-muted-foreground text-sm cursor-help'>{format(date, 'yyyy-MM-dd')}</div>
+            </TooltipTrigger>
+            <TooltipContent>{format(date, 'yyyy-MM-dd HH:mm:ss')}</TooltipContent>
+          </Tooltip>
+        )
       },
       enableSorting: true,
       enableHiding: false,
@@ -328,11 +374,7 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
       header: () => null,
       cell: DataTableRowActions,
       meta: {
-        // Fix the sticky name column caused layout issues.
-        className: cn(
-          'sticky right-0 z-10 w-[56px] min-w-[56px] pr-3 pl-0',
-          'bg-background transition-colors duration-200 group-hover/row:bg-muted group-data-[state=selected]/row:bg-muted'
-        ),
+        className: 'w-[56px] min-w-[56px] pr-3 pl-0',
       },
       enableSorting: false,
       enableHiding: false,

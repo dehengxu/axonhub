@@ -39,6 +39,7 @@ input ProxyConfigInput {
 type ChannelSettings {
   extraModelPrefix: String
   modelMappings: [ModelMapping!]
+  autoTrimedModelPrefixes: [String!]
   overrideParameters: String
   overrideHeaders: [HeaderEntry!]
   proxy: ProxyConfig
@@ -52,6 +53,7 @@ input ModelMappingInput {
 input ChannelSettingsInput {
   extraModelPrefix: String
   modelMappings: [ModelMappingInput!]
+  autoTrimedModelPrefixes: [String!]
   overrideParameters: String
   overrideHeaders: [HeaderEntryInput!]
   proxy: ProxyConfigInput
@@ -170,6 +172,8 @@ input UpdateAPIKeyProfilesInput {
 input APIKeyProfileInput {
   name: String!
   modelMappings: [ModelMappingInput!]
+  channelIDs: [Int!]
+  channelTags: [String!]
 }
 
 type APIKeyProfiles {
@@ -180,6 +184,8 @@ type APIKeyProfiles {
 type APIKeyProfile {
   name: String!
   modelMappings: [ModelMapping!]
+  channelIDs: [Int!]
+  channelTags: [String!]
 }
 
 input FetchModelsInput {

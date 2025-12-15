@@ -391,6 +391,8 @@
     },
     "profiles": {
       "title": "API Key Profiles",
+      "expand": "Expand Profile",
+      "collapse": "Collapse Profile",
       "description": "Configure model mapping profiles for {{name}}. When an active profile has model mappings configured, the system will automatically map requested models to their target models during API requests.",
       "profilesTitle": "Profiles",
       "addProfile": "Add Profile",
@@ -404,7 +406,13 @@
       "searchModels": "Search Model",
       "selectActiveProfile": "Select active profile",
       "noModelsFound": "No models found",
-      "regexSupported": "Supports regular expressions"
+      "regexSupported": "Supports regular expressions",
+      "allowedChannels": "Allowed Channels",
+      "allowedChannelsDescription": "Select channels that this profile can use. If none selected, all channels are allowed.",
+      "noChannelsAvailable": "No channels available",
+      "allowedChannelTags": "Allowed Channel Tags",
+      "allowedChannelTagsDescription": "Select tags to filter channels for this profile. Channels with any of the selected tags will be allowed. If none selected, tag filtering is disabled.",
+      "noTagsAvailable": "No tags available"
     }
   },
   "roles": {
@@ -551,6 +559,7 @@
     "columns": {
       "name": "Name",
       "type": "Type",
+      "provider": "Provider",
       "status": "Status",
       "tags": "Tags",
       "baseURL": "Base URL",
@@ -575,6 +584,7 @@
     },
     "types": {
       "openai": "OpenAI",
+      "openai_responses": "OpenAI (Responses)",
       "anthropic": "Anthropic",
       "anthropic_aws": "Anthropic AWS",
       "anthropic_gcp": "Anthropic GCP",
@@ -689,9 +699,9 @@
       "batchCreateError": "Failed to create channels: {{error}}",
       "errorResolvedSuccess": "Channel error resolved successfully",
       "errorResolvedError": "Failed to resolve channel error: {{error}}",
-      "Unauthorized": "Unauthorized, please check the API key of the channel",
-      "Not Found": "Endpoint not found, pleast check the base url of the channel",
-      "Interval Server Error": "Interval server error, please confirm the channel configuration"
+      "Unauthorized":"Unauthorized, please check the API key of the channel",
+      "Not Found":"Endpoint not found, pleast check the base url of the channel",
+      "Interval Server Error":"Interval server error, please confirm the channel configuration"
     },
     "errors": {
       "fetchList": "Failed to load channels",
@@ -775,8 +785,10 @@
           "editDisabled": "API format cannot be changed",
           "placeholder": "Select API format",
           "formats": {
-            "openaiChatCompletions": "OpenAI / chat completions",
-            "anthropicMessages": "Anthropic / messages"
+            "openai/chat_completions": "OpenAI (Chat Completions)",
+            "openai/responses": "OpenAI (Responses)",
+            "anthropic/messages": "Anthropic (Messages)",
+            "gemini/contents": "Gemini (Contents)"
           }
         },
         "provider": {
@@ -802,7 +814,7 @@
         },
         "supportedModels": {
           "label": "Models",
-          "description": "List of models supported by this channel",
+          "description": "Model ID",
           "required": "Please add at least one supported model",
           "defaultModelsLabel": "Quick Add Models",
           "fetchedModelsLabel": "Fetched Models",
@@ -811,11 +823,19 @@
           "searchPlaceholder": "Search models...",
           "showAddedOnly": "Show added only",
           "added": "Added",
-          "allModels": "All Models ({{count}})"
+          "allModels": "All Models ({{count}})",
+          "clearAllTitle": "Clear all supported models?",
+          "clearAllDescription": "Are you sure you want to clear all {{count}} models?",
+          "willRemove": "Will remove"
         },
         "defaultTestModel": {
           "label": "Test Model",
           "description": "Default model for testing connections"
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Add tags...",
+          "description": "Add tags to categorize and filter channels. Press Enter, comma, or space to add a tag."
         },
         "modelName": {
           "label": "Model Name",
@@ -863,12 +883,16 @@
         "test": "Test Connection",
         "testing": "Testing...",
         "add": "Add",
-        "addSelected": "Add Selected",
-        "fetchModels": "Fetch Models",
+        "batchAdd": "Batch Add",
+        "addSelected": "Add",
+        "fetchModels": "Fetch",
         "selectAll": "Select All",
         "deselectAll": "Deselect All",
-        "addSelectedCount": "Add Selected ({{count}})"
+        "addSelectedCount": "Add Selected ({{count}})",
+        "removeDeprecated": "Clean ({{count}})",
+        "clearAll": "Clear all"
       },
+
       "status": {
         "enable": {
           "title": "Enable Channel",
@@ -895,14 +919,20 @@
       "settings": {
         "title": "Channel Settings",
         "description": "Configure advanced settings for {{name}}.",
-        "basicInfo": {
+        "basic": {
           "title": "Basic Information",
           "description": "Basic configuration information for the Channel"
         },
         "extraModelPrefix": {
           "title": "Extra Model Prefix",
-          "description": "Configure an extra model prefix to allow accessing this channel with prefixed model names. For example: with prefix 'deepseek', both 'deepseek/deepseek-chat' and 'deepseek-chat' can access this channel",
+          "description": "Configure extra model prefixes to allow access to this channel using prefixed model names. For example: with prefix 'deepseek', both 'deepseek/deepseek-chat' and 'deepseek-chat' can access this channel.",
           "placeholder": "e.g., deepseek"
+        },
+        "autoTrimedModelPrefixes": {
+          "title": "Auto-Trimmed Model Prefixes",
+          "description": "Configure prefixes to automatically trim from model names. For example: with prefix 'deepseek-ai', model 'deepseek-ai/deepseek-chat' becomes 'deepseek-chat'; both 'deepseek-ai/deepseek-chat' and 'deepseek-chat' can access this channel",
+          "placeholder": "e.g., openai, deepseek",
+          "duplicateWarning": "This prefix already exists"
         },
         "modelMapping": {
           "action": "Model Alias",
@@ -910,7 +940,12 @@
           "description": "Use aliases to expose channel-supported models under alternative names without transforming the request model. For example: register 'gpt-4' as an alias of 'gpt-4-turbo', and both names will be handled by this channel",
           "originalModel": "Alias Name",
           "targetModel": "Channel-Supported Model",
-          "noMappings": "No model alias configuration"
+          "noMappings": "No model alias configuration",
+          "editHint": "Double-click to edit",
+          "validationRequired": "Both alias and target model are required",
+          "targetInvalid": "Target model must be in supported models",
+          "duplicateAlias": "Each original model can only be mapped once",
+          "useSuggestion": "Use {{alias}}"
         },
         "overrides": {
           "action": "Overrides",
@@ -1010,7 +1045,29 @@
         "description": "Adjust the ordering weight for channel \"{{name}}\".",
         "action": "Adjust Weight",
         "rangeHint": "Weight must be between {{min}} and {{max}}. Higher values will be prioritized."
+      },
+      "remark": {
+        "title": "Channel Remark",
+        "description": "Add or edit remark for channel \"{{name}}\".",
+        "action": "Remark",
+        "label": "Remark",
+        "placeholder": "Enter a note or remark for this channel..."
       }
+    },
+    "expandedRow": {
+      "basic": "Basic",
+      "additional": "Additional", 
+      "performance": "Performance",
+      "modelsAndRemark": "Models & Remark",
+      "modes": "Models",
+      "supportedModels": "Supported Models",
+      "totalModels": "Total Models",
+      "defaultTestModel": "Default Test Model",
+      "remark": "Remark",
+      "tags": "Tags",
+      "apiFormat": "API Format",
+      "noPerformanceData": "No performance data available",
+      "more": "more"
     },
     "validation": {
       "nameRequired": "Name is required",
@@ -1190,7 +1247,8 @@
     "tabs": {
       "brand": "Brand",
       "storage": "Storage",
-      "retry": "Retry"
+      "retry": "Retry",
+      "about": "About"
     },
     "storage": {
       "dataStorage": {
@@ -1358,6 +1416,31 @@
     "buttons": {
       "save": "Save Settings",
       "saving": "Saving..."
+    },
+    "about": {
+      "title": "About AxonHub",
+      "description": "System version information and update status",
+      "version": "Version",
+      "commit": "Commit",
+      "buildTime": "Build Time",
+      "goVersion": "Go Version",
+      "platform": "Platform",
+      "uptime": "Uptime",
+      "updateCheck": {
+        "title": "Check for Updates",
+        "description": "Check if a newer version is available",
+        "button": "Check Now",
+        "newVersionAvailable": "A new version is available!",
+        "currentVersion": "Current",
+        "latestVersion": "Latest",
+        "viewRelease": "View Release Notes",
+        "upToDate": "You are running the latest version"
+      },
+      "links": {
+        "title": "Links",
+        "releases": "Releases",
+        "issues": "Report Issue"
+      }
     }
   },
   "requests": {
@@ -1366,9 +1449,6 @@
     "columns": {
       "id": "ID",
       "modelId": "Model ID",
-      "promptTokens": "Input",
-      "completionTokens": "Output",
-      "totalTokens": "Total",
       "status": "Status",
       "stream": "Stream",
       "source": "Source",
@@ -1554,8 +1634,8 @@
     },
     "detail": {
       "title": "Trace Details",
-      "basicInfo": "Basic Information",
-      "additionalInfo": "Additional Information",
+      "basic": "Basic Information",
+      "additional": "Additional Information",
       "notFound": "Trace not found",
       "overview": "Overview",
       "requestTrace": "Request Trace",
@@ -1757,32 +1837,7 @@
       "totalTokens": "Total Tokens",
       "input": "Input",
       "output": "Output",
-      "cached": "Cached",
-      "modelDetails": "Model Details",
-      "modelTokenStats": "Model Token Statistics",
-      "detailedModelTokenConsumption": "Detailed token consumption statistics by model",
-      "tokenTrends": "Token Trends",
-      "noModelData": "No model data available",
-      "selectModel": "Select Model",
-      "selectPeriod": "Select Period",
-      "day": "Day",
-      "week": "Week",
-      "month": "Month",
-      "chart": "Chart",
-      "table": "Table",
-      "showing": "Showing",
-      "models": "models",
-      "totalInput": "Total Input",
-      "totalOutput": "Total Output",
-      "totalCached": "Total Cached",
-      "percentage": "Percentage",
-      "export": "Export",
-      "noDataAvailable": "No data available",
-      "totalConsumption": "Total Consumption",
-      "totalRequests": "Total Requests",
-      "totalPromptTokens": "Total Prompt Tokens",
-      "totalTokens": "Total Tokens",
-      "selectModelPrompt": "Please select a model to view statistics"
+      "cached": "Cached"
     }
   },
   "playground": {
@@ -1916,31 +1971,28 @@
     "selectedItems": "{{count}} selected",
     "noResultsFound": "No results found",
     "clearFilters": "Clear filters",
-    "loading": "Loading...",
     "view": "View",
     "toggleColumns": "Toggle columns",
     "noData": "No data available",
     "noResults": "No results.",
+    "loading": "Loading...",
     "loadError": "Load failed:",
     "back": "Back",
     "showing": "Showing",
     "of": "of",
     "previous": "Previous",
     "next": "Next",
-    "sort": {
-      "label": "Sort",
-      "asc": "Ascending",
-      "desc": "Descending",
-      "ascending": "Ascending",
-      "descending": "Descending",
-      "hide": "Hide"
-    },
     "moveUp": "Move Up",
     "moveDown": "Move Down",
     "moveToTop": "Move to top",
     "moveToBottom": "Move to bottom",
     "dragging": "Dragging",
     "unsavedChanges": "You have unsaved changes",
+    "sort": {
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "hide": "Hide"
+    },
     "messages": {
       "errorMessage": "Error Message",
       "success": "Success",
@@ -1973,6 +2025,7 @@
       "test": "Test",
       "openMenu": "Open menu",
       "edit": "Edit",
+      "duplicate": "Duplicate",
       "delete": "Delete"
     },
     "filters": {
@@ -2024,7 +2077,6 @@
       "modelCreated": "Model created successfully",
       "modelUpdated": "Model updated successfully",
       "modelDeleted": "Model deleted successfully",
-      "total": "Total",
       "systemUpdated": "System settings updated successfully",
       "onboardingCompleted": "Onboarding completed successfully"
     }

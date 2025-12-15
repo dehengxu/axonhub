@@ -37,6 +37,7 @@ func (Channel) Fields() []ent.Field {
 		field.Enum("type").
 			Values(
 				"openai",
+				"openai_responses",
 				"vercel",
 				"anthropic",
 				"anthropic_aws",
@@ -88,6 +89,9 @@ func (Channel) Fields() []ent.Field {
 			Optional().Nillable().Annotations(
 			entgql.Skip(entgql.SkipMutationCreateInput),
 		),
+		field.String("remark").
+			Optional().Nillable().
+			Comment("User-defined remark or note for the channel"),
 	}
 }
 

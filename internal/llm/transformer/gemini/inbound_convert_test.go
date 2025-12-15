@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/looplj/axonhub/internal/llm"
+	"github.com/looplj/axonhub/internal/llm/transformer/shared"
 	"github.com/looplj/axonhub/internal/pkg/xtest"
 )
 
@@ -607,6 +608,262 @@ func TestConvertGeminiContentToLLMMessage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := convertGeminiContentToLLMMessage(tt.input, nil)
 			require.NoError(t, err)
+			tt.validate(t, result)
+		})
+	}
+}
+
+func TestConvertGeminiContentToLLMMessage_ThoughtSignature(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *Content
+		validate func(t *testing.T, result *llm.Message)
+	}{
+		{
+			name: "function call with thought signature",
+			input: &Content{
+				Role: "model",
+				Parts: []*Part{
+					{
+						FunctionCall: &FunctionCall{
+							ID:   "call_001",
+							Name: "check_flight",
+							Args: map[string]any{"flight": "AA100"},
+						},
+						ThoughtSignature: "signature_A",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Message) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.NotNil(t, result.RedactedReasoningContent)
+				require.True(t, shared.IsGeminiThoughtSignature(result.RedactedReasoningContent))
+				decoded := shared.DecodeGeminiThoughtSignature(result.RedactedReasoningContent)
+				require.NotNil(t, decoded)
+				require.Equal(t, "signature_A", *decoded)
+				require.Len(t, result.ToolCalls, 1)
+				tc := result.ToolCalls[0]
+				require.Equal(t, "call_001", tc.ID)
+				require.Equal(t, "check_flight", tc.Function.Name)
+				require.Nil(t, tc.TransformerMetadata)
+			},
+		},
+		{
+			name: "parallel function calls - only first has signature",
+			input: &Content{
+				Role: "model",
+				Parts: []*Part{
+					{
+						FunctionCall: &FunctionCall{
+							ID:   "call_paris",
+							Name: "get_weather",
+							Args: map[string]any{"location": "Paris"},
+						},
+						ThoughtSignature: "signature_parallel",
+					},
+					{
+						FunctionCall: &FunctionCall{
+							ID:   "call_london",
+							Name: "get_weather",
+							Args: map[string]any{"location": "London"},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Message) {
+				t.Helper()
+				require.NotNil(t, result.RedactedReasoningContent)
+				require.True(t, shared.IsGeminiThoughtSignature(result.RedactedReasoningContent))
+				decoded := shared.DecodeGeminiThoughtSignature(result.RedactedReasoningContent)
+				require.NotNil(t, decoded)
+				require.Equal(t, "signature_parallel", *decoded)
+				require.Len(t, result.ToolCalls, 2)
+
+				// First call should have signature
+				tc1 := result.ToolCalls[0]
+				require.Equal(t, "call_paris", tc1.ID)
+				require.Nil(t, tc1.TransformerMetadata)
+
+				// Second call should not have signature
+				tc2 := result.ToolCalls[1]
+				require.Equal(t, "call_london", tc2.ID)
+				require.Nil(t, tc2.TransformerMetadata)
+			},
+		},
+		{
+			name: "function call without signature",
+			input: &Content{
+				Role: "model",
+				Parts: []*Part{
+					{
+						FunctionCall: &FunctionCall{
+							ID:   "call_002",
+							Name: "get_weather",
+							Args: map[string]any{"location": "NYC"},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Message) {
+				t.Helper()
+				require.Nil(t, result.RedactedReasoningContent)
+				require.Len(t, result.ToolCalls, 1)
+				tc := result.ToolCalls[0]
+				require.Equal(t, "call_002", tc.ID)
+				require.Nil(t, tc.TransformerMetadata)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertGeminiContentToLLMMessage(tt.input, nil)
+			require.NoError(t, err)
+			tt.validate(t, result)
+		})
+	}
+}
+
+func TestConvertLLMChoiceToGeminiCandidate_ThoughtSignature(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *llm.Choice
+		validate func(t *testing.T, result *Candidate)
+	}{
+		{
+			name: "tool call with thought signature",
+			input: &llm.Choice{
+				Index: 0,
+				Message: &llm.Message{
+					Role:                     "assistant",
+					RedactedReasoningContent: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
+					ToolCalls: []llm.ToolCall{
+						{
+							ID:   "call_001",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "check_flight",
+								Arguments: `{"flight":"AA100"}`,
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *Candidate) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.NotNil(t, result.Content)
+				require.Len(t, result.Content.Parts, 1)
+				require.NotNil(t, result.Content.Parts[0].FunctionCall)
+				require.Equal(t, "check_flight", result.Content.Parts[0].FunctionCall.Name)
+				require.Equal(t, "signature_A", result.Content.Parts[0].ThoughtSignature)
+			},
+		},
+		{
+			name: "multiple tool calls - only first has signature",
+			input: &llm.Choice{
+				Index: 0,
+				Message: &llm.Message{
+					Role:                     "assistant",
+					RedactedReasoningContent: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
+					ToolCalls: []llm.ToolCall{
+						{
+							ID:   "call_001",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "check_flight",
+								Arguments: `{"flight":"AA100"}`,
+							},
+						},
+						{
+							ID:   "call_002",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "book_taxi",
+								Arguments: `{"time":"10 AM"}`,
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *Candidate) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.Len(t, result.Content.Parts, 2)
+
+				require.Equal(t, "check_flight", result.Content.Parts[0].FunctionCall.Name)
+				require.Equal(t, "signature_A", result.Content.Parts[0].ThoughtSignature)
+
+				require.Equal(t, "book_taxi", result.Content.Parts[1].FunctionCall.Name)
+				require.Empty(t, result.Content.Parts[1].ThoughtSignature)
+			},
+		},
+		{
+			name: "tool call without signature",
+			input: &llm.Choice{
+				Index: 0,
+				Message: &llm.Message{
+					Role: "assistant",
+					ToolCalls: []llm.ToolCall{
+						{
+							ID:   "call_001",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "get_weather",
+								Arguments: `{"location":"NYC"}`,
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *Candidate) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.Len(t, result.Content.Parts, 1)
+				require.NotNil(t, result.Content.Parts[0].FunctionCall)
+				require.Equal(t, "context_engineering_is_the_way_to_go", result.Content.Parts[0].ThoughtSignature)
+			},
+		},
+		{
+			name: "parallel tool calls without signature - only first gets default",
+			input: &llm.Choice{
+				Index: 0,
+				Message: &llm.Message{
+					Role: "assistant",
+					ToolCalls: []llm.ToolCall{
+						{
+							ID:   "call_paris",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "get_weather",
+								Arguments: `{"location":"Paris"}`,
+							},
+						},
+						{
+							ID:   "call_london",
+							Type: "function",
+							Function: llm.FunctionCall{
+								Name:      "get_weather",
+								Arguments: `{"location":"London"}`,
+							},
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *Candidate) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.Len(t, result.Content.Parts, 2)
+				require.Equal(t, "context_engineering_is_the_way_to_go", result.Content.Parts[0].ThoughtSignature)
+				require.Empty(t, result.Content.Parts[1].ThoughtSignature)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertLLMChoiceToGeminiCandidate(tt.input, false)
 			tt.validate(t, result)
 		})
 	}

@@ -24,6 +24,7 @@ import { BURNCLOUD_DEFAULT_MODELS } from './burncloud-models'
 import { ApiFormat, ChannelType } from './schema'
 
 export const OPENAI_CHAT_COMPLETIONS: ApiFormat = 'openai/chat_completions'
+export const OPENAI_RESPONSES: ApiFormat = 'openai/responses'
 export const ANTHROPIC_MESSAGES: ApiFormat = 'anthropic/messages'
 export const GEMINI_CONTENTS: ApiFormat = 'gemini/contents'
 
@@ -60,6 +61,14 @@ export const CHANNEL_CONFIGS: Record<ChannelType, ChannelConfig> = {
     defaultModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-5', 'gpt-5.1'],
     apiFormat: OPENAI_CHAT_COMPLETIONS,
     color: 'bg-white-100 text-white-800 border-white-200',
+    icon: OpenAI,
+  },
+  openai_responses: {
+    channelType: 'openai_responses',
+    baseURL: 'https://api.openai.com/v1',
+    defaultModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-5', 'gpt-5.1'],
+    apiFormat: OPENAI_RESPONSES,
+    color: 'bg-green-100 text-green-800 border-green-200',
     icon: OpenAI,
   },
   deepseek: {
@@ -466,4 +475,75 @@ export const getDefaultBaseURL = (channelType: ChannelType): string => {
  */
 export const getDefaultModels = (channelType: ChannelType): string[] => {
   return CHANNEL_CONFIGS[channelType]?.defaultModels || []
+}
+
+/**
+ * Provider type for grouping channel types
+ */
+export type Provider =
+  | 'openai'
+  | 'anthropic'
+  | 'deepseek'
+  | 'gemini'
+  | 'moonshot'
+  | 'zhipu'
+  | 'zai'
+  | 'doubao'
+  | 'minimax'
+  | 'longcat'
+  | 'xai'
+  | 'openrouter'
+  | 'vercel'
+  | 'ppio'
+  | 'siliconflow'
+  | 'volcengine'
+  | 'aihubmix'
+  | 'burncloud'
+  | 'modelscope'
+  | 'bailian'
+
+/**
+ * Map channel type to provider
+ */
+export const CHANNEL_TYPE_TO_PROVIDER: Record<ChannelType, Provider> = {
+  openai: 'openai',
+  openai_responses: 'openai',
+  openai_fake: 'openai',
+  anthropic: 'anthropic',
+  anthropic_aws: 'anthropic',
+  anthropic_gcp: 'anthropic',
+  anthropic_fake: 'anthropic',
+  deepseek: 'deepseek',
+  deepseek_anthropic: 'deepseek',
+  gemini: 'gemini',
+  gemini_openai: 'gemini',
+  moonshot: 'moonshot',
+  moonshot_anthropic: 'moonshot',
+  zhipu: 'zhipu',
+  zhipu_anthropic: 'zhipu',
+  zai: 'zai',
+  zai_anthropic: 'zai',
+  doubao: 'doubao',
+  doubao_anthropic: 'doubao',
+  minimax: 'minimax',
+  minimax_anthropic: 'minimax',
+  longcat: 'longcat',
+  longcat_anthropic: 'longcat',
+  xai: 'xai',
+  openrouter: 'openrouter',
+  vercel: 'vercel',
+  ppio: 'ppio',
+  siliconflow: 'siliconflow',
+  volcengine: 'volcengine',
+  aihubmix: 'aihubmix',
+  burncloud: 'burncloud',
+  modelscope: 'modelscope',
+  bailian: 'bailian',
+}
+
+/**
+ * Get provider for a channel type
+ */
+export const getProvider = (channelType: ChannelType): Provider => {
+  return CHANNEL_TYPE_TO_PROVIDER[channelType]
 }

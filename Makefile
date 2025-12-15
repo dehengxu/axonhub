@@ -9,7 +9,7 @@ generate:
 # Build the backend application
 build-backend:
 	@echo "Building axonhub backend..."
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
+	CGO_ENABLED=0 go build -tags=nomsgpack -trimpath -ldflags="-s -w" -o axonhub ./cmd/axonhub && \
 	ls -lsh axonhub*
 	@echo "Backend build completed!"
 

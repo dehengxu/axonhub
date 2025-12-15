@@ -167,8 +167,8 @@ func TestInboundTransformer_TransformRequest(t *testing.T) {
 			},
 			expected: &llm.Request{
 				Model:       "claude-3-sonnet-20240229",
-				MaxTokens:   func() *int64 { v := int64(1024); return &v }(),
-				Temperature: func() *float64 { v := 0.7; return &v }(),
+				MaxTokens:   lo.ToPtr(int64(1024)),
+				Temperature: lo.ToPtr(0.7),
 				Stop: &llm.Stop{
 					MultipleStop: []string{"Human:", "Assistant:"},
 				},
@@ -180,6 +180,60 @@ func TestInboundTransformer_TransformRequest(t *testing.T) {
 						},
 					},
 				},
+			},
+			expectError: false,
+		},
+		{
+			name: "request with tool result",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens":100,
+					"messages": [
+						{
+						"role": "user",
+						"content": [
+							{
+							"tool_use_id": "call_cmN7LOSh5GhF7h0m5KfWuGEI",
+							"type": "tool_result",
+							"content": [
+								{
+								"type": "text",
+								"text": "I located "
+								}
+							],
+							"cache_control": {
+								"type": "ephemeral"
+							}
+							}
+						]
+						}
+					]
+			}`),
+			},
+			expected: &llm.Request{
+				Messages: []llm.Message{
+					{
+						Role:       "tool",
+						ToolCallID: lo.ToPtr("call_cmN7LOSh5GhF7h0m5KfWuGEI"),
+						Content: llm.MessageContent{
+							MultipleContent: []llm.MessageContentPart{
+								{
+									Type: "text",
+									Text: lo.ToPtr("I located"),
+									CacheControl: &llm.CacheControl{
+										Type: "ephemeral",
+									},
+								},
+							},
+						},
+					},
+				},
+				Model:     "claude-sonnet-4-5-20250929",
+				MaxTokens: lo.ToPtr(int64(100)),
 			},
 			expectError: false,
 		},
@@ -338,7 +392,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 				t.Helper()
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Hello! How can I help you?", resp.Content[0].Text)
+				require.Equal(t, "Hello! How can I help you?", *resp.Content[0].Text)
 				require.Equal(t, "end_turn", *resp.StopReason)
 			},
 		},
@@ -372,7 +426,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 				t.Helper()
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "I can see an image.", resp.Content[0].Text)
+				require.Equal(t, "I can see an image.", *resp.Content[0].Text)
 			},
 		},
 		{
@@ -413,7 +467,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be text
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Here's an image for you:", resp.Content[0].Text)
+				require.Equal(t, "Here's an image for you:", *resp.Content[0].Text)
 
 				// Second content block should be image
 				require.Equal(t, "image", resp.Content[1].Type)
@@ -475,7 +529,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be text
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Here are two different images:", resp.Content[0].Text)
+				require.Equal(t, "Here are two different images:", *resp.Content[0].Text)
 
 				// Second content block should be PNG image
 				require.Equal(t, "image", resp.Content[1].Type)
@@ -486,7 +540,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// Third content block should be text
 				require.Equal(t, "text", resp.Content[2].Type)
-				require.Equal(t, "and", resp.Content[2].Text)
+				require.Equal(t, "and", *resp.Content[2].Text)
 
 				// Fourth content block should be WebP image
 				require.Equal(t, "image", resp.Content[3].Type)
@@ -497,7 +551,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// Fifth content block should be text
 				require.Equal(t, "text", resp.Content[4].Type)
-				require.Equal(t, "Both images show different content.", resp.Content[4].Text)
+				require.Equal(t, "Both images show different content.", *resp.Content[4].Text)
 			},
 		},
 		{
@@ -542,11 +596,11 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be thinking
 				require.Equal(t, "thinking", resp.Content[0].Type)
-				require.Equal(t, "I should analyze this image and provide a helpful response with a visual example.", resp.Content[0].Thinking)
+				require.Equal(t, "I should analyze this image and provide a helpful response with a visual example.", *resp.Content[0].Thinking)
 
 				// Second content block should be text
 				require.Equal(t, "text", resp.Content[1].Type)
-				require.Equal(t, "Based on my analysis, here's a relevant image:", resp.Content[1].Text)
+				require.Equal(t, "Based on my analysis, here's a relevant image:", *resp.Content[1].Text)
 
 				// Third content block should be GIF image
 				require.Equal(t, "image", resp.Content[2].Type)
@@ -587,11 +641,11 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be thinking
 				require.Equal(t, "thinking", resp.Content[0].Type)
-				require.Equal(t, "Let me think about this step by step. First, I need to understand the problem...", resp.Content[0].Thinking)
+				require.Equal(t, "Let me think about this step by step. First, I need to understand the problem...", *resp.Content[0].Thinking)
 
 				// Second content block should be text
 				require.Equal(t, "text", resp.Content[1].Type)
-				require.Equal(t, "Based on my analysis, the answer is 42.", resp.Content[1].Text)
+				require.Equal(t, "Based on my analysis, the answer is 42.", *resp.Content[1].Text)
 			},
 		},
 		{
@@ -631,7 +685,7 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be text
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "I'll help you with that calculation.", resp.Content[0].Text)
+				require.Equal(t, "I'll help you with that calculation.", *resp.Content[0].Text)
 
 				// Second content block should be tool_use
 				require.Equal(t, "tool_use", resp.Content[1].Type)
@@ -699,11 +753,11 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 
 				// First content block should be thinking
 				require.Equal(t, "thinking", resp.Content[0].Type)
-				require.Equal(t, "The user wants me to calculate something. I should use the calculator tool.", resp.Content[0].Thinking)
+				require.Equal(t, "The user wants me to calculate something. I should use the calculator tool.", *resp.Content[0].Thinking)
 
 				// Second content block should be text
 				require.Equal(t, "text", resp.Content[1].Type)
-				require.Equal(t, "Let me calculate that for you.", resp.Content[1].Text)
+				require.Equal(t, "Let me calculate that for you.", *resp.Content[1].Text)
 
 				// Third content block should be first tool_use
 				require.Equal(t, "tool_use", resp.Content[2].Type)
@@ -1192,7 +1246,7 @@ func TestAnthropicMessageContent_MarshalUnmarshal(t *testing.T) {
 				MultipleContent: []MessageContentBlock{
 					{
 						Type: "text",
-						Text: "Hello",
+						Text: lo.ToPtr("Hello"),
 					},
 				},
 			},
@@ -1253,7 +1307,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				t.Helper()
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "thinking", resp.Content[0].Type)
-				require.Equal(t, "I need to think about this carefully...", resp.Content[0].Thinking)
+				require.Equal(t, "I need to think about this carefully...", *resp.Content[0].Thinking)
 			},
 		},
 		{
@@ -1322,7 +1376,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				// Empty thinking content should be ignored
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Direct answer.", resp.Content[0].Text)
+				require.Equal(t, "Direct answer.", *resp.Content[0].Text)
 			},
 		},
 		{
@@ -1389,7 +1443,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				t.Helper()
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Delta content", resp.Content[0].Text)
+				require.Equal(t, "Delta content", *resp.Content[0].Text)
 			},
 		},
 		{
@@ -1503,7 +1557,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				// Should only include text parts
 				require.Len(t, resp.Content, 3)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "First text part", resp.Content[0].Text)
+				require.Equal(t, "First text part", *resp.Content[0].Text)
 
 				require.Equal(t, "image", resp.Content[1].Type)
 				require.NotNil(t, resp.Content[1].Source)
@@ -1511,7 +1565,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				require.Equal(t, "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==", resp.Content[1].Source.Data)
 
 				require.Equal(t, "text", resp.Content[2].Type)
-				require.Equal(t, "Second text part", resp.Content[2].Text)
+				require.Equal(t, "Second text part", *resp.Content[2].Text)
 			},
 		},
 		{
@@ -1549,7 +1603,7 @@ func TestInboundTransformer_TransformResponse_EdgeCases(t *testing.T) {
 				// Should only include the valid text part
 				require.Len(t, resp.Content, 1)
 				require.Equal(t, "text", resp.Content[0].Type)
-				require.Equal(t, "Valid text", resp.Content[0].Text)
+				require.Equal(t, "Valid text", *resp.Content[0].Text)
 			},
 		},
 	}

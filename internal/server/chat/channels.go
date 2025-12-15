@@ -4,68 +4,157 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samber/lo"
+
 	"github.com/looplj/axonhub/internal/llm"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
 
+// ChannelSelector defines the interface for selecting channels.
 type ChannelSelector interface {
 	Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error)
 }
 
-// DefaultChannelSelector selects only enabled channels and sorts them using load balancing.
-type DefaultChannelSelector struct {
-	ChannelService    *biz.ChannelService
-	LoadBalancer      *LoadBalancer
-	ConnectionTracker *DefaultConnectionTracker
+// DefaultSelector directly calls ChannelService.ChooseChannels to get enabled channels.
+type DefaultSelector struct {
+	ChannelService *biz.ChannelService
 }
 
-// NewDefaultChannelSelector creates a selector with optional connection tracking.
-func NewDefaultChannelSelector(
-	channelService *biz.ChannelService,
-	systemService *biz.SystemService,
-	requestService *biz.RequestService,
-	connectionTracker *DefaultConnectionTracker,
-) *DefaultChannelSelector {
-	// Build strategies
-	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(requestService),                         // Priority 1: Last successful channel from trace
-		NewErrorAwareStrategy(channelService),                         // Priority 2: Health and error rate
-		NewWeightRoundRobinStrategy(channelService),                   // Priority 3: Weight round robin
-		NewConnectionAwareStrategy(channelService, connectionTracker), // Priority 4: Connection count
-	}
-
-	loadBalancer := NewLoadBalancer(systemService, strategies...)
-
-	return &DefaultChannelSelector{
-		ChannelService:    channelService,
-		LoadBalancer:      loadBalancer,
-		ConnectionTracker: connectionTracker,
+// NewDefaultSelector creates a basic selector that returns all enabled channels supporting the model.
+func NewDefaultSelector(channelService *biz.ChannelService) *DefaultSelector {
+	return &DefaultSelector{
+		ChannelService: channelService,
 	}
 }
 
-func (s *DefaultChannelSelector) Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error) {
-	// The request model has already been mapped by the inbound transformer if needed
-	// Channel selection will use the mapped model for finding compatible channels
-	channels, err := s.ChannelService.ChooseChannels(ctx, req)
+func (s *DefaultSelector) Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error) {
+	return s.ChannelService.ChooseChannels(ctx, req)
+}
+
+// SelectedChannelsSelector is a decorator that filters channels by allowed channel IDs.
+type SelectedChannelsSelector struct {
+	wrapped           ChannelSelector
+	allowedChannelIDs []int
+}
+
+// NewSelectedChannelsSelector creates a selector that filters by allowed channel IDs.
+// If allowedChannelIDs is nil or empty, all channels from the wrapped selector are returned.
+func NewSelectedChannelsSelector(wrapped ChannelSelector, allowedChannelIDs []int) *SelectedChannelsSelector {
+	return &SelectedChannelsSelector{
+		wrapped:           wrapped,
+		allowedChannelIDs: allowedChannelIDs,
+	}
+}
+
+func (s *SelectedChannelsSelector) Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error) {
+	channels, err := s.wrapped.Select(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(channels) == 1 {
+	// If no allowed IDs specified, return all channels
+	if len(s.allowedChannelIDs) == 0 {
+		return channels, nil
+	}
+
+	// Build allowed set for O(1) lookup
+	allowedSet := lo.SliceToMap(s.allowedChannelIDs, func(id int) (int, struct{}) {
+		return id, struct{}{}
+	})
+
+	// Filter channels by allowed IDs
+	filtered := lo.Filter(channels, func(ch *biz.Channel, _ int) bool {
+		_, ok := allowedSet[ch.ID]
+		return ok
+	})
+
+	return filtered, nil
+}
+
+// LoadBalancedSelector is a decorator that sorts channels using load balancing strategies.
+type LoadBalancedSelector struct {
+	wrapped      ChannelSelector
+	loadBalancer *LoadBalancer
+}
+
+// NewLoadBalancedSelector creates a selector that applies load balancing to sort channels.
+func NewLoadBalancedSelector(wrapped ChannelSelector, loadBalancer *LoadBalancer) *LoadBalancedSelector {
+	return &LoadBalancedSelector{
+		wrapped:      wrapped,
+		loadBalancer: loadBalancer,
+	}
+}
+
+func (s *LoadBalancedSelector) Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error) {
+	channels, err := s.wrapped.Select(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(channels) <= 1 {
 		return channels, nil
 	}
 
 	// Apply load balancing to sort channels by priority
-	sortedChannels := s.LoadBalancer.Sort(ctx, channels, req.Model)
+	sortedChannels := s.loadBalancer.Sort(ctx, channels, req.Model)
 
-	log.Debug(ctx, "Selected and sorted channels for model",
-		log.String("model", req.Model),
-		log.Int("total_channels", len(channels)),
-		log.Int("selected_channels", len(sortedChannels)))
+	if log.DebugEnabled(ctx) {
+		log.Debug(ctx, "Load balanced channels for model",
+			log.String("model", req.Model),
+			log.Int("total_channels", len(channels)),
+			log.Int("selected_channels", len(sortedChannels)))
+	}
 
 	return sortedChannels, nil
+}
+
+// TagsFilterSelector 是一个装饰器，根据允许的标签过滤渠道。
+// 采用 OR 逻辑：渠道包含任意一个允许的标签即可被选中。
+type TagsFilterSelector struct {
+	wrapped     ChannelSelector
+	allowedTags []string
+}
+
+// NewTagsFilterSelector 创建根据标签过滤的选择器。
+// 如果 allowedTags 为空，返回所有来自 wrapped selector 的渠道。
+func NewTagsFilterSelector(wrapped ChannelSelector, allowedTags []string) *TagsFilterSelector {
+	return &TagsFilterSelector{
+		wrapped:     wrapped,
+		allowedTags: allowedTags,
+	}
+}
+
+func (s *TagsFilterSelector) Select(ctx context.Context, req *llm.Request) ([]*biz.Channel, error) {
+	channels, err := s.wrapped.Select(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// 如果没有指定标签，返回所有渠道
+	if len(s.allowedTags) == 0 {
+		return channels, nil
+	}
+
+	// 构建标签集合用于 O(1) 查找
+	allowedSet := lo.SliceToMap(s.allowedTags, func(tag string) (string, struct{}) {
+		return tag, struct{}{}
+	})
+
+	// 过滤渠道：只保留至少包含一个允许标签的渠道（OR 逻辑）
+	// 空标签的渠道不会被匹配
+	filtered := lo.Filter(channels, func(ch *biz.Channel, _ int) bool {
+		for _, tag := range ch.Tags {
+			if _, ok := allowedSet[tag]; ok {
+				return true
+			}
+		}
+
+		return false
+	})
+
+	return filtered, nil
 }
 
 // SpecifiedChannelSelector allows selecting specific channels (including disabled ones) for testing.

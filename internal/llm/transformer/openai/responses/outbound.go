@@ -8,12 +8,11 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
-	"github.com/tidwall/gjson"
 
 	"github.com/looplj/axonhub/internal/llm"
 	"github.com/looplj/axonhub/internal/llm/transformer"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/streams"
+	"github.com/looplj/axonhub/internal/pkg/xmap"
 )
 
 var _ transformer.Outbound = (*OutboundTransformer)(nil)
@@ -40,8 +39,39 @@ func (t *OutboundTransformer) APIFormat() llm.APIFormat {
 	return llm.APIFormatOpenAIResponse
 }
 
-func (t *OutboundTransformer) TransformError(ctx context.Context, err *httpclient.Error) *llm.ResponseError {
-	return nil
+// TransformError transforms HTTP error response to unified error response.
+func (t *OutboundTransformer) TransformError(ctx context.Context, rawErr *httpclient.Error) *llm.ResponseError {
+	if rawErr == nil {
+		return &llm.ResponseError{
+			StatusCode: http.StatusInternalServerError,
+			Detail: llm.ErrorDetail{
+				Message: http.StatusText(http.StatusInternalServerError),
+				Type:    "api_error",
+			},
+		}
+	}
+
+	// Try to parse as OpenAI error format first
+	var openaiError struct {
+		Error llm.ErrorDetail `json:"error"`
+	}
+
+	err := json.Unmarshal(rawErr.Body, &openaiError)
+	if err == nil && openaiError.Error.Message != "" {
+		return &llm.ResponseError{
+			StatusCode: rawErr.StatusCode,
+			Detail:     openaiError.Error,
+		}
+	}
+
+	// If JSON parsing fails, use the upstream status text
+	return &llm.ResponseError{
+		StatusCode: rawErr.StatusCode,
+		Detail: llm.ErrorDetail{
+			Message: http.StatusText(rawErr.StatusCode),
+			Type:    "api_error",
+		},
+	}
 }
 
 func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm.Request) (*httpclient.Request, error) {
@@ -51,28 +81,52 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm
 
 	var tools []Tool
 
-	metadata := map[string]string{}
+	// Initialize TransformerMetadata if nil
+	if chatReq.TransformerMetadata == nil {
+		chatReq.TransformerMetadata = map[string]any{}
+	}
 
-	// If caller provided a tool of type image_generation, merge its parameters.
+	// Convert tools to Responses API format
 	for _, item := range chatReq.Tools {
 		switch item.Type {
 		case llm.ToolTypeImageGeneration:
 			tool := convertImageGenerationToTool(item)
 			tools = append(tools, tool)
-			metadata["image_output_format"] = tool.OutputFormat
+			// Store image output format in TransformerMetadata
+			chatReq.TransformerMetadata["image_output_format"] = tool.OutputFormat
+		case "function":
+			tool := convertFunctionToTool(item)
+			tools = append(tools, tool)
 		default:
-			return nil, fmt.Errorf("unsupported tool type: %s", item.Type)
+			// Skip unsupported tool types
+			continue
 		}
 	}
 
 	payload := Request{
-		Model:             chatReq.Model,
-		Input:             convertInputFromMessages(chatReq.Messages),
-		Instructions:      convertInstructionsFromMessages(chatReq.Messages),
-		Tools:             tools,
-		ParallelToolCalls: chatReq.ParallelToolCalls,
-		Stream:            chatReq.Stream,
-		Text:              convertToTextOptions(chatReq),
+		Model:                chatReq.Model,
+		Input:                convertInputFromMessages(chatReq.Messages),
+		Instructions:         convertInstructionsFromMessages(chatReq.Messages),
+		Tools:                tools,
+		ParallelToolCalls:    chatReq.ParallelToolCalls,
+		Stream:               chatReq.Stream,
+		Text:                 convertToTextOptions(chatReq),
+		Store:                chatReq.Store,
+		ServiceTier:          chatReq.ServiceTier,
+		SafetyIdentifier:     chatReq.SafetyIdentifier,
+		User:                 chatReq.User,
+		Metadata:             chatReq.Metadata,
+		MaxOutputTokens:      chatReq.MaxCompletionTokens,
+		TopLogprobs:          chatReq.TopLogprobs,
+		TopP:                 chatReq.TopP,
+		ToolChoice:           convertToolChoice(chatReq.ToolChoice),
+		StreamOptions:        convertStreamOptions(chatReq.StreamOptions, chatReq.TransformerMetadata),
+		Reasoning:            convertReasoning(chatReq),
+		Include:              xmap.GetStringSlice(chatReq.TransformerMetadata, "include"),
+		MaxToolCalls:         xmap.GetInt64Ptr(chatReq.TransformerMetadata, "max_tool_calls"),
+		PromptCacheKey:       xmap.GetStringPtr(chatReq.TransformerMetadata, "prompt_cache_key"),
+		PromptCacheRetention: xmap.GetStringPtr(chatReq.TransformerMetadata, "prompt_cache_retention"),
+		Truncation:           xmap.GetStringPtr(chatReq.TransformerMetadata, "truncation"),
 	}
 
 	body, err := json.Marshal(payload)
@@ -93,7 +147,7 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm
 			Type:   "bearer",
 			APIKey: t.APIKey,
 		},
-		Metadata: metadata,
+		TransformerMetadata: chatReq.TransformerMetadata,
 	}, nil
 }
 
@@ -135,100 +189,133 @@ func (t *OutboundTransformer) TransformResponse(
 		llmResp.Usage = resp.Usage.ToUsage()
 	}
 
-	// Process output items
-	for i, output := range resp.Output {
-		choice := llm.Choice{
-			Index: i,
-			Message: &llm.Message{
-				Role: "assistant",
-			},
-		}
+	// Process output items - aggregate all into a single choice (Chat Completions format)
+	var (
+		contentParts     []llm.MessageContentPart
+		textContent      strings.Builder
+		reasoningContent strings.Builder
+		toolCalls        []llm.ToolCall
+	)
 
-		// Handle different output item types
-		var (
-			contentParts []llm.MessageContentPart
-			textContent  strings.Builder
-		)
-
-		switch output.Type {
+	for _, outputItem := range resp.Output {
+		switch outputItem.Type {
 		case "message":
 			// Extract text content from message content array
-			for _, contentItem := range output.Content {
+			for _, contentItem := range outputItem.GetContentItems() {
 				if contentItem.Type == "output_text" {
 					textContent.WriteString(contentItem.Text)
 				}
 			}
 		case "output_text":
 			// Direct text output
-			if output.Text != nil {
-				textContent.WriteString(*output.Text)
+			if outputItem.Text != nil {
+				textContent.WriteString(*outputItem.Text)
+			}
+		case "function_call":
+			// Function call output - aggregate all tool calls
+			toolCalls = append(toolCalls, llm.ToolCall{
+				ID:   outputItem.CallID,
+				Type: "function",
+				Function: llm.FunctionCall{
+					Name:      outputItem.Name,
+					Arguments: outputItem.Arguments,
+				},
+			})
+		case "reasoning":
+			// Handle reasoning output - convert to ReasoningContent
+			for _, summary := range outputItem.Summary {
+				reasoningContent.WriteString(summary.Text)
 			}
 		case "image_generation_call":
 			imageOutputFormat := "png"
-			if httpResp.Request != nil && httpResp.Request.Metadata != nil && httpResp.Request.Metadata["image_output_format"] != "" {
-				imageOutputFormat = httpResp.Request.Metadata["image_output_format"]
+
+			if httpResp.Request != nil && httpResp.Request.TransformerMetadata != nil {
+				if fmt, ok := httpResp.Request.TransformerMetadata["image_output_format"].(string); ok && fmt != "" {
+					imageOutputFormat = fmt
+				}
 			}
 			// Image generation result
-			if output.Result != nil && *output.Result != "" {
+			if outputItem.Result != nil && *outputItem.Result != "" {
 				contentParts = append(contentParts, llm.MessageContentPart{
 					Type: "image_url",
 					ImageURL: &llm.ImageURL{
-						URL: `data:image/` + imageOutputFormat + `;base64,` + *output.Result,
+						URL: `data:image/` + imageOutputFormat + `;base64,` + *outputItem.Result,
+					},
+					TransformerMetadata: map[string]any{
+						"background":    outputItem.Background,
+						"output_format": outputItem.OutputFormat,
+						"quality":       outputItem.Quality,
+						"size":          outputItem.Size,
 					},
 				})
 			}
 		case "input_image":
 			// Input image (for reference)
-			if output.ImageURL != nil && *output.ImageURL != "" {
+			if outputItem.ImageURL != nil && *outputItem.ImageURL != "" {
 				contentParts = append(contentParts, llm.MessageContentPart{
 					Type: "image_url",
 					ImageURL: &llm.ImageURL{
-						URL: *output.ImageURL,
+						URL: *outputItem.ImageURL,
 					},
 				})
 			}
 		}
+	}
 
-		// Set message content
-		if textContent.Len() > 0 {
-			if len(contentParts) > 0 {
-				// Mixed content: text + images
-				textPart := llm.MessageContentPart{
-					Type: "text",
-					Text: func() *string { s := textContent.String(); return &s }(),
-				}
-				contentParts = append([]llm.MessageContentPart{textPart}, contentParts...)
-				choice.Message.Content = llm.MessageContent{
-					MultipleContent: contentParts,
-				}
-			} else {
-				// Text only
-				content := textContent.String()
-				choice.Message.Content = llm.MessageContent{
-					Content: &content,
-				}
+	// Build the single choice
+	choice := llm.Choice{
+		Index: 0,
+		Message: &llm.Message{
+			Role:      "assistant",
+			ToolCalls: toolCalls,
+		},
+	}
+
+	// Set reasoning content if present
+	if reasoningContent.Len() > 0 {
+		choice.Message.ReasoningContent = lo.ToPtr(reasoningContent.String())
+	}
+
+	// Set message content
+	if textContent.Len() > 0 {
+		if len(contentParts) > 0 {
+			// Mixed content: text + images
+			textPart := llm.MessageContentPart{
+				Type: "text",
+				Text: lo.ToPtr(textContent.String()),
 			}
-		} else if len(contentParts) > 0 {
-			// Images only
+			contentParts = append([]llm.MessageContentPart{textPart}, contentParts...)
 			choice.Message.Content = llm.MessageContent{
 				MultipleContent: contentParts,
 			}
-		}
-
-		// Set finish reason based on status
-		if resp.Status != nil {
-			switch *resp.Status {
-			case "completed":
-				choice.FinishReason = lo.ToPtr("stop")
-			case "failed":
-				choice.FinishReason = lo.ToPtr("error")
-			case "incomplete":
-				choice.FinishReason = lo.ToPtr("length")
+		} else {
+			// Text only
+			choice.Message.Content = llm.MessageContent{
+				Content: lo.ToPtr(textContent.String()),
 			}
 		}
-
-		llmResp.Choices = append(llmResp.Choices, choice)
+	} else if len(contentParts) > 0 {
+		// Images only
+		choice.Message.Content = llm.MessageContent{
+			MultipleContent: contentParts,
+		}
 	}
+
+	// Set finish reason based on status and content
+	if len(toolCalls) > 0 {
+		choice.FinishReason = lo.ToPtr("tool_calls")
+	} else if resp.Status != nil {
+		switch *resp.Status {
+		case "completed":
+			choice.FinishReason = lo.ToPtr("stop")
+		case "failed":
+			choice.FinishReason = lo.ToPtr("error")
+		case "incomplete":
+			choice.FinishReason = lo.ToPtr("length")
+		}
+	}
+
+	llmResp.Choices = append(llmResp.Choices, choice)
 
 	// If no choices were created, create a default empty choice
 	if len(llmResp.Choices) == 0 {
@@ -247,59 +334,4 @@ func (t *OutboundTransformer) TransformResponse(
 	}
 
 	return llmResp, nil
-}
-
-func (t *OutboundTransformer) TransformStream(
-	ctx context.Context,
-	stream streams.Stream[*httpclient.StreamEvent],
-) (streams.Stream[*llm.Response], error) {
-	return nil, nil
-}
-
-func (t *OutboundTransformer) AggregateStreamChunks(
-	ctx context.Context,
-	chunks []*httpclient.StreamEvent,
-) ([]byte, llm.ResponseMeta, error) {
-	return nil, llm.ResponseMeta{}, nil
-}
-
-// TransformStreamChunk maps a Responses API streaming event to a partial llm.Response.
-// We support emitting a full response structure whenever we can extract an image URL.
-func (t *OutboundTransformer) TransformStreamChunk(
-	ctx context.Context,
-	event *httpclient.StreamEvent,
-) (*llm.Response, error) {
-	if event == nil || len(event.Data) == 0 {
-		return nil, fmt.Errorf("empty stream event")
-	}
-
-	// Some streams carry discrete event types; try to extract image urls
-	eType := gjson.GetBytes(event.Data, "type").String()
-	switch eType {
-	case "response.image_generation_call.partial_image",
-		"response.image_generation_call.generating",
-		"response.image_generation_call.completed":
-		// Try to find a data URL under common fields
-		url := gjson.GetBytes(event.Data, "image_url.url").String()
-		if url == "" {
-			url = gjson.GetBytes(event.Data, "result").String()
-		}
-
-		if url != "" {
-			msg := &llm.Message{Role: "assistant"}
-			msg.Content = llm.MessageContent{MultipleContent: []llm.MessageContentPart{
-				{Type: "image_url", ImageURL: &llm.ImageURL{URL: url}},
-			}}
-			// Build minimal response
-			return &llm.Response{Object: "chat.completion", Choices: []llm.Choice{{Index: 0, Delta: msg}}}, nil
-		}
-	}
-
-	// If not an image-related event, attempt to interpret as a full Responses payload
-	// to enable non-streaming path reuse.
-	var dummy httpclient.Response
-
-	dummy.Body = event.Data
-
-	return t.TransformResponse(ctx, &dummy)
 }
