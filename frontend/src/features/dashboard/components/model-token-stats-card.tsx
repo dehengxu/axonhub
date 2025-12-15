@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useModelTokenStats } from '../data/dashboard'
 import { ModelTokenChart } from './model-token-chart'
 import { ModelTokenTable } from './model-token-table'
+import { DailyTokensChart } from './daily-tokens-chart'
 
 interface ModelTokenStatsCardProps {
   availableModels?: string[]
@@ -29,7 +30,7 @@ export function ModelTokenStatsCard({
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const { data: stats, isLoading, error, refetch } = useModelTokenStats(
-    selectedModels.length > 0 ? selectedModels : undefined,
+    selectedModels,
     period,
     undefined // Use current date
   )
@@ -167,6 +168,12 @@ export function ModelTokenStatsCard({
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          {/* Daily Token Consumption Chart - First Row */}
+          <div className='space-y-3'>
+            <h4 className='text-sm font-medium'>{t('dashboard.stats.dailyTokenConsumption')}</h4>
+            <DailyTokensChart trends={stats?.trends?.trends || []} isLoading={isLoading} />
           </div>
 
           {/* Stats Overview */}

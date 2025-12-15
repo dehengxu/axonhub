@@ -1875,6 +1875,7 @@
       "requestsByChannelDescription": "Distribution of requests across different channels.",
       "requestsByModelDescription": "Distribution of requests across different AI models.",
       "noTrendData": "No trend data available",
+      "noTokenData": "No token data available",
       "inputTokens": "Input Tokens",
       "outputTokens": "Output Tokens"
     },
@@ -1898,6 +1899,7 @@
       "output": "Output",
       "cached": "Cached",
       "modelDetails": "Model Details",
+      "dailyTokenConsumption": "Daily Token Consumption",
       "noModelData": "No model data available",
       "modelTokenStats": "Model Token Statistics",
       "detailedModelTokenConsumption": "Detailed Model Token Consumption",

@@ -322,6 +322,5 @@ export function useModelTokenStats(models?: string[], period?: string, date?: st
       return modelTokenStatsSummarySchema.parse(data.modelTokenStats)
     },
     refetchInterval: 300000, // Refetch every 5 minutes
-    enabled: !!models && models.length > 0, // Only fetch when models are specified
   })
 }
