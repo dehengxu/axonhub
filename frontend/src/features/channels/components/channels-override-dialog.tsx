@@ -19,7 +19,7 @@ import {
   useChannelOverrideTemplates,
   useCreateChannelOverrideTemplate,
 } from '../data/templates'
-import { mergeOverrideHeaders, mergeOverrideParameters, normalizeOverrideParameters } from '../utils/merge'
+
 import {
   mergeChannelSettingsForUpdate,
   mergeOverrideHeaders,
@@ -35,10 +35,6 @@ interface Props {
 
 const AUTH_HEADER_KEYS = ['authorization', 'proxy-authorization', 'x-api-key', 'x-api-secret', 'x-api-token']
 
-const saveTemplateFormSchema = z.object({
-  name: z.string().min(1, 'Template name is required'),
-  description: z.string().optional(),
-})
 
 interface SaveTemplateDialogProps {
   open: boolean

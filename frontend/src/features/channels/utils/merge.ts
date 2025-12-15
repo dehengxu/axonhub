@@ -1,7 +1,7 @@
 // Utility functions for merging channel override configurations
 // Mirrors backend merge logic in internal/server/biz/channel_merge.go
 
-import type { HeaderEntry } from '../data/schema'
+
 import type { ChannelSettings, HeaderEntry } from '../data/schema'
 
 const CLEAR_HEADER_DIRECTIVE = '__AXONHUB_CLEAR__'
