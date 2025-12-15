@@ -1460,6 +1460,9 @@
       "details": "Details",
       "createdAt": "Created At",
       "latency": "Latency",
+      "promptTokens": "Prompt Tokens",
+      "completionTokens": "Completion Tokens",
+      "totalTokens": "Total Tokens",
       "actions": "Actions",
       "selectAll": "Select all",
       "selectRow": "Select row",
@@ -1817,7 +1820,10 @@
       "noChannelData": "No channel data available",
       "noModelData": "No model data available",
       "requestsByChannelDescription": "Distribution of requests across different channels.",
-      "requestsByModelDescription": "Distribution of requests across different AI models."
+      "requestsByModelDescription": "Distribution of requests across different AI models.",
+      "noTrendData": "No trend data available",
+      "inputTokens": "Input Tokens",
+      "outputTokens": "Output Tokens"
     },
     "stats": {
       "totalUsersInSystem": "Total users in system",
@@ -1837,7 +1843,31 @@
       "totalTokens": "Total Tokens",
       "input": "Input",
       "output": "Output",
-      "cached": "Cached"
+      "cached": "Cached",
+      "modelDetails": "Model Details",
+      "noModelData": "No model data available",
+      "modelTokenStats": "Model Token Statistics",
+      "detailedModelTokenConsumption": "Detailed Model Token Consumption",
+      "selectPeriod": "Select Period",
+      "day": "Day",
+      "week": "Week", 
+      "month": "Month",
+      "selectModel": "Select Model",
+      "selectModelPrompt": "Please select at least one model to view detailed statistics",
+      "noDataAvailable": "No data available",
+      "chart": "Chart",
+      "table": "Table",
+      "tokenTrends": "Token Trends",
+      "totalConsumption": "Total Consumption",
+      "totalRequests": "Total Requests",
+      "totalPromptTokens": "Total Prompt Tokens",
+      "showing": "Showing",
+      "models": "models",
+      "model": "Model",
+      "percentage": "Percentage",
+      "totalInput": "Total Input",
+      "totalOutput": "Total Output",
+      "totalCached": "Total Cached"
     }
   },
   "playground": {
@@ -1977,6 +2007,7 @@
     "noResults": "No results.",
     "loading": "Loading...",
     "loadError": "Load failed:",
+    "total": "Total",
     "back": "Back",
     "showing": "Showing",
     "of": "of",
@@ -1991,7 +2022,10 @@
     "sort": {
       "ascending": "Ascending",
       "descending": "Descending",
-      "hide": "Hide"
+      "hide": "Hide",
+      "label": "Sort",
+      "asc": "Asc",
+      "desc": "Desc"
     },
     "messages": {
       "errorMessage": "Error Message",

@@ -1489,6 +1489,9 @@
       "details": "详情",
       "createdAt": "创建时间",
       "latency": "延迟",
+      "promptTokens": "输入令牌",
+      "completionTokens": "输出令牌",
+      "totalTokens": "总令牌数",
       "actions": "操作",
       "selectAll": "全选",
       "selectRow": "选择行",
@@ -1847,7 +1850,10 @@
       "noChannelData": "暂无渠道数据",
       "noModelData": "暂无模型数据",
       "requestsByChannelDescription": "不同渠道的请求分布情况。",
-      "requestsByModelDescription": "不同AI模型的请求分布情况。"
+      "requestsByModelDescription": "不同AI模型的请求分布情况。",
+      "noTrendData": "暂无趋势数据",
+      "inputTokens": "输入令牌",
+      "outputTokens": "输出令牌"
     },
     "stats": {
       "totalUsersInSystem": "系统总用户数",
@@ -1867,7 +1873,31 @@
       "totalTokens": "总令牌数",
       "input": "输入",
       "output": "输出",
-      "cached": "缓存"
+      "cached": "缓存",
+      "modelDetails": "模型详情",
+      "noModelData": "暂无模型数据",
+      "modelTokenStats": "模型令牌统计",
+      "detailedModelTokenConsumption": "详细模型令牌消耗",
+      "selectPeriod": "选择周期",
+      "day": "日",
+      "week": "周", 
+      "month": "月",
+      "selectModel": "选择模型",
+      "selectModelPrompt": "请至少选择一个模型以查看详细统计",
+      "noDataAvailable": "暂无数据",
+      "chart": "图表",
+      "table": "表格",
+      "tokenTrends": "令牌趋势",
+      "totalConsumption": "总消耗",
+      "totalRequests": "总请求数",
+      "totalPromptTokens": "总提示令牌数",
+      "showing": "显示",
+      "models": "个模型",
+      "model": "模型",
+      "percentage": "百分比",
+      "totalInput": "总输入",
+      "totalOutput": "总输出",
+      "totalCached": "总缓存"
     }
   },
   "playground": {
@@ -2007,6 +2037,7 @@
     "noData": "暂无数据",
     "noResults": "无结果。",
     "loadError": "加载失败:",
+    "total": "总计",
     "back": "返回",
     "showing": "显示",
     "of": "共",
@@ -2021,7 +2052,10 @@
     "sort": {
       "ascending": "升序",
       "descending": "降序",
-      "hide": "隐藏"
+      "hide": "隐藏",
+      "label": "排序",
+      "asc": "升序",
+      "desc": "降序"
     },
     "messages": {
       "errorMessage": "错误信息",
