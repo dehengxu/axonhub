@@ -97,7 +97,7 @@ export function ModelTokenStatsCard({
     return (
       <Card>
         <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-          <CardTitle className='text-sm font-medium'>{t('dashboard.cards.modelTokenStats')}</CardTitle>
+          <CardTitle className='text-sm font-medium'>{t('dashboard.stats.modelTokenStats')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className='text-sm text-red-500'>{t('common.loadError')}</div>
@@ -113,7 +113,7 @@ export function ModelTokenStatsCard({
           <div className='bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-full dark:bg-primary/20'>
             <TrendingUp className='h-4 w-4' />
           </div>
-          <CardTitle className='text-sm font-medium'>{t('dashboard.cards.modelTokenStats')}</CardTitle>
+          <CardTitle className='text-sm font-medium'>{t('dashboard.stats.modelTokenStats')}</CardTitle>
         </div>
         <div className='flex items-center gap-2'>
           <Button

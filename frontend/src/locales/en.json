@@ -699,9 +699,9 @@
       "batchCreateError": "Failed to create channels: {{error}}",
       "errorResolvedSuccess": "Channel error resolved successfully",
       "errorResolvedError": "Failed to resolve channel error: {{error}}",
-      "Unauthorized": "Unauthorized, please check the API key of the channel",
-      "Not Found": "Endpoint not found, pleast check the base url of the channel",
-      "Interval Server Error": "Interval server error, please confirm the channel configuration"
+      "Unauthorized":"Unauthorized, please check the API key of the channel",
+      "Not Found":"Endpoint not found, pleast check the base url of the channel",
+      "Interval Server Error":"Interval server error, please confirm the channel configuration"
     },
     "errors": {
       "fetchList": "Failed to load channels",
@@ -892,6 +892,7 @@
         "removeDeprecated": "Clean ({{count}})",
         "clearAll": "Clear all"
       },
+
       "status": {
         "enable": {
           "title": "Enable Channel",
@@ -1501,9 +1502,6 @@
     "columns": {
       "id": "ID",
       "modelId": "Model ID",
-      "promptTokens": "Input",
-      "completionTokens": "Output",
-      "totalTokens": "Total",
       "status": "Status",
       "stream": "Stream",
       "source": "Source",
@@ -1515,6 +1513,9 @@
       "details": "Details",
       "createdAt": "Created At",
       "latency": "Latency",
+      "promptTokens": "Prompt Tokens",
+      "completionTokens": "Completion Tokens",
+      "totalTokens": "Total Tokens",
       "actions": "Actions",
       "selectAll": "Select all",
       "selectRow": "Select row",
@@ -1872,7 +1873,10 @@
       "noChannelData": "No channel data available",
       "noModelData": "No model data available",
       "requestsByChannelDescription": "Distribution of requests across different channels.",
-      "requestsByModelDescription": "Distribution of requests across different AI models."
+      "requestsByModelDescription": "Distribution of requests across different AI models.",
+      "noTrendData": "No trend data available",
+      "inputTokens": "Input Tokens",
+      "outputTokens": "Output Tokens"
     },
     "stats": {
       "totalUsersInSystem": "Total users in system",
@@ -1894,30 +1898,29 @@
       "output": "Output",
       "cached": "Cached",
       "modelDetails": "Model Details",
-      "modelTokenStats": "Model Token Statistics",
-      "detailedModelTokenConsumption": "Detailed token consumption statistics by model",
-      "tokenTrends": "Token Trends",
       "noModelData": "No model data available",
-      "selectModel": "Select Model",
+      "modelTokenStats": "Model Token Statistics",
+      "detailedModelTokenConsumption": "Detailed Model Token Consumption",
       "selectPeriod": "Select Period",
       "day": "Day",
-      "week": "Week",
+      "week": "Week", 
       "month": "Month",
+      "selectModel": "Select Model",
+      "selectModelPrompt": "Please select at least one model to view detailed statistics",
+      "noDataAvailable": "No data available",
       "chart": "Chart",
       "table": "Table",
-      "showing": "Showing",
-      "models": "models",
-      "totalInput": "Total Input",
-      "totalOutput": "Total Output",
-      "totalCached": "Total Cached",
-      "percentage": "Percentage",
-      "export": "Export",
-      "noDataAvailable": "No data available",
+      "tokenTrends": "Token Trends",
       "totalConsumption": "Total Consumption",
       "totalRequests": "Total Requests",
       "totalPromptTokens": "Total Prompt Tokens",
-      "totalTokens": "Total Tokens",
-      "selectModelPrompt": "Please select a model to view statistics"
+      "showing": "Showing",
+      "models": "models",
+      "model": "Model",
+      "percentage": "Percentage",
+      "totalInput": "Total Input",
+      "totalOutput": "Total Output",
+      "totalCached": "Total Cached"
     }
   },
   "playground": {
@@ -2059,25 +2062,26 @@
     "loading": "Loading...",
     "loadError": "Load failed:",
     "error": "Error",
+    "total": "Total",
     "back": "Back",
     "showing": "Showing",
     "of": "of",
     "previous": "Previous",
     "next": "Next",
-    "sort": {
-      "label": "Sort",
-      "asc": "Ascending",
-      "desc": "Descending",
-      "ascending": "Ascending",
-      "descending": "Descending",
-      "hide": "Hide"
-    },
     "moveUp": "Move Up",
     "moveDown": "Move Down",
     "moveToTop": "Move to top",
     "moveToBottom": "Move to bottom",
     "dragging": "Dragging",
     "unsavedChanges": "You have unsaved changes",
+    "sort": {
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "hide": "Hide",
+      "label": "Sort",
+      "asc": "Asc",
+      "desc": "Desc"
+    },
     "messages": {
       "errorMessage": "Error Message",
       "success": "Success",
@@ -2162,7 +2166,6 @@
       "modelCreated": "Model created successfully",
       "modelUpdated": "Model updated successfully",
       "modelDeleted": "Model deleted successfully",
-      "total": "Total",
       "systemUpdated": "System settings updated successfully",
       "onboardingCompleted": "Onboarding completed successfully"
     }

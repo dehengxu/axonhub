@@ -352,6 +352,38 @@ type ComplexityRoot struct {
 		To   func(childComplexity int) int
 	}
 
+	ModelTokenStats struct {
+		Date              func(childComplexity int) int
+		ModelID           func(childComplexity int) int
+		ModelName         func(childComplexity int) int
+		Period            func(childComplexity int) int
+		TotalCachedTokens func(childComplexity int) int
+		TotalInputTokens  func(childComplexity int) int
+		TotalOutputTokens func(childComplexity int) int
+		TotalTokens       func(childComplexity int) int
+	}
+
+	ModelTokenStatsSummary struct {
+		CurrentPeriod func(childComplexity int) int
+		Trends        func(childComplexity int) int
+	}
+
+	ModelTokenTrend struct {
+		CachedTokens func(childComplexity int) int
+		Date         func(childComplexity int) int
+		InputTokens  func(childComplexity int) int
+		ModelID      func(childComplexity int) int
+		ModelName    func(childComplexity int) int
+		OutputTokens func(childComplexity int) int
+		TotalTokens  func(childComplexity int) int
+	}
+
+	ModelTokenTrendData struct {
+		Dates  func(childComplexity int) int
+		Models func(childComplexity int) int
+		Trends func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AddUserToProject              func(childComplexity int, input AddUserToProjectInput) int
 		ApplyChannelOverrideTemplate  func(childComplexity int, input ApplyChannelOverrideTemplateInput) int
@@ -462,6 +494,7 @@ type ComplexityRoot struct {
 		DefaultDataStorageID          func(childComplexity int) int
 		FetchModels                   func(childComplexity int, input biz.FetchModelsInput) int
 		Me                            func(childComplexity int) int
+		ModelTokenStats               func(childComplexity int, models []string, period *string, date *string) int
 		Models                        func(childComplexity int, input ModelsInput) int
 		MyProjects                    func(childComplexity int) int
 		Node                          func(childComplexity int, id objects.GUID) int
@@ -1038,6 +1071,7 @@ type QueryResolver interface {
 	DailyRequestStats(ctx context.Context, days *int) ([]*DailyRequestStats, error)
 	TopRequestsProjects(ctx context.Context, limit *int) ([]*TopRequestsProjects, error)
 	TokenStats(ctx context.Context) (*TokenStats, error)
+	ModelTokenStats(ctx context.Context, models []string, period *string, date *string) (*ModelTokenStatsSummary, error)
 	AllScopes(ctx context.Context, level *string) ([]*ScopeInfo, error)
 	Me(ctx context.Context) (*objects.UserInfo, error)
 	MyProjects(ctx context.Context) ([]*ent.Project, error)
@@ -2220,6 +2254,130 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.ModelMapping.To(childComplexity), true
 
+	case "ModelTokenStats.date":
+		if e.complexity.ModelTokenStats.Date == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.Date(childComplexity), true
+	case "ModelTokenStats.modelId":
+		if e.complexity.ModelTokenStats.ModelID == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.ModelID(childComplexity), true
+	case "ModelTokenStats.modelName":
+		if e.complexity.ModelTokenStats.ModelName == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.ModelName(childComplexity), true
+	case "ModelTokenStats.period":
+		if e.complexity.ModelTokenStats.Period == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.Period(childComplexity), true
+	case "ModelTokenStats.totalCachedTokens":
+		if e.complexity.ModelTokenStats.TotalCachedTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.TotalCachedTokens(childComplexity), true
+	case "ModelTokenStats.totalInputTokens":
+		if e.complexity.ModelTokenStats.TotalInputTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.TotalInputTokens(childComplexity), true
+	case "ModelTokenStats.totalOutputTokens":
+		if e.complexity.ModelTokenStats.TotalOutputTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.TotalOutputTokens(childComplexity), true
+	case "ModelTokenStats.totalTokens":
+		if e.complexity.ModelTokenStats.TotalTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStats.TotalTokens(childComplexity), true
+
+	case "ModelTokenStatsSummary.currentPeriod":
+		if e.complexity.ModelTokenStatsSummary.CurrentPeriod == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStatsSummary.CurrentPeriod(childComplexity), true
+	case "ModelTokenStatsSummary.trends":
+		if e.complexity.ModelTokenStatsSummary.Trends == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenStatsSummary.Trends(childComplexity), true
+
+	case "ModelTokenTrend.cachedTokens":
+		if e.complexity.ModelTokenTrend.CachedTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.CachedTokens(childComplexity), true
+	case "ModelTokenTrend.date":
+		if e.complexity.ModelTokenTrend.Date == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.Date(childComplexity), true
+	case "ModelTokenTrend.inputTokens":
+		if e.complexity.ModelTokenTrend.InputTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.InputTokens(childComplexity), true
+	case "ModelTokenTrend.modelId":
+		if e.complexity.ModelTokenTrend.ModelID == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.ModelID(childComplexity), true
+	case "ModelTokenTrend.modelName":
+		if e.complexity.ModelTokenTrend.ModelName == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.ModelName(childComplexity), true
+	case "ModelTokenTrend.outputTokens":
+		if e.complexity.ModelTokenTrend.OutputTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.OutputTokens(childComplexity), true
+	case "ModelTokenTrend.totalTokens":
+		if e.complexity.ModelTokenTrend.TotalTokens == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrend.TotalTokens(childComplexity), true
+
+	case "ModelTokenTrendData.dates":
+		if e.complexity.ModelTokenTrendData.Dates == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrendData.Dates(childComplexity), true
+	case "ModelTokenTrendData.models":
+		if e.complexity.ModelTokenTrendData.Models == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrendData.Models(childComplexity), true
+	case "ModelTokenTrendData.trends":
+		if e.complexity.ModelTokenTrendData.Trends == nil {
+			break
+		}
+
+		return e.complexity.ModelTokenTrendData.Trends(childComplexity), true
+
 	case "Mutation.addUserToProject":
 		if e.complexity.Mutation.AddUserToProject == nil {
 			break
@@ -3045,6 +3203,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.Me(childComplexity), true
+	case "Query.modelTokenStats":
+		if e.complexity.Query.ModelTokenStats == nil {
+			break
+		}
+
+		args, err := ec.field_Query_modelTokenStats_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ModelTokenStats(childComplexity, args["models"].([]string), args["period"].(*string), args["date"].(*string)), true
 	case "Query.models":
 		if e.complexity.Query.Models == nil {
 			break
@@ -6482,6 +6651,27 @@ func (ec *executionContext) field_Query_fetchModels_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_modelTokenStats_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "models", ec.unmarshalOString2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["models"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "period", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["period"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "date", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["date"] = arg2
 	return args, nil
 }
 
@@ -12803,6 +12993,628 @@ func (ec *executionContext) fieldContext_ModelMapping_to(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _ModelTokenStats_modelId(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_modelId,
+		func(ctx context.Context) (any, error) {
+			return obj.ModelID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_modelId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_modelName(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_modelName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModelName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_modelName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_totalInputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_totalInputTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalInputTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_totalInputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_totalOutputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_totalOutputTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalOutputTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_totalOutputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_totalCachedTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_totalCachedTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCachedTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_totalCachedTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_totalTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_totalTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_totalTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_period(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_period,
+		func(ctx context.Context) (any, error) {
+			return obj.Period, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_period(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStats_date(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStats_date,
+		func(ctx context.Context) (any, error) {
+			return obj.Date, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStats_date(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStatsSummary_currentPeriod(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStatsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStatsSummary_currentPeriod,
+		func(ctx context.Context) (any, error) {
+			return obj.CurrentPeriod, nil
+		},
+		nil,
+		ec.marshalNModelTokenStats2ᚕᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStatsᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStatsSummary_currentPeriod(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStatsSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "modelId":
+				return ec.fieldContext_ModelTokenStats_modelId(ctx, field)
+			case "modelName":
+				return ec.fieldContext_ModelTokenStats_modelName(ctx, field)
+			case "totalInputTokens":
+				return ec.fieldContext_ModelTokenStats_totalInputTokens(ctx, field)
+			case "totalOutputTokens":
+				return ec.fieldContext_ModelTokenStats_totalOutputTokens(ctx, field)
+			case "totalCachedTokens":
+				return ec.fieldContext_ModelTokenStats_totalCachedTokens(ctx, field)
+			case "totalTokens":
+				return ec.fieldContext_ModelTokenStats_totalTokens(ctx, field)
+			case "period":
+				return ec.fieldContext_ModelTokenStats_period(ctx, field)
+			case "date":
+				return ec.fieldContext_ModelTokenStats_date(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelTokenStats", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenStatsSummary_trends(ctx context.Context, field graphql.CollectedField, obj *ModelTokenStatsSummary) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenStatsSummary_trends,
+		func(ctx context.Context) (any, error) {
+			return obj.Trends, nil
+		},
+		nil,
+		ec.marshalNModelTokenTrendData2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrendData,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenStatsSummary_trends(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenStatsSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "trends":
+				return ec.fieldContext_ModelTokenTrendData_trends(ctx, field)
+			case "models":
+				return ec.fieldContext_ModelTokenTrendData_models(ctx, field)
+			case "dates":
+				return ec.fieldContext_ModelTokenTrendData_dates(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelTokenTrendData", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_modelId(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_modelId,
+		func(ctx context.Context) (any, error) {
+			return obj.ModelID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_modelId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_modelName(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_modelName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModelName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_modelName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_date(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_date,
+		func(ctx context.Context) (any, error) {
+			return obj.Date, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_date(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_inputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_inputTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.InputTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_outputTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_outputTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.OutputTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_cachedTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_cachedTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.CachedTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_cachedTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrend_totalTokens(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrend) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrend_totalTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalTokens, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrend_totalTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrend",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrendData_trends(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrendData) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrendData_trends,
+		func(ctx context.Context) (any, error) {
+			return obj.Trends, nil
+		},
+		nil,
+		ec.marshalNModelTokenTrend2ᚕᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrendᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrendData_trends(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrendData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "modelId":
+				return ec.fieldContext_ModelTokenTrend_modelId(ctx, field)
+			case "modelName":
+				return ec.fieldContext_ModelTokenTrend_modelName(ctx, field)
+			case "date":
+				return ec.fieldContext_ModelTokenTrend_date(ctx, field)
+			case "inputTokens":
+				return ec.fieldContext_ModelTokenTrend_inputTokens(ctx, field)
+			case "outputTokens":
+				return ec.fieldContext_ModelTokenTrend_outputTokens(ctx, field)
+			case "cachedTokens":
+				return ec.fieldContext_ModelTokenTrend_cachedTokens(ctx, field)
+			case "totalTokens":
+				return ec.fieldContext_ModelTokenTrend_totalTokens(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelTokenTrend", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrendData_models(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrendData) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrendData_models,
+		func(ctx context.Context) (any, error) {
+			return obj.Models, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrendData_models(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrendData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelTokenTrendData_dates(ctx context.Context, field graphql.CollectedField, obj *ModelTokenTrendData) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModelTokenTrendData_dates,
+		func(ctx context.Context) (any, error) {
+			return obj.Dates, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModelTokenTrendData_dates(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelTokenTrendData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createChannel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17664,6 +18476,53 @@ func (ec *executionContext) fieldContext_Query_tokenStats(_ context.Context, fie
 			}
 			return nil, fmt.Errorf("no field named %q was found under type TokenStats", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_modelTokenStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_modelTokenStats,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().ModelTokenStats(ctx, fc.Args["models"].([]string), fc.Args["period"].(*string), fc.Args["date"].(*string))
+		},
+		nil,
+		ec.marshalNModelTokenStatsSummary2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStatsSummary,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_modelTokenStats(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "currentPeriod":
+				return ec.fieldContext_ModelTokenStatsSummary_currentPeriod(ctx, field)
+			case "trends":
+				return ec.fieldContext_ModelTokenStatsSummary_trends(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelTokenStatsSummary", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_modelTokenStats_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -47485,6 +48344,242 @@ func (ec *executionContext) _ModelMapping(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var modelTokenStatsImplementors = []string{"ModelTokenStats"}
+
+func (ec *executionContext) _ModelTokenStats(ctx context.Context, sel ast.SelectionSet, obj *ModelTokenStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelTokenStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelTokenStats")
+		case "modelId":
+			out.Values[i] = ec._ModelTokenStats_modelId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "modelName":
+			out.Values[i] = ec._ModelTokenStats_modelName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalInputTokens":
+			out.Values[i] = ec._ModelTokenStats_totalInputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalOutputTokens":
+			out.Values[i] = ec._ModelTokenStats_totalOutputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCachedTokens":
+			out.Values[i] = ec._ModelTokenStats_totalCachedTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalTokens":
+			out.Values[i] = ec._ModelTokenStats_totalTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "period":
+			out.Values[i] = ec._ModelTokenStats_period(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "date":
+			out.Values[i] = ec._ModelTokenStats_date(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelTokenStatsSummaryImplementors = []string{"ModelTokenStatsSummary"}
+
+func (ec *executionContext) _ModelTokenStatsSummary(ctx context.Context, sel ast.SelectionSet, obj *ModelTokenStatsSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelTokenStatsSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelTokenStatsSummary")
+		case "currentPeriod":
+			out.Values[i] = ec._ModelTokenStatsSummary_currentPeriod(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "trends":
+			out.Values[i] = ec._ModelTokenStatsSummary_trends(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelTokenTrendImplementors = []string{"ModelTokenTrend"}
+
+func (ec *executionContext) _ModelTokenTrend(ctx context.Context, sel ast.SelectionSet, obj *ModelTokenTrend) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelTokenTrendImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelTokenTrend")
+		case "modelId":
+			out.Values[i] = ec._ModelTokenTrend_modelId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "modelName":
+			out.Values[i] = ec._ModelTokenTrend_modelName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "date":
+			out.Values[i] = ec._ModelTokenTrend_date(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "inputTokens":
+			out.Values[i] = ec._ModelTokenTrend_inputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "outputTokens":
+			out.Values[i] = ec._ModelTokenTrend_outputTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cachedTokens":
+			out.Values[i] = ec._ModelTokenTrend_cachedTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalTokens":
+			out.Values[i] = ec._ModelTokenTrend_totalTokens(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelTokenTrendDataImplementors = []string{"ModelTokenTrendData"}
+
+func (ec *executionContext) _ModelTokenTrendData(ctx context.Context, sel ast.SelectionSet, obj *ModelTokenTrendData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelTokenTrendDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelTokenTrendData")
+		case "trends":
+			out.Values[i] = ec._ModelTokenTrendData_trends(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "models":
+			out.Values[i] = ec._ModelTokenTrendData_models(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dates":
+			out.Values[i] = ec._ModelTokenTrendData_dates(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -49037,6 +50132,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_tokenStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "modelTokenStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_modelTokenStats(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -55947,6 +57064,138 @@ func (ec *executionContext) marshalNModelMapping2githubᚗcomᚋloopljᚋaxonhub
 func (ec *executionContext) unmarshalNModelMappingInput2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐModelMapping(ctx context.Context, v any) (objects.ModelMapping, error) {
 	res, err := ec.unmarshalInputModelMappingInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModelTokenStats2ᚕᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStatsᚄ(ctx context.Context, sel ast.SelectionSet, v []*ModelTokenStats) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNModelTokenStats2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStats(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModelTokenStats2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStats(ctx context.Context, sel ast.SelectionSet, v *ModelTokenStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelTokenStats(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModelTokenStatsSummary2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStatsSummary(ctx context.Context, sel ast.SelectionSet, v ModelTokenStatsSummary) graphql.Marshaler {
+	return ec._ModelTokenStatsSummary(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNModelTokenStatsSummary2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenStatsSummary(ctx context.Context, sel ast.SelectionSet, v *ModelTokenStatsSummary) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelTokenStatsSummary(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModelTokenTrend2ᚕᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrendᚄ(ctx context.Context, sel ast.SelectionSet, v []*ModelTokenTrend) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNModelTokenTrend2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrend(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModelTokenTrend2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrend(ctx context.Context, sel ast.SelectionSet, v *ModelTokenTrend) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelTokenTrend(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModelTokenTrendData2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelTokenTrendData(ctx context.Context, sel ast.SelectionSet, v *ModelTokenTrendData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelTokenTrendData(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNModelsInput2githubᚗcomᚋloopljᚋaxonhubᚋinternalᚋserverᚋgqlᚐModelsInput(ctx context.Context, v any) (ModelsInput, error) {

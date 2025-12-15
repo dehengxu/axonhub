@@ -2,7 +2,6 @@ module github.com/looplj/axonhub/gemini_test
 
 go 1.25.2
 
-<<<<<<< HEAD
 require google.golang.org/genai v1.36.0
 
 require (
@@ -29,7 +28,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
-=======
 require google.golang.org/genai v1.37.0
 
 require (
@@ -56,5 +54,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.77.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
->>>>>>> v0.6.3
 )
