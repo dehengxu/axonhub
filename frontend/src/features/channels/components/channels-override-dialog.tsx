@@ -19,7 +19,6 @@ import {
   useChannelOverrideTemplates,
   useCreateChannelOverrideTemplate,
 } from '../data/templates'
-import { mergeOverrideHeaders, mergeOverrideParameters, normalizeOverrideParameters } from '../utils/merge'
 import {
   mergeChannelSettingsForUpdate,
   mergeOverrideHeaders,
