@@ -11,6 +11,7 @@ import (
 	"github.com/looplj/axonhub/internal/llm"
 	geminioai "github.com/looplj/axonhub/internal/llm/transformer/gemini/openai"
 	"github.com/looplj/axonhub/internal/pkg/xjson"
+	"github.com/looplj/axonhub/internal/llm/transformer/shared"
 )
 
 // convertLLMToGeminiRequest converts unified Request to Gemini GenerateContentRequest.
@@ -82,27 +83,36 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 				IncludeThoughts: extraBody.Google.ThinkingConfig.IncludeThoughts,
 			}
 
-			// Handle ThinkingBudget conversion
-			if extraBody.Google.ThinkingConfig.ThinkingBudget != nil {
+			// Priority 1: Use ThinkingLevel if present (takes absolute priority)
+			if extraBody.Google.ThinkingConfig.ThinkingLevel != "" {
+				level := extraBody.Google.ThinkingConfig.ThinkingLevel
+				// Map "minimal" to "low" for consistency
+				if strings.ToLower(level) == "minimal" {
+					level = "low"
+				}
+
+				geminiThinkingConfig.ThinkingLevel = level
+				// Don't set ThinkingBudget when ThinkingLevel is present
+			} else if extraBody.Google.ThinkingConfig.ThinkingBudget != nil {
+				// Priority 2: Use ThinkingBudget if no level
 				if extraBody.Google.ThinkingConfig.ThinkingBudget.IntValue != nil {
+					// Integer budget: use as ThinkingBudget
 					geminiThinkingConfig.ThinkingBudget = lo.ToPtr(int64(*extraBody.Google.ThinkingConfig.ThinkingBudget.IntValue))
 				} else if extraBody.Google.ThinkingConfig.ThinkingBudget.StringValue != nil {
-					// For string values, we'll need to map them or set a default
-					// For now, set a reasonable default for string values
-					switch strings.ToLower(*extraBody.Google.ThinkingConfig.ThinkingBudget.StringValue) {
-					case "low":
-						geminiThinkingConfig.ThinkingBudget = lo.ToPtr(int64(1024))
+					// String budget: convert to ThinkingLevel for standard values
+					strVal := strings.ToLower(*extraBody.Google.ThinkingConfig.ThinkingBudget.StringValue)
+					switch strVal {
+					case "low", "minimal":
+						geminiThinkingConfig.ThinkingLevel = "low"
+					case "medium":
+						geminiThinkingConfig.ThinkingLevel = "medium"
 					case "high":
-						geminiThinkingConfig.ThinkingBudget = lo.ToPtr(int64(24576))
+						geminiThinkingConfig.ThinkingLevel = "high"
 					default:
-						geminiThinkingConfig.ThinkingBudget = lo.ToPtr(int64(8192)) // medium
+						// Unknown string value, use as-is
+						geminiThinkingConfig.ThinkingLevel = strVal
 					}
 				}
-			}
-
-			// Set ThinkingLevel if present
-			if extraBody.Google.ThinkingConfig.ThinkingLevel != "" {
-				geminiThinkingConfig.ThinkingLevel = extraBody.Google.ThinkingConfig.ThinkingLevel
 			}
 
 			gc.ThinkingConfig = geminiThinkingConfig
@@ -112,21 +122,37 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 	}
 
 	// Convert reasoning effort to thinking config
-	// Priority: ExtraBody > ReasoningBudget > config mapping > default mapping
-	if !hasExtraBodyThinkingConfig && chatReq.ReasoningEffort != "" {
-		var thinkingBudget int64
+	// Priority: ExtraBody > ReasoningBudget > ReasoningEffort > default
+	if !hasExtraBodyThinkingConfig {
 		if chatReq.ReasoningBudget != nil {
-			thinkingBudget = *chatReq.ReasoningBudget
-		} else {
-			thinkingBudget = reasoningEffortToThinkingBudgetWithConfig(chatReq.ReasoningEffort, config)
-		}
+			// Priority 1: Use ReasoningBudget if provided
+			gc.ThinkingConfig = &ThinkingConfig{
+				IncludeThoughts: true,
+				// Gemini max thinking budget is 24576
+				ThinkingBudget: lo.ToPtr(min(*chatReq.ReasoningBudget, 24576)),
+			}
+			hasGenerationConfig = true
+		} else if chatReq.ReasoningEffort != "" {
+			// Priority 2: Convert from ReasoningEffort if provided
+			// Use ThinkingLevel for standard effort values (low, medium, high)
+			// to preserve the original format when possible
+			thinkingConfig := &ThinkingConfig{
+				IncludeThoughts: true,
+			}
 
-		gc.ThinkingConfig = &ThinkingConfig{
-			IncludeThoughts: true,
-			// Gemini max thinking budget is 24576
-			ThinkingBudget: lo.ToPtr(min(thinkingBudget, 24576)),
+			// For standard effort levels, use ThinkingLevel
+			switch strings.ToLower(chatReq.ReasoningEffort) {
+			case "none", "low", "medium", "high":
+				thinkingConfig.ThinkingLevel = chatReq.ReasoningEffort
+			default:
+				// For non-standard effort values, convert to budget
+				thinkingBudget := reasoningEffortToThinkingBudgetWithConfig(chatReq.ReasoningEffort, config)
+				thinkingConfig.ThinkingBudget = lo.ToPtr(min(thinkingBudget, 24576))
+			}
+
+			gc.ThinkingConfig = thinkingConfig
+			hasGenerationConfig = true
 		}
-		hasGenerationConfig = true
 	}
 
 	// Convert modalities to responseModalities
@@ -146,8 +172,8 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 
 	for _, msg := range chatReq.Messages {
 		switch msg.Role {
-		case "system":
-			// Collect system messages into system instruction
+		case "system", "developer":
+			// Collect system and developer messages into system instruction
 			parts := extractPartsFromLLMMessage(&msg)
 			if len(parts) > 0 {
 				if systemInstruction == nil {
@@ -180,9 +206,14 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 
 	// Convert tools
 	if len(chatReq.Tools) > 0 {
-		functionDeclarations := make([]*FunctionDeclaration, 0, len(chatReq.Tools))
+		tools := make([]*Tool, 0)
+		functionDeclarations := make([]*FunctionDeclaration, 0)
+
+		var functionTool *Tool
+
 		for _, tool := range chatReq.Tools {
-			if tool.Type == "function" {
+			switch tool.Type {
+			case "function":
 				params := tool.Function.Parameters
 
 				params, err := xjson.CleanSchema(params, "$schema", "additionalProperties")
@@ -198,11 +229,35 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 					Parameters:  params,
 				}
 				functionDeclarations = append(functionDeclarations, fd)
+
+				if functionTool == nil {
+					functionTool = &Tool{}
+					tools = append(tools, functionTool)
+				}
+
+			case llm.ToolTypeGoogleSearch:
+				if tool.Google != nil && tool.Google.Search != nil {
+					tools = append(tools, &Tool{GoogleSearch: &GoogleSearch{}})
+				}
+
+			case llm.ToolTypeGoogleCodeExecution:
+				if tool.Google != nil && tool.Google.CodeExecution != nil {
+					tools = append(tools, &Tool{CodeExecution: &CodeExecution{}})
+				}
+
+			case llm.ToolTypeGoogleUrlContext:
+				if tool.Google != nil && tool.Google.UrlContext != nil {
+					tools = append(tools, &Tool{UrlContext: &UrlContext{}})
+				}
 			}
 		}
 
-		if len(functionDeclarations) > 0 {
-			req.Tools = []*Tool{{FunctionDeclarations: functionDeclarations}}
+		if functionTool != nil {
+			functionTool.FunctionDeclarations = functionDeclarations
+		}
+
+		if len(tools) > 0 {
+			req.Tools = tools
 		}
 	}
 
@@ -221,6 +276,8 @@ func convertLLMMessageToGeminiContent(msg *llm.Message) *Content {
 	}
 
 	parts := make([]*Part, 0)
+	var lastPart *Part
+	var firstFunctionCallPart *Part
 
 	// Add reasoning content (thinking) first if present
 	if msg.ReasoningContent != nil && *msg.ReasoningContent != "" {
@@ -258,13 +315,39 @@ func convertLLMMessageToGeminiContent(msg *llm.Message) *Content {
 			_ = json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
 		}
 
-		parts = append(parts, &Part{
+		part := &Part{
 			FunctionCall: &FunctionCall{
 				ID:   toolCall.ID,
 				Name: toolCall.Function.Name,
 				Args: args,
 			},
-		})
+		}
+
+		parts = append(parts, part)
+
+		lastPart = part
+		if firstFunctionCallPart == nil {
+			firstFunctionCallPart = part
+		}
+	}
+
+	// https://ai.google.dev/gemini-api/docs/gemini-3#migrating_from_other_models
+	// If there are tool calls but no thought signature, use a default one.
+	// This field is not compatible with OpenAI sdk, so we use the default value.
+	// We try the best to support this fields to keep this fields in the chat conversions, so we use the RedactedReasoningContent to hold the field,
+	// And this field will be preserved during claude code trace, will not degrade the gemini model performance.
+	msgThoughtSignature := shared.DecodeGeminiThoughtSignature(msg.RedactedReasoningContent)
+	if len(msg.ToolCalls) > 0 && msgThoughtSignature == nil {
+		msgThoughtSignature = lo.ToPtr("context_engineering_is_the_way_to_go")
+	}
+
+	if msgThoughtSignature != nil && lastPart != nil {
+		signatureBytes := []byte(*msgThoughtSignature)
+		if firstFunctionCallPart != nil {
+			firstFunctionCallPart.ThoughtSignature = signatureBytes
+		} else {
+			lastPart.ThoughtSignature = signatureBytes
+		}
 	}
 
 	if len(parts) == 0 {
@@ -297,7 +380,7 @@ func convertLLMToolResultToGeminiContent(msg *llm.Message, contents []*Content) 
 		Response: responseData,
 	}
 
-	// Anthropic‘s tool result doesn't have name, so we need to find it by tool call id.
+	// Anthropic's tool result doesn't have name, so we need to find it by tool call id.
 	if fp.Name == "" && fp.ID != "" {
 		fp.Name = findToolNameByToolCallID(contents, fp.ID)
 	}
@@ -324,6 +407,16 @@ func findToolNameByToolCallID(contents []*Content, id string) string {
 // convertGeminiToLLMResponse converts Gemini GenerateContentResponse to unified Response.
 // When isStream is true, it sets Delta instead of Message in choices.
 func convertGeminiToLLMResponse(geminiResp *GenerateContentResponse, isStream bool) *llm.Response {
+	resp, _ := convertGeminiToLLMResponseWithState(geminiResp, isStream, 0)
+	return resp
+}
+
+// TransformerMetadataKeyGroundingMetadata is the key for storing GroundingMetadata in TransformerMetadata.
+const TransformerMetadataKeyGroundingMetadata = "gemini_grounding_metadata"
+
+// convertGeminiToLLMResponseWithState converts Gemini response with tool call index tracking.
+// Returns the response and the next tool call index to use.
+func convertGeminiToLLMResponseWithState(geminiResp *GenerateContentResponse, isStream bool, toolCallIndexOffset int) (*llm.Response, int) {
 	resp := &llm.Response{
 		ID:      geminiResp.ResponseID,
 		Model:   geminiResp.ModelVersion,
@@ -344,25 +437,47 @@ func convertGeminiToLLMResponse(geminiResp *GenerateContentResponse, isStream bo
 
 	// Convert candidates to choices
 	choices := make([]llm.Choice, 0, len(geminiResp.Candidates))
+	nextToolCallIndex := toolCallIndexOffset
+
 	for _, candidate := range geminiResp.Candidates {
-		choice := convertGeminiCandidateToLLMChoice(candidate, isStream)
+		var choice llm.Choice
+
+		choice, nextToolCallIndex = convertGeminiCandidateToLLMChoiceWithState(candidate, isStream, nextToolCallIndex)
+
+		// Store GroundingMetadata in Choice.TransformerMetadata if present
+		if candidate.GroundingMetadata != nil {
+			if choice.TransformerMetadata == nil {
+				choice.TransformerMetadata = map[string]any{}
+			}
+
+			choice.TransformerMetadata[TransformerMetadataKeyGroundingMetadata] = candidate.GroundingMetadata
+		}
+
 		choices = append(choices, choice)
 	}
 
 	resp.Choices = choices
 	resp.Usage = convertToLLMUsage(geminiResp.UsageMetadata)
 
-	return resp
+	return resp, nextToolCallIndex
 }
 
 // convertGeminiCandidateToLLMChoice converts a Gemini Candidate to an LLM Choice.
 // When isStream is true, it sets Delta instead of Message.
 func convertGeminiCandidateToLLMChoice(candidate *Candidate, isStream bool) llm.Choice {
+	choice, _ := convertGeminiCandidateToLLMChoiceWithState(candidate, isStream, 0)
+	return choice
+}
+
+// convertGeminiCandidateToLLMChoiceWithState converts Gemini candidate with tool call index tracking.
+// Returns the choice and the next tool call index to use.
+func convertGeminiCandidateToLLMChoiceWithState(candidate *Candidate, isStream bool, toolCallIndexOffset int) (llm.Choice, int) {
 	choice := llm.Choice{
 		Index: int(candidate.Index),
 	}
 
 	var hasToolCall bool
+	var nextToolCallIndex int = toolCallIndexOffset
 
 	if candidate.Content != nil {
 		msg := &llm.Message{
@@ -456,5 +571,5 @@ func convertGeminiCandidateToLLMChoice(candidate *Candidate, isStream bool) llm.
 	// Convert finish reason
 	choice.FinishReason = convertGeminiFinishReasonToLLM(candidate.FinishReason, hasToolCall)
 
-	return choice
+	return choice, nextToolCallIndex
 }

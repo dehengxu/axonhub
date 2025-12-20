@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
 )
 
@@ -228,6 +230,12 @@ func (r *Request) ClearHelpFields() {
 	}
 
 	r.ExtraBody = nil
+
+	// If tools are present, keep only function tools
+	tools := lo.Filter(r.Tools, func(tool Tool, _ int) bool {
+		return tool.Type == "function"
+	})
+	r.Tools = tools
 }
 
 func (r *Request) IsImageGenerationRequest() bool {
@@ -281,6 +289,7 @@ func (s *Stop) UnmarshalJSON(data []byte) error {
 
 // Message represents a message in the conversation.
 type Message struct {
+	// user, assistant, system, tool, developer
 	Role string `json:"role,omitempty"`
 	// Content of the message.
 	// string or []ContentPart, be careful about the omitzero tag, it required.
@@ -456,6 +465,14 @@ type Response struct {
 
 	// Error is the error information, will present if request to llm service failed with status >= 400.
 	Error *ResponseError `json:"error,omitempty"`
+
+	// ProviderData stores provider-specific response payloads that do not map to the chat completion schema.
+	// This field is ignored when serializing to JSON and is only used internally by transformers (e.g., embeddings).
+	ProviderData any `json:"-"`
+
+	// TransformerMetadata stores metadata from transformers that process the response.
+	// This field is ignored when serializing to JSON and is only used internally by transformers.
+	TransformerMetadata map[string]any `json:"-"`
 }
 
 func (r *Response) ClearHelpFields() {
@@ -489,6 +506,10 @@ type Choice struct {
 	FinishReason *string `json:"finish_reason,omitempty"`
 
 	Logprobs *LogprobsContent `json:"logprobs,omitempty"`
+
+	// TransformerMetadata stores metadata from transformers that process the response.
+	// This field is ignored when serializing to JSON and is only used internally by transformers.
+	TransformerMetadata map[string]any `json:"-"`
 }
 
 // LogprobsContent represents logprobs information.
@@ -558,6 +579,8 @@ type CompletionTokensDetails struct {
 type PromptTokensDetails struct {
 	AudioTokens  int64 `json:"audio_tokens"`
 	CachedTokens int64 `json:"cached_tokens"`
+	// hidden field, used for internal calculation.
+	WriteCachedTokens int64 `json:"-"`
 }
 
 // ResponseError represents an error response.

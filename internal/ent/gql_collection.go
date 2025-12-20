@@ -2557,6 +2557,16 @@ func (_q *RequestQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 				selectedFields = append(selectedFields, request.FieldStream)
 				fieldSeen[request.FieldStream] = struct{}{}
 			}
+		case "metricsLatencyMs":
+			if _, ok := fieldSeen[request.FieldMetricsLatencyMs]; !ok {
+				selectedFields = append(selectedFields, request.FieldMetricsLatencyMs)
+				fieldSeen[request.FieldMetricsLatencyMs] = struct{}{}
+			}
+		case "metricsFirstTokenLatencyMs":
+			if _, ok := fieldSeen[request.FieldMetricsFirstTokenLatencyMs]; !ok {
+				selectedFields = append(selectedFields, request.FieldMetricsFirstTokenLatencyMs)
+				fieldSeen[request.FieldMetricsFirstTokenLatencyMs] = struct{}{}
+			}
 		case "id":
 		case "__typename":
 		default:
@@ -2755,6 +2765,16 @@ func (_q *RequestExecutionQuery) collectField(ctx context.Context, oneNode bool,
 			if _, ok := fieldSeen[requestexecution.FieldStatus]; !ok {
 				selectedFields = append(selectedFields, requestexecution.FieldStatus)
 				fieldSeen[requestexecution.FieldStatus] = struct{}{}
+			}
+		case "metricsLatencyMs":
+			if _, ok := fieldSeen[requestexecution.FieldMetricsLatencyMs]; !ok {
+				selectedFields = append(selectedFields, requestexecution.FieldMetricsLatencyMs)
+				fieldSeen[requestexecution.FieldMetricsLatencyMs] = struct{}{}
+			}
+		case "metricsFirstTokenLatencyMs":
+			if _, ok := fieldSeen[requestexecution.FieldMetricsFirstTokenLatencyMs]; !ok {
+				selectedFields = append(selectedFields, requestexecution.FieldMetricsFirstTokenLatencyMs)
+				fieldSeen[requestexecution.FieldMetricsFirstTokenLatencyMs] = struct{}{}
 			}
 		case "id":
 		case "__typename":
@@ -3800,6 +3820,11 @@ func (_q *UsageLogQuery) collectField(ctx context.Context, oneNode bool, opCtx *
 			if _, ok := fieldSeen[usagelog.FieldPromptCachedTokens]; !ok {
 				selectedFields = append(selectedFields, usagelog.FieldPromptCachedTokens)
 				fieldSeen[usagelog.FieldPromptCachedTokens] = struct{}{}
+			}
+		case "promptWriteCachedTokens":
+			if _, ok := fieldSeen[usagelog.FieldPromptWriteCachedTokens]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldPromptWriteCachedTokens)
+				fieldSeen[usagelog.FieldPromptWriteCachedTokens] = struct{}{}
 			}
 		case "completionAudioTokens":
 			if _, ok := fieldSeen[usagelog.FieldCompletionAudioTokens]; !ok {

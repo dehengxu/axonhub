@@ -222,6 +222,10 @@ func TestTransformRequest_Integration(t *testing.T) {
 			name:        "1 item system array request",
 			requestFile: `anthropic-system-1.request.json`,
 		},
+		{
+			name:        "parallel multiple tool request",
+			requestFile: `anthropic-parallel_multiple_tool.request.json`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -396,6 +400,14 @@ func TestTransformResponse_Integration(t *testing.T) {
 		{
 			name:        "anthropic-tool2.response.json",
 			requestFile: `anthropic-tool2.response.json`,
+		},
+		{
+			name:        "anthropic-stop.response.json",
+			requestFile: `anthropic-stop.response.json`,
+		},
+		{
+			name:        "anthropic-cache-usage.response.json",
+			requestFile: `anthropic-cache-usage.response.json`,
 		},
 	}
 

@@ -19,6 +19,7 @@
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
       "totalTokens": "Total Tokens",
+      "firstTokenLatency": "First Token Latency",
       "actions": "Actions",
       "selectAll": "Select all",
       "selectRow": "Select row",

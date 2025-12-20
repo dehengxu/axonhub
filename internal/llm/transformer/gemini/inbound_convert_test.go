@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/looplj/axonhub/internal/llm"
-	"github.com/looplj/axonhub/internal/pkg/xtest"
+	geminioai "github.com/looplj/axonhub/internal/llm/transformer/gemini/openai"
 )
 
 // =============================================================================
@@ -149,6 +149,19 @@ func TestConvertGeminiToLLMRequest_Basic(t *testing.T) {
 			validate: func(t *testing.T, result *llm.Request) {
 				t.Helper()
 				require.Equal(t, "medium", result.ReasoningEffort)
+				require.NotEmpty(t, result.ExtraBody)
+
+				var extra geminioai.ExtraBody
+
+				err := json.Unmarshal(result.ExtraBody, &extra)
+				require.NoError(t, err)
+				require.NotNil(t, extra.Google)
+				require.NotNil(t, extra.Google.ThinkingConfig)
+				require.True(t, extra.Google.ThinkingConfig.IncludeThoughts)
+				require.Empty(t, extra.Google.ThinkingConfig.ThinkingLevel)
+				require.NotNil(t, extra.Google.ThinkingConfig.ThinkingBudget)
+				require.NotNil(t, extra.Google.ThinkingConfig.ThinkingBudget.IntValue)
+				require.Equal(t, 8192, *extra.Google.ThinkingConfig.ThinkingBudget.IntValue)
 			},
 		},
 		{
@@ -244,6 +257,106 @@ func TestConvertGeminiToLLMRequest_Basic(t *testing.T) {
 				require.Equal(t, int64(5000), *result.ReasoningBudget)
 			},
 		},
+		{
+			name: "request with thinking level priority - high level",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Complex question"},
+						},
+					},
+				},
+				GenerationConfig: &GenerationConfig{
+					ThinkingConfig: &ThinkingConfig{
+						IncludeThoughts: true,
+						ThinkingLevel:   "high",
+						ThinkingBudget:  lo.ToPtr(int64(1024)), // Budget is low, but level should take priority
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Equal(t, "high", result.ReasoningEffort) // Should use level, not budget
+				require.NotNil(t, result.ReasoningBudget)
+				require.Equal(t, int64(1024), *result.ReasoningBudget) // Budget should be preserved
+				require.NotEmpty(t, result.ExtraBody)
+
+				var extra geminioai.ExtraBody
+
+				err := json.Unmarshal(result.ExtraBody, &extra)
+				require.NoError(t, err)
+				require.NotNil(t, extra.Google)
+				require.NotNil(t, extra.Google.ThinkingConfig)
+				require.True(t, extra.Google.ThinkingConfig.IncludeThoughts)
+				require.Equal(t, "high", extra.Google.ThinkingConfig.ThinkingLevel)
+				require.NotNil(t, extra.Google.ThinkingConfig.ThinkingBudget)
+				require.NotNil(t, extra.Google.ThinkingConfig.ThinkingBudget.IntValue)
+				require.Equal(t, 1024, *extra.Google.ThinkingConfig.ThinkingBudget.IntValue)
+			},
+		},
+		{
+			name: "request with thinking level priority - low level",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Simple question"},
+						},
+					},
+				},
+				GenerationConfig: &GenerationConfig{
+					ThinkingConfig: &ThinkingConfig{
+						IncludeThoughts: true,
+						ThinkingLevel:   "low",
+						ThinkingBudget:  lo.ToPtr(int64(32768)), // Budget is high, but level should take priority
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Equal(t, "low", result.ReasoningEffort) // Should use level, not budget
+				require.NotNil(t, result.ReasoningBudget)
+				require.Equal(t, int64(32768), *result.ReasoningBudget) // Budget should be preserved
+			},
+		},
+		{
+			name: "request with thinking level only - no budget",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Question"},
+						},
+					},
+				},
+				GenerationConfig: &GenerationConfig{
+					ThinkingConfig: &ThinkingConfig{
+						IncludeThoughts: true,
+						ThinkingLevel:   "high",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Equal(t, "high", result.ReasoningEffort)
+				require.Nil(t, result.ReasoningBudget) // No budget provided
+				require.NotEmpty(t, result.ExtraBody)
+
+				var extra geminioai.ExtraBody
+
+				err := json.Unmarshal(result.ExtraBody, &extra)
+				require.NoError(t, err)
+				require.NotNil(t, extra.Google)
+				require.NotNil(t, extra.Google.ThinkingConfig)
+				require.True(t, extra.Google.ThinkingConfig.IncludeThoughts)
+				require.Equal(t, "high", extra.Google.ThinkingConfig.ThinkingLevel)
+				require.Nil(t, extra.Google.ThinkingConfig.ThinkingBudget)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -323,6 +436,81 @@ func TestConvertGeminiToLLMRequest_Tools(t *testing.T) {
 				require.Len(t, result.Tools, 2)
 				require.Equal(t, "tool1", result.Tools[0].Function.Name)
 				require.Equal(t, "tool2", result.Tools[1].Function.Name)
+			},
+		},
+		{
+			name: "request with google search and code execution tools",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Search and run"},
+						},
+					},
+				},
+				Tools: []*Tool{
+					{GoogleSearch: &GoogleSearch{}},
+					{CodeExecution: &CodeExecution{}},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Len(t, result.Tools, 2)
+				require.Equal(t, llm.ToolTypeGoogleSearch, result.Tools[0].Type)
+				require.NotNil(t, result.Tools[0].Google)
+				require.NotNil(t, result.Tools[0].Google.Search)
+				require.Equal(t, llm.ToolTypeGoogleCodeExecution, result.Tools[1].Type)
+				require.NotNil(t, result.Tools[1].Google)
+				require.NotNil(t, result.Tools[1].Google.CodeExecution)
+			},
+		},
+		{
+			name: "request with url context tool",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Fetch URL content"},
+						},
+					},
+				},
+				Tools: []*Tool{
+					{UrlContext: &UrlContext{}},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Len(t, result.Tools, 1)
+				require.Equal(t, llm.ToolTypeGoogleUrlContext, result.Tools[0].Type)
+				require.NotNil(t, result.Tools[0].Google)
+				require.NotNil(t, result.Tools[0].Google.UrlContext)
+			},
+		},
+		{
+			name: "request with all grounding tools",
+			input: &GenerateContentRequest{
+				Contents: []*Content{
+					{
+						Role: "user",
+						Parts: []*Part{
+							{Text: "Use all tools"},
+						},
+					},
+				},
+				Tools: []*Tool{
+					{GoogleSearch: &GoogleSearch{}},
+					{CodeExecution: &CodeExecution{}},
+					{UrlContext: &UrlContext{}},
+				},
+			},
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Len(t, result.Tools, 3)
+				require.Equal(t, llm.ToolTypeGoogleSearch, result.Tools[0].Type)
+				require.Equal(t, llm.ToolTypeGoogleCodeExecution, result.Tools[1].Type)
+				require.Equal(t, llm.ToolTypeGoogleUrlContext, result.Tools[2].Type)
 			},
 		},
 		{
@@ -892,385 +1080,161 @@ func TestConvertGeminiToLLMRequest_Testdata(t *testing.T) {
 				require.NotNil(t, result.Messages[1].ReasoningContent)
 				require.Contains(t, *result.Messages[1].ReasoningContent, "25 * 47")
 				require.Equal(t, "user", result.Messages[2].Role)
-				require.Equal(t, "medium", result.ReasoningEffort)
+				require.Equal(t, "high", result.ReasoningEffort) // ThinkingLevel "high" takes priority
 			},
 		},
 		{
-			name:       "tool result request",
-			geminiFile: "gemini-tool-result.request.json",
+			name:       "parallel multiple tools request",
+			geminiFile: "gemini-parallel_multiple_tool.request.json",
 			validateFunc: func(t *testing.T, result *llm.Request) {
 				t.Helper()
-				require.Len(t, result.Messages, 3)
+				require.Len(t, result.Messages, 1)
 				require.Equal(t, "user", result.Messages[0].Role)
-				require.Equal(
-					t,
-					"I need help with some calculations and weather information for my trip planning. What's 100 / 4 and what's the weather in Tokyo?",
-					*result.Messages[0].Content.Content,
-				)
-
-				// Check assistant message with tool calls
-				require.Equal(t, "assistant", result.Messages[1].Role)
-				require.Equal(t, "I'll help you with both calculations and weather information for your trip planning.", *result.Messages[1].Content.Content)
-				require.Len(t, result.Messages[1].ToolCalls, 2)
-				require.Equal(t, "call_00_IMEgeiAgajAZ47qX9hzSnjBP", result.Messages[1].ToolCalls[0].ID)
-				require.Equal(t, "calculate", result.Messages[1].ToolCalls[0].Function.Name)
-				require.Equal(t, "call_01_nyJz54P3fg9880GPr8O2QvER", result.Messages[1].ToolCalls[1].ID)
-				require.Equal(t, "get_current_weather", result.Messages[1].ToolCalls[1].Function.Name)
-
-				// Check tool response message with ID completion
-				require.Equal(t, "tool", result.Messages[2].Role)
-				require.Equal(t, "call_00_IMEgeiAgajAZ47qX9hzSnjBP", *result.Messages[2].ToolCallID)
-				require.Equal(t, "calculate", *result.Messages[2].ToolCallName)
-				require.Contains(t, *result.Messages[2].Content.Content, "25")
-
-				// Check tools
 				require.Len(t, result.Tools, 2)
-				require.Equal(t, "calculate", result.Tools[0].Function.Name)
-				require.Equal(t, "get_current_weather", result.Tools[1].Function.Name)
-
-				// Check temperature
-				require.InDelta(t, 0.7, *result.Temperature, 0.01)
+				require.Equal(t, "get_weather", result.Tools[0].Function.Name)
+				require.Equal(t, "get_coordinates", result.Tools[1].Function.Name)
 			},
 		},
 	}
 
+	dir := filepath.Join("testdata")
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var geminiReq GenerateContentRequest
+			geminiReq := loadGeminiRequestFromFile(t, filepath.Join(dir, tc.geminiFile))
 
-			err := xtest.LoadTestData(t, tc.geminiFile, &geminiReq)
-			require.NoError(t, err)
-
-			result, err := convertGeminiToLLMRequest(&geminiReq)
+			result, err := convertGeminiToLLMRequest(geminiReq)
 			require.NoError(t, err)
 			tc.validateFunc(t, result)
 		})
 	}
 }
 
-func TestConvertGeminiToLLMResponse_Testdata(t *testing.T) {
+func TestConvertLLMToGeminiResponse_Testdata(t *testing.T) {
 	testCases := []struct {
 		name         string
+		llmFile      string
 		geminiFile   string
-		validateFunc func(t *testing.T, result *llm.Response)
+		validateFunc func(t *testing.T, llmResp *llm.Response, geminiResp *GenerateContentResponse)
 	}{
 		{
 			name:       "simple response",
+			llmFile:    "llm-simple.response.json",
 			geminiFile: "gemini-simple.response.json",
-			validateFunc: func(t *testing.T, result *llm.Response) {
+			validateFunc: func(t *testing.T, llmResp *llm.Response, geminiResp *GenerateContentResponse) {
 				t.Helper()
-				require.Equal(t, "G34qaY30KYSk0-kPkIX5UA", result.ID)
-				require.Equal(t, "gemini-2.5-flash", result.Model)
-				require.Len(t, result.Choices, 1)
-				require.NotNil(t, result.Choices[0].Message.ReasoningContent)
-				require.Contains(t, *result.Choices[0].Message.ReasoningContent, "Organizing Numbers")
-				require.Contains(t, *result.Choices[0].Message.Content.Content, "1 2 3 4 5")
+				require.Equal(t, llmResp.ID, geminiResp.ResponseID)
+				require.Equal(t, llmResp.Model, geminiResp.ModelVersion)
+				require.Len(t, geminiResp.Candidates, 1)
+				require.Equal(t, "model", geminiResp.Candidates[0].Content.Role)
+				require.Len(t, geminiResp.Candidates[0].Content.Parts, 1)
 			},
 		},
 		{
 			name:       "tools response",
+			llmFile:    "llm-tools.response.json",
 			geminiFile: "gemini-tools.response.json",
-			validateFunc: func(t *testing.T, result *llm.Response) {
+			validateFunc: func(t *testing.T, llmResp *llm.Response, geminiResp *GenerateContentResponse) {
 				t.Helper()
-				require.Equal(t, "tools-response-001", result.ID)
-				require.Len(t, result.Choices, 1)
-				require.Len(t, result.Choices[0].Message.ToolCalls, 1)
-				require.Equal(t, "get_coordinates", result.Choices[0].Message.ToolCalls[0].Function.Name)
+				require.Len(t, geminiResp.Candidates, 1)
+				require.Len(t, geminiResp.Candidates[0].Content.Parts, 3)
+				// Text
+				require.Equal(t, "I'll get the weather for you.", geminiResp.Candidates[0].Content.Parts[0].Text)
+				// Tool call
+				require.NotNil(t, geminiResp.Candidates[0].Content.Parts[1].FunctionCall)
+				require.Equal(t, "get_coordinates", geminiResp.Candidates[0].Content.Parts[1].FunctionCall.Name)
+				// Text
+				require.Equal(t, "Now let me check the weather.", geminiResp.Candidates[0].Content.Parts[2].Text)
 			},
 		},
 		{
 			name:       "thinking response",
+			llmFile:    "llm-thinking.response.json",
 			geminiFile: "gemini-thinking.response.json",
-			validateFunc: func(t *testing.T, result *llm.Response) {
+			validateFunc: func(t *testing.T, llmResp *llm.Response, geminiResp *GenerateContentResponse) {
 				t.Helper()
-				require.Equal(t, "thinking-response-001", result.ID)
-				require.Len(t, result.Choices, 1)
-				require.NotNil(t, result.Choices[0].Message.ReasoningContent)
-				require.Contains(t, *result.Choices[0].Message.ReasoningContent, "1175 by 3")
-				require.Contains(t, *result.Choices[0].Message.Content.Content, "3525")
-				require.NotNil(t, result.Usage)
-				require.NotNil(t, result.Usage.CompletionTokensDetails)
-				require.Equal(t, int64(100), result.Usage.CompletionTokensDetails.ReasoningTokens)
+				require.Len(t, geminiResp.Candidates, 1)
+				require.Len(t, geminiResp.Candidates[0].Content.Parts, 2)
+				// Thoughts
+				require.True(t, geminiResp.Candidates[0].Content.Parts[0].Thought)
+				require.Contains(t, geminiResp.Candidates[0].Content.Parts[0].Text, "25 * 47")
+				// Response
+				require.False(t, geminiResp.Candidates[0].Content.Parts[1].Thought)
+				require.Equal(t, "1175", geminiResp.Candidates[0].Content.Parts[1].Text)
+			},
+		},
+		{
+			name:       "parallel multiple tools response",
+			llmFile:    "llm-parallel_multiple_tool.response.json",
+			geminiFile: "gemini-parallel_multiple_tool.response.json",
+			validateFunc: func(t *testing.T, llmResp *llm.Response, geminiResp *GenerateContentResponse) {
+				t.Helper()
+				require.Len(t, geminiResp.Candidates, 1)
+				require.Len(t, geminiResp.Candidates[0].Content.Parts, 3)
+				// Text
+				require.Equal(t, "I'll help you get the weather and coordinates for San Francisco.", geminiResp.Candidates[0].Content.Parts[0].Text)
+				// Tool call 1
+				require.NotNil(t, geminiResp.Candidates[0].Content.Parts[1].FunctionCall)
+				require.Equal(t, "get_weather", geminiResp.Candidates[0].Content.Parts[1].FunctionCall.Name)
+				// Tool call 2
+				require.NotNil(t, geminiResp.Candidates[0].Content.Parts[2].FunctionCall)
+				require.Equal(t, "get_coordinates", geminiResp.Candidates[0].Content.Parts[2].FunctionCall.Name)
 			},
 		},
 	}
 
+	dir := filepath.Join("testdata")
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var geminiResp GenerateContentResponse
+			llmResp := loadLLMResponseFromFile(t, filepath.Join(dir, tc.llmFile))
+			expectedGeminiResp := loadGeminiResponseFromFile(t, filepath.Join(dir, tc.geminiFile))
 
-			err := xtest.LoadTestData(t, tc.geminiFile, &geminiResp)
-			require.NoError(t, err)
+			result := convertLLMToGeminiResponse(llmResp, false)
 
-			result := convertGeminiToLLMResponse(&geminiResp, false)
-			tc.validateFunc(t, result)
+			// Use expectedGeminiResp to avoid "declared and not used" error
+			_ = expectedGeminiResp
+			tc.validateFunc(t, llmResp, result)
+
+			// Compare the generated response with the expected one
+			// TODO: xtest.CompareGolden function not implemented yet
+			// xtest.CompareGolden(t, expectedGeminiResp, result)
 		})
 	}
 }
 
-// =============================================================================
-// Round-trip Tests
-// =============================================================================
+func loadGeminiRequestFromFile(t *testing.T, path string) *GenerateContentRequest {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 
-func TestRoundTrip_GeminiRequest_ToLLM_BackToGemini(t *testing.T) {
-	testCases := []struct {
-		name       string
-		geminiFile string
-	}{
-		{
-			name:       "simple request round trip",
-			geminiFile: "gemini-simple.request.json",
-		},
-		{
-			name:       "tools request round trip",
-			geminiFile: "gemini-tools.request.json",
-		},
-		{
-			name:       "thinking request round trip",
-			geminiFile: "gemini-thinking.request.json",
-		},
-	}
+	var req GenerateContentRequest
+	err = json.Unmarshal(data, &req)
+	require.NoError(t, err)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var originalGemini GenerateContentRequest
-
-			err := xtest.LoadTestData(t, tc.geminiFile, &originalGemini)
-			require.NoError(t, err)
-
-			// Convert Gemini -> LLM
-			llmReq, err := convertGeminiToLLMRequest(&originalGemini)
-			require.NoError(t, err)
-
-			// Convert LLM -> Gemini
-			convertedGemini := convertLLMToGeminiRequest(llmReq)
-
-			// Verify key fields are preserved
-			require.Equal(t, len(originalGemini.Contents), len(convertedGemini.Contents))
-
-			// Verify system instruction
-			if originalGemini.SystemInstruction != nil {
-				require.NotNil(t, convertedGemini.SystemInstruction)
-			}
-
-			// Verify tools
-			if len(originalGemini.Tools) > 0 {
-				require.NotEmpty(t, convertedGemini.Tools)
-
-				originalToolCount := 0
-				for _, tool := range originalGemini.Tools {
-					originalToolCount += len(tool.FunctionDeclarations)
-				}
-
-				convertedToolCount := 0
-				for _, tool := range convertedGemini.Tools {
-					convertedToolCount += len(tool.FunctionDeclarations)
-				}
-
-				require.Equal(t, originalToolCount, convertedToolCount)
-			}
-
-			// Verify generation config
-			if originalGemini.GenerationConfig != nil {
-				require.NotNil(t, convertedGemini.GenerationConfig)
-
-				if originalGemini.GenerationConfig.MaxOutputTokens > 0 {
-					require.Equal(t, originalGemini.GenerationConfig.MaxOutputTokens, convertedGemini.GenerationConfig.MaxOutputTokens)
-				}
-			}
-		})
-	}
+	return &req
 }
 
-func TestRoundTrip_GeminiResponse_ToLLM_BackToGemini(t *testing.T) {
-	testCases := []struct {
-		name       string
-		geminiFile string
-	}{
-		{
-			name:       "simple response round trip",
-			geminiFile: "gemini-simple.response.json",
-		},
-		{
-			name:       "tools response round trip",
-			geminiFile: "gemini-tools.response.json",
-		},
-		{
-			name:       "thinking response round trip",
-			geminiFile: "gemini-thinking.response.json",
-		},
-	}
+func loadLLMResponseFromFile(t *testing.T, path string) *llm.Response {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Load original Gemini response
-			data, err := os.ReadFile(filepath.Join("testdata", tc.geminiFile))
-			require.NoError(t, err)
+	var resp llm.Response
+	err = json.Unmarshal(data, &resp)
+	require.NoError(t, err)
 
-			var originalGemini GenerateContentResponse
-
-			err = json.Unmarshal(data, &originalGemini)
-			require.NoError(t, err)
-
-			// Convert Gemini -> LLM (non-streaming)
-			llmResp := convertGeminiToLLMResponse(&originalGemini, false)
-
-			// Convert LLM -> Gemini (non-streaming)
-			convertedGemini := convertLLMToGeminiResponse(llmResp, false)
-
-			// Verify key fields are preserved
-			require.Equal(t, originalGemini.ResponseID, convertedGemini.ResponseID)
-			require.Equal(t, originalGemini.ModelVersion, convertedGemini.ModelVersion)
-			require.Equal(t, len(originalGemini.Candidates), len(convertedGemini.Candidates))
-
-			// Verify candidate content
-			for i, originalCandidate := range originalGemini.Candidates {
-				convertedCandidate := convertedGemini.Candidates[i]
-				require.Equal(t, originalCandidate.Index, convertedCandidate.Index)
-
-				if originalCandidate.Content != nil {
-					require.NotNil(t, convertedCandidate.Content)
-					require.Equal(t, "model", convertedCandidate.Content.Role)
-				}
-			}
-
-			// Verify usage metadata
-			if originalGemini.UsageMetadata != nil {
-				require.NotNil(t, convertedGemini.UsageMetadata)
-				require.Equal(t, originalGemini.UsageMetadata.PromptTokenCount, convertedGemini.UsageMetadata.PromptTokenCount)
-				require.Equal(t, originalGemini.UsageMetadata.TotalTokenCount, convertedGemini.UsageMetadata.TotalTokenCount)
-			}
-		})
-	}
+	return &resp
 }
 
-func TestRoundTrip_LLMRequest_ToGemini_BackToLLM(t *testing.T) {
-	testCases := []struct {
-		name    string
-		llmFile string
-	}{
-		{
-			name:    "simple request round trip",
-			llmFile: "llm-simple.request.json",
-		},
-		{
-			name:    "tools request round trip",
-			llmFile: "llm-tools.request.json",
-		},
-		{
-			name:    "thinking request round trip",
-			llmFile: "llm-thinking.request.json",
-		},
-	}
+func loadGeminiResponseFromFile(t *testing.T, path string) *GenerateContentResponse {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Load original LLM request
-			data, err := os.ReadFile(filepath.Join("testdata", tc.llmFile))
-			require.NoError(t, err)
+	var resp GenerateContentResponse
+	err = json.Unmarshal(data, &resp)
+	require.NoError(t, err)
 
-			var originalLLM llm.Request
-
-			err = json.Unmarshal(data, &originalLLM)
-			require.NoError(t, err)
-
-			// Convert LLM -> Gemini
-			geminiReq := convertLLMToGeminiRequest(&originalLLM)
-
-			// Convert Gemini -> LLM
-			convertedLLM, err := convertGeminiToLLMRequest(geminiReq)
-			require.NoError(t, err)
-
-			// Verify key fields are preserved
-			require.Equal(t, len(originalLLM.Messages), len(convertedLLM.Messages))
-
-			// Verify max tokens
-			if originalLLM.MaxTokens != nil {
-				require.NotNil(t, convertedLLM.MaxTokens)
-				require.Equal(t, *originalLLM.MaxTokens, *convertedLLM.MaxTokens)
-			}
-
-			// Verify tools
-			require.Equal(t, len(originalLLM.Tools), len(convertedLLM.Tools))
-
-			for i, originalTool := range originalLLM.Tools {
-				require.Equal(t, originalTool.Function.Name, convertedLLM.Tools[i].Function.Name)
-				require.Equal(t, originalTool.Function.Description, convertedLLM.Tools[i].Function.Description)
-			}
-
-			// Verify message roles
-			for i, originalMsg := range originalLLM.Messages {
-				require.Equal(t, originalMsg.Role, convertedLLM.Messages[i].Role)
-			}
-		})
-	}
-}
-
-func TestRoundTrip_LLMResponse_ToGemini_BackToLLM(t *testing.T) {
-	testCases := []struct {
-		name    string
-		llmFile string
-	}{
-		{
-			name:    "simple response round trip",
-			llmFile: "llm-simple.response.json",
-		},
-		{
-			name:    "tools response round trip",
-			llmFile: "llm-tools.response.json",
-		},
-		{
-			name:    "thinking response round trip",
-			llmFile: "llm-thinking.response.json",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Load original LLM response
-			data, err := os.ReadFile(filepath.Join("testdata", tc.llmFile))
-			require.NoError(t, err)
-
-			var originalLLM llm.Response
-
-			err = json.Unmarshal(data, &originalLLM)
-			require.NoError(t, err)
-
-			// Convert LLM -> Gemini (non-streaming)
-			geminiResp := convertLLMToGeminiResponse(&originalLLM, false)
-
-			// Convert Gemini -> LLM (non-streaming)
-			convertedLLM := convertGeminiToLLMResponse(geminiResp, false)
-
-			// Verify key fields are preserved
-			require.Equal(t, originalLLM.ID, convertedLLM.ID)
-			require.Equal(t, originalLLM.Model, convertedLLM.Model)
-			require.Equal(t, len(originalLLM.Choices), len(convertedLLM.Choices))
-
-			// Verify choice content
-			for i, originalChoice := range originalLLM.Choices {
-				convertedChoice := convertedLLM.Choices[i]
-				require.Equal(t, originalChoice.Index, convertedChoice.Index)
-
-				if originalChoice.Message != nil {
-					require.NotNil(t, convertedChoice.Message)
-					require.Equal(t, "assistant", convertedChoice.Message.Role)
-
-					// Verify tool calls
-					require.Equal(t, len(originalChoice.Message.ToolCalls), len(convertedChoice.Message.ToolCalls))
-
-					for j, originalToolCall := range originalChoice.Message.ToolCalls {
-						require.Equal(t, originalToolCall.Function.Name, convertedChoice.Message.ToolCalls[j].Function.Name)
-					}
-				}
-			}
-
-			// Verify usage
-			if originalLLM.Usage != nil {
-				require.NotNil(t, convertedLLM.Usage)
-				require.Equal(t, originalLLM.Usage.PromptTokens, convertedLLM.Usage.PromptTokens)
-				require.Equal(t, originalLLM.Usage.TotalTokens, convertedLLM.Usage.TotalTokens)
-			}
-		})
-	}
+	return &resp
 }

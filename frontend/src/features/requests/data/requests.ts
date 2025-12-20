@@ -54,6 +54,8 @@ function buildRequestsQuery(permissions: { canViewApiKeys: boolean; canViewChann
                 }
               }
             }
+            metricsLatencyMs
+            metricsFirstTokenLatencyMs
           }
           cursor
         }
@@ -140,6 +142,7 @@ function buildRequestExecutionsQuery(permissions: { canViewChannels: boolean }) 
                 responseChunks
                 errorMessage
                 status
+                metricsFirstTokenLatencyMs
               }
               cursor
             }

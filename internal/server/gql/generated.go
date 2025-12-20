@@ -522,30 +522,32 @@ type ComplexityRoot struct {
 	}
 
 	Request struct {
-		APIKey         func(childComplexity int) int
-		APIKeyID       func(childComplexity int) int
-		Channel        func(childComplexity int) int
-		ChannelID      func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		DataStorage    func(childComplexity int) int
-		DataStorageID  func(childComplexity int) int
-		Executions     func(childComplexity int, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.RequestExecutionOrder, where *ent.RequestExecutionWhereInput) int
-		ExternalID     func(childComplexity int) int
-		Format         func(childComplexity int) int
-		ID             func(childComplexity int) int
-		ModelID        func(childComplexity int) int
-		Project        func(childComplexity int) int
-		ProjectID      func(childComplexity int) int
-		RequestBody    func(childComplexity int) int
-		ResponseBody   func(childComplexity int) int
-		ResponseChunks func(childComplexity int) int
-		Source         func(childComplexity int) int
-		Status         func(childComplexity int) int
-		Stream         func(childComplexity int) int
-		Trace          func(childComplexity int) int
-		TraceID        func(childComplexity int) int
-		UpdatedAt      func(childComplexity int) int
-		UsageLogs      func(childComplexity int, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.UsageLogOrder, where *ent.UsageLogWhereInput) int
+		APIKey                     func(childComplexity int) int
+		APIKeyID                   func(childComplexity int) int
+		Channel                    func(childComplexity int) int
+		ChannelID                  func(childComplexity int) int
+		CreatedAt                  func(childComplexity int) int
+		DataStorage                func(childComplexity int) int
+		DataStorageID              func(childComplexity int) int
+		Executions                 func(childComplexity int, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.RequestExecutionOrder, where *ent.RequestExecutionWhereInput) int
+		ExternalID                 func(childComplexity int) int
+		Format                     func(childComplexity int) int
+		ID                         func(childComplexity int) int
+		MetricsFirstTokenLatencyMs func(childComplexity int) int
+		MetricsLatencyMs           func(childComplexity int) int
+		ModelID                    func(childComplexity int) int
+		Project                    func(childComplexity int) int
+		ProjectID                  func(childComplexity int) int
+		RequestBody                func(childComplexity int) int
+		ResponseBody               func(childComplexity int) int
+		ResponseChunks             func(childComplexity int) int
+		Source                     func(childComplexity int) int
+		Status                     func(childComplexity int) int
+		Stream                     func(childComplexity int) int
+		Trace                      func(childComplexity int) int
+		TraceID                    func(childComplexity int) int
+		UpdatedAt                  func(childComplexity int) int
+		UsageLogs                  func(childComplexity int, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.UsageLogOrder, where *ent.UsageLogWhereInput) int
 	}
 
 	RequestConnection struct {
@@ -560,24 +562,26 @@ type ComplexityRoot struct {
 	}
 
 	RequestExecution struct {
-		Channel        func(childComplexity int) int
-		ChannelID      func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		DataStorage    func(childComplexity int) int
-		DataStorageID  func(childComplexity int) int
-		ErrorMessage   func(childComplexity int) int
-		ExternalID     func(childComplexity int) int
-		Format         func(childComplexity int) int
-		ID             func(childComplexity int) int
-		ModelID        func(childComplexity int) int
-		ProjectID      func(childComplexity int) int
-		Request        func(childComplexity int) int
-		RequestBody    func(childComplexity int) int
-		RequestID      func(childComplexity int) int
-		ResponseBody   func(childComplexity int) int
-		ResponseChunks func(childComplexity int) int
-		Status         func(childComplexity int) int
-		UpdatedAt      func(childComplexity int) int
+		Channel                    func(childComplexity int) int
+		ChannelID                  func(childComplexity int) int
+		CreatedAt                  func(childComplexity int) int
+		DataStorage                func(childComplexity int) int
+		DataStorageID              func(childComplexity int) int
+		ErrorMessage               func(childComplexity int) int
+		ExternalID                 func(childComplexity int) int
+		Format                     func(childComplexity int) int
+		ID                         func(childComplexity int) int
+		MetricsFirstTokenLatencyMs func(childComplexity int) int
+		MetricsLatencyMs           func(childComplexity int) int
+		ModelID                    func(childComplexity int) int
+		ProjectID                  func(childComplexity int) int
+		Request                    func(childComplexity int) int
+		RequestBody                func(childComplexity int) int
+		RequestID                  func(childComplexity int) int
+		ResponseBody               func(childComplexity int) int
+		ResponseChunks             func(childComplexity int) int
+		Status                     func(childComplexity int) int
+		UpdatedAt                  func(childComplexity int) int
 	}
 
 	RequestExecutionConnection struct {
@@ -618,6 +622,7 @@ type ComplexityRoot struct {
 
 	RetryPolicy struct {
 		Enabled                 func(childComplexity int) int
+		LoadBalancerStrategy    func(childComplexity int) int
 		MaxChannelRetries       func(childComplexity int) int
 		MaxSingleChannelRetries func(childComplexity int) int
 		RetryDelayMs            func(childComplexity int) int
@@ -869,6 +874,7 @@ type ComplexityRoot struct {
 		PromptAudioTokens                  func(childComplexity int) int
 		PromptCachedTokens                 func(childComplexity int) int
 		PromptTokens                       func(childComplexity int) int
+		PromptWriteCachedTokens            func(childComplexity int) int
 		Request                            func(childComplexity int) int
 		RequestID                          func(childComplexity int) int
 		Source                             func(childComplexity int) int
@@ -3500,6 +3506,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Request.ID(childComplexity), true
+	case "Request.metricsFirstTokenLatencyMs":
+		if e.complexity.Request.MetricsFirstTokenLatencyMs == nil {
+			break
+		}
+
+		return e.complexity.Request.MetricsFirstTokenLatencyMs(childComplexity), true
+	case "Request.metricsLatencyMs":
+		if e.complexity.Request.MetricsLatencyMs == nil {
+			break
+		}
+
+		return e.complexity.Request.MetricsLatencyMs(childComplexity), true
 	case "Request.modelID":
 		if e.complexity.Request.ModelID == nil {
 			break
@@ -3670,6 +3688,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.RequestExecution.ID(childComplexity), true
+	case "RequestExecution.metricsFirstTokenLatencyMs":
+		if e.complexity.RequestExecution.MetricsFirstTokenLatencyMs == nil {
+			break
+		}
+
+		return e.complexity.RequestExecution.MetricsFirstTokenLatencyMs(childComplexity), true
+	case "RequestExecution.metricsLatencyMs":
+		if e.complexity.RequestExecution.MetricsLatencyMs == nil {
+			break
+		}
+
+		return e.complexity.RequestExecution.MetricsLatencyMs(childComplexity), true
 	case "RequestExecution.modelID":
 		if e.complexity.RequestExecution.ModelID == nil {
 			break
@@ -3845,6 +3875,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.RetryPolicy.Enabled(childComplexity), true
+	case "RetryPolicy.loadBalancerStrategy":
+		if e.complexity.RetryPolicy.LoadBalancerStrategy == nil {
+			break
+		}
+
+		return e.complexity.RetryPolicy.LoadBalancerStrategy(childComplexity), true
 	case "RetryPolicy.maxChannelRetries":
 		if e.complexity.RetryPolicy.MaxChannelRetries == nil {
 			break
@@ -4788,6 +4824,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.UsageLog.PromptTokens(childComplexity), true
+	case "UsageLog.promptWriteCachedTokens":
+		if e.complexity.UsageLog.PromptWriteCachedTokens == nil {
+			break
+		}
+
+		return e.complexity.UsageLog.PromptWriteCachedTokens(childComplexity), true
 	case "UsageLog.request":
 		if e.complexity.UsageLog.Request == nil {
 			break
@@ -18825,6 +18867,8 @@ func (ec *executionContext) fieldContext_Query_retryPolicy(_ context.Context, fi
 				return ec.fieldContext_RetryPolicy_maxSingleChannelRetries(ctx, field)
 			case "retryDelayMs":
 				return ec.fieldContext_RetryPolicy_retryDelayMs(ctx, field)
+			case "loadBalancerStrategy":
+				return ec.fieldContext_RetryPolicy_loadBalancerStrategy(ctx, field)
 			case "enabled":
 				return ec.fieldContext_RetryPolicy_enabled(ctx, field)
 			}
@@ -19583,6 +19627,64 @@ func (ec *executionContext) fieldContext_Request_stream(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Request_metricsLatencyMs(ctx context.Context, field graphql.CollectedField, obj *ent.Request) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Request_metricsLatencyMs,
+		func(ctx context.Context) (any, error) {
+			return obj.MetricsLatencyMs, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Request_metricsLatencyMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Request",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Request_metricsFirstTokenLatencyMs(ctx context.Context, field graphql.CollectedField, obj *ent.Request) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Request_metricsFirstTokenLatencyMs,
+		func(ctx context.Context) (any, error) {
+			return obj.MetricsFirstTokenLatencyMs, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Request_metricsFirstTokenLatencyMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Request",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Request_apiKey(ctx context.Context, field graphql.CollectedField, obj *ent.Request) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20143,6 +20245,10 @@ func (ec *executionContext) fieldContext_RequestEdge_node(_ context.Context, fie
 				return ec.fieldContext_Request_status(ctx, field)
 			case "stream":
 				return ec.fieldContext_Request_stream(ctx, field)
+			case "metricsLatencyMs":
+				return ec.fieldContext_Request_metricsLatencyMs(ctx, field)
+			case "metricsFirstTokenLatencyMs":
+				return ec.fieldContext_Request_metricsFirstTokenLatencyMs(ctx, field)
 			case "apiKey":
 				return ec.fieldContext_Request_apiKey(ctx, field)
 			case "project":
@@ -20628,6 +20734,64 @@ func (ec *executionContext) fieldContext_RequestExecution_status(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _RequestExecution_metricsLatencyMs(ctx context.Context, field graphql.CollectedField, obj *ent.RequestExecution) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RequestExecution_metricsLatencyMs,
+		func(ctx context.Context) (any, error) {
+			return obj.MetricsLatencyMs, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_RequestExecution_metricsLatencyMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RequestExecution",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RequestExecution_metricsFirstTokenLatencyMs(ctx context.Context, field graphql.CollectedField, obj *ent.RequestExecution) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RequestExecution_metricsFirstTokenLatencyMs,
+		func(ctx context.Context) (any, error) {
+			return obj.MetricsFirstTokenLatencyMs, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_RequestExecution_metricsFirstTokenLatencyMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RequestExecution",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RequestExecution_request(ctx context.Context, field graphql.CollectedField, obj *ent.RequestExecution) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20686,6 +20850,10 @@ func (ec *executionContext) fieldContext_RequestExecution_request(_ context.Cont
 				return ec.fieldContext_Request_status(ctx, field)
 			case "stream":
 				return ec.fieldContext_Request_stream(ctx, field)
+			case "metricsLatencyMs":
+				return ec.fieldContext_Request_metricsLatencyMs(ctx, field)
+			case "metricsFirstTokenLatencyMs":
+				return ec.fieldContext_Request_metricsFirstTokenLatencyMs(ctx, field)
 			case "apiKey":
 				return ec.fieldContext_Request_apiKey(ctx, field)
 			case "project":
@@ -20988,6 +21156,10 @@ func (ec *executionContext) fieldContext_RequestExecutionEdge_node(_ context.Con
 				return ec.fieldContext_RequestExecution_errorMessage(ctx, field)
 			case "status":
 				return ec.fieldContext_RequestExecution_status(ctx, field)
+			case "metricsLatencyMs":
+				return ec.fieldContext_RequestExecution_metricsLatencyMs(ctx, field)
+			case "metricsFirstTokenLatencyMs":
+				return ec.fieldContext_RequestExecution_metricsFirstTokenLatencyMs(ctx, field)
 			case "request":
 				return ec.fieldContext_RequestExecution_request(ctx, field)
 			case "channel":
@@ -21489,6 +21661,35 @@ func (ec *executionContext) fieldContext_RetryPolicy_retryDelayMs(_ context.Cont
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RetryPolicy_loadBalancerStrategy(ctx context.Context, field graphql.CollectedField, obj *biz.RetryPolicy) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_RetryPolicy_loadBalancerStrategy,
+		func(ctx context.Context) (any, error) {
+			return obj.LoadBalancerStrategy, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_RetryPolicy_loadBalancerStrategy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RetryPolicy",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -26165,6 +26366,35 @@ func (ec *executionContext) fieldContext_UsageLog_promptCachedTokens(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _UsageLog_promptWriteCachedTokens(ctx context.Context, field graphql.CollectedField, obj *ent.UsageLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_UsageLog_promptWriteCachedTokens,
+		func(ctx context.Context) (any, error) {
+			return obj.PromptWriteCachedTokens, nil
+		},
+		nil,
+		ec.marshalOInt2int64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_UsageLog_promptWriteCachedTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UsageLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _UsageLog_completionAudioTokens(ctx context.Context, field graphql.CollectedField, obj *ent.UsageLog) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26397,6 +26627,10 @@ func (ec *executionContext) fieldContext_UsageLog_request(_ context.Context, fie
 				return ec.fieldContext_Request_status(ctx, field)
 			case "stream":
 				return ec.fieldContext_Request_stream(ctx, field)
+			case "metricsLatencyMs":
+				return ec.fieldContext_Request_metricsLatencyMs(ctx, field)
+			case "metricsFirstTokenLatencyMs":
+				return ec.fieldContext_Request_metricsFirstTokenLatencyMs(ctx, field)
 			case "apiKey":
 				return ec.fieldContext_Request_apiKey(ctx, field)
 			case "project":
@@ -26699,6 +26933,8 @@ func (ec *executionContext) fieldContext_UsageLogEdge_node(_ context.Context, fi
 				return ec.fieldContext_UsageLog_promptAudioTokens(ctx, field)
 			case "promptCachedTokens":
 				return ec.fieldContext_UsageLog_promptCachedTokens(ctx, field)
+			case "promptWriteCachedTokens":
+				return ec.fieldContext_UsageLog_promptWriteCachedTokens(ctx, field)
 			case "completionAudioTokens":
 				return ec.fieldContext_UsageLog_completionAudioTokens(ctx, field)
 			case "completionReasoningTokens":
@@ -35026,7 +35262,7 @@ func (ec *executionContext) unmarshalInputCreateRequestInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"source", "modelID", "format", "requestBody", "responseBody", "responseChunks", "externalID", "status", "stream", "apiKeyID", "projectID", "traceID", "dataStorageID", "channelID"}
+	fieldsInOrder := [...]string{"source", "modelID", "format", "requestBody", "responseBody", "responseChunks", "externalID", "status", "stream", "metricsLatencyMs", "metricsFirstTokenLatencyMs", "apiKeyID", "projectID", "traceID", "dataStorageID", "channelID"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -35096,6 +35332,20 @@ func (ec *executionContext) unmarshalInputCreateRequestInput(ctx context.Context
 				return it, err
 			}
 			it.Stream = data
+		case "metricsLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMs = data
+		case "metricsFirstTokenLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMs = data
 		case "apiKeyID":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("apiKeyID"))
 			data, err := ec.unmarshalOID2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐGUID(ctx, v)
@@ -35348,7 +35598,7 @@ func (ec *executionContext) unmarshalInputCreateUsageLogInput(ctx context.Contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"modelID", "promptTokens", "completionTokens", "totalTokens", "promptAudioTokens", "promptCachedTokens", "completionAudioTokens", "completionReasoningTokens", "completionAcceptedPredictionTokens", "completionRejectedPredictionTokens", "source", "format", "requestID", "projectID", "channelID"}
+	fieldsInOrder := [...]string{"modelID", "promptTokens", "completionTokens", "totalTokens", "promptAudioTokens", "promptCachedTokens", "promptWriteCachedTokens", "completionAudioTokens", "completionReasoningTokens", "completionAcceptedPredictionTokens", "completionRejectedPredictionTokens", "source", "format", "requestID", "projectID", "channelID"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -35397,6 +35647,13 @@ func (ec *executionContext) unmarshalInputCreateUsageLogInput(ctx context.Contex
 				return it, err
 			}
 			it.PromptCachedTokens = data
+		case "promptWriteCachedTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokens"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokens = data
 		case "completionAudioTokens":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("completionAudioTokens"))
 			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
@@ -37459,7 +37716,7 @@ func (ec *executionContext) unmarshalInputRequestExecutionWhereInput(ctx context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "projectIDGT", "projectIDGTE", "projectIDLT", "projectIDLTE", "requestID", "requestIDNEQ", "requestIDIn", "requestIDNotIn", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "dataStorageID", "dataStorageIDNEQ", "dataStorageIDIn", "dataStorageIDNotIn", "dataStorageIDIsNil", "dataStorageIDNotNil", "externalID", "externalIDNEQ", "externalIDIn", "externalIDNotIn", "externalIDGT", "externalIDGTE", "externalIDLT", "externalIDLTE", "externalIDContains", "externalIDHasPrefix", "externalIDHasSuffix", "externalIDIsNil", "externalIDNotNil", "externalIDEqualFold", "externalIDContainsFold", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "errorMessage", "errorMessageNEQ", "errorMessageIn", "errorMessageNotIn", "errorMessageGT", "errorMessageGTE", "errorMessageLT", "errorMessageLTE", "errorMessageContains", "errorMessageHasPrefix", "errorMessageHasSuffix", "errorMessageIsNil", "errorMessageNotNil", "errorMessageEqualFold", "errorMessageContainsFold", "status", "statusNEQ", "statusIn", "statusNotIn", "hasRequest", "hasRequestWith", "hasChannel", "hasChannelWith", "hasDataStorage", "hasDataStorageWith"}
+	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "projectIDGT", "projectIDGTE", "projectIDLT", "projectIDLTE", "requestID", "requestIDNEQ", "requestIDIn", "requestIDNotIn", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "dataStorageID", "dataStorageIDNEQ", "dataStorageIDIn", "dataStorageIDNotIn", "dataStorageIDIsNil", "dataStorageIDNotNil", "externalID", "externalIDNEQ", "externalIDIn", "externalIDNotIn", "externalIDGT", "externalIDGTE", "externalIDLT", "externalIDLTE", "externalIDContains", "externalIDHasPrefix", "externalIDHasSuffix", "externalIDIsNil", "externalIDNotNil", "externalIDEqualFold", "externalIDContainsFold", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "errorMessage", "errorMessageNEQ", "errorMessageIn", "errorMessageNotIn", "errorMessageGT", "errorMessageGTE", "errorMessageLT", "errorMessageLTE", "errorMessageContains", "errorMessageHasPrefix", "errorMessageHasSuffix", "errorMessageIsNil", "errorMessageNotNil", "errorMessageEqualFold", "errorMessageContainsFold", "status", "statusNEQ", "statusIn", "statusNotIn", "metricsLatencyMs", "metricsLatencyMsNEQ", "metricsLatencyMsIn", "metricsLatencyMsNotIn", "metricsLatencyMsGT", "metricsLatencyMsGTE", "metricsLatencyMsLT", "metricsLatencyMsLTE", "metricsLatencyMsIsNil", "metricsLatencyMsNotNil", "metricsFirstTokenLatencyMs", "metricsFirstTokenLatencyMsNEQ", "metricsFirstTokenLatencyMsIn", "metricsFirstTokenLatencyMsNotIn", "metricsFirstTokenLatencyMsGT", "metricsFirstTokenLatencyMsGTE", "metricsFirstTokenLatencyMsLT", "metricsFirstTokenLatencyMsLTE", "metricsFirstTokenLatencyMsIsNil", "metricsFirstTokenLatencyMsNotNil", "hasRequest", "hasRequestWith", "hasChannel", "hasChannelWith", "hasDataStorage", "hasDataStorageWith"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -38323,6 +38580,146 @@ func (ec *executionContext) unmarshalInputRequestExecutionWhereInput(ctx context
 				return it, err
 			}
 			it.StatusNotIn = data
+		case "metricsLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMs = data
+		case "metricsLatencyMsNEQ":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNEQ"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNEQ = data
+		case "metricsLatencyMsIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsIn = data
+		case "metricsLatencyMsNotIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNotIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNotIn = data
+		case "metricsLatencyMsGT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsGT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsGT = data
+		case "metricsLatencyMsGTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsGTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsGTE = data
+		case "metricsLatencyMsLT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsLT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsLT = data
+		case "metricsLatencyMsLTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsLTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsLTE = data
+		case "metricsLatencyMsIsNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsIsNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsIsNil = data
+		case "metricsLatencyMsNotNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNotNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNotNil = data
+		case "metricsFirstTokenLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMs = data
+		case "metricsFirstTokenLatencyMsNEQ":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNEQ"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNEQ = data
+		case "metricsFirstTokenLatencyMsIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsIn = data
+		case "metricsFirstTokenLatencyMsNotIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNotIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNotIn = data
+		case "metricsFirstTokenLatencyMsGT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsGT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsGT = data
+		case "metricsFirstTokenLatencyMsGTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsGTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsGTE = data
+		case "metricsFirstTokenLatencyMsLT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsLT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsLT = data
+		case "metricsFirstTokenLatencyMsLTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsLTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsLTE = data
+		case "metricsFirstTokenLatencyMsIsNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsIsNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsIsNil = data
+		case "metricsFirstTokenLatencyMsNotNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNotNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNotNil = data
 		case "hasRequest":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hasRequest"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -38416,7 +38813,7 @@ func (ec *executionContext) unmarshalInputRequestWhereInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "apiKeyID", "apiKeyIDNEQ", "apiKeyIDIn", "apiKeyIDNotIn", "apiKeyIDIsNil", "apiKeyIDNotNil", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "traceID", "traceIDNEQ", "traceIDIn", "traceIDNotIn", "traceIDIsNil", "traceIDNotNil", "dataStorageID", "dataStorageIDNEQ", "dataStorageIDIn", "dataStorageIDNotIn", "dataStorageIDIsNil", "dataStorageIDNotNil", "source", "sourceNEQ", "sourceIn", "sourceNotIn", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "externalID", "externalIDNEQ", "externalIDIn", "externalIDNotIn", "externalIDGT", "externalIDGTE", "externalIDLT", "externalIDLTE", "externalIDContains", "externalIDHasPrefix", "externalIDHasSuffix", "externalIDIsNil", "externalIDNotNil", "externalIDEqualFold", "externalIDContainsFold", "status", "statusNEQ", "statusIn", "statusNotIn", "stream", "streamNEQ", "hasAPIKey", "hasAPIKeyWith", "hasProject", "hasProjectWith", "hasTrace", "hasTraceWith", "hasDataStorage", "hasDataStorageWith", "hasExecutions", "hasExecutionsWith", "hasChannel", "hasChannelWith", "hasUsageLogs", "hasUsageLogsWith"}
+	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "apiKeyID", "apiKeyIDNEQ", "apiKeyIDIn", "apiKeyIDNotIn", "apiKeyIDIsNil", "apiKeyIDNotNil", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "traceID", "traceIDNEQ", "traceIDIn", "traceIDNotIn", "traceIDIsNil", "traceIDNotNil", "dataStorageID", "dataStorageIDNEQ", "dataStorageIDIn", "dataStorageIDNotIn", "dataStorageIDIsNil", "dataStorageIDNotNil", "source", "sourceNEQ", "sourceIn", "sourceNotIn", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "externalID", "externalIDNEQ", "externalIDIn", "externalIDNotIn", "externalIDGT", "externalIDGTE", "externalIDLT", "externalIDLTE", "externalIDContains", "externalIDHasPrefix", "externalIDHasSuffix", "externalIDIsNil", "externalIDNotNil", "externalIDEqualFold", "externalIDContainsFold", "status", "statusNEQ", "statusIn", "statusNotIn", "stream", "streamNEQ", "metricsLatencyMs", "metricsLatencyMsNEQ", "metricsLatencyMsIn", "metricsLatencyMsNotIn", "metricsLatencyMsGT", "metricsLatencyMsGTE", "metricsLatencyMsLT", "metricsLatencyMsLTE", "metricsLatencyMsIsNil", "metricsLatencyMsNotNil", "metricsFirstTokenLatencyMs", "metricsFirstTokenLatencyMsNEQ", "metricsFirstTokenLatencyMsIn", "metricsFirstTokenLatencyMsNotIn", "metricsFirstTokenLatencyMsGT", "metricsFirstTokenLatencyMsGTE", "metricsFirstTokenLatencyMsLT", "metricsFirstTokenLatencyMsLTE", "metricsFirstTokenLatencyMsIsNil", "metricsFirstTokenLatencyMsNotNil", "hasAPIKey", "hasAPIKeyWith", "hasProject", "hasProjectWith", "hasTrace", "hasTraceWith", "hasDataStorage", "hasDataStorageWith", "hasExecutions", "hasExecutionsWith", "hasChannel", "hasChannelWith", "hasUsageLogs", "hasUsageLogsWith"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -39277,6 +39674,146 @@ func (ec *executionContext) unmarshalInputRequestWhereInput(ctx context.Context,
 				return it, err
 			}
 			it.StreamNEQ = data
+		case "metricsLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMs = data
+		case "metricsLatencyMsNEQ":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNEQ"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNEQ = data
+		case "metricsLatencyMsIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsIn = data
+		case "metricsLatencyMsNotIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNotIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNotIn = data
+		case "metricsLatencyMsGT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsGT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsGT = data
+		case "metricsLatencyMsGTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsGTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsGTE = data
+		case "metricsLatencyMsLT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsLT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsLT = data
+		case "metricsLatencyMsLTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsLTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsLTE = data
+		case "metricsLatencyMsIsNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsIsNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsIsNil = data
+		case "metricsLatencyMsNotNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMsNotNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMsNotNil = data
+		case "metricsFirstTokenLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMs = data
+		case "metricsFirstTokenLatencyMsNEQ":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNEQ"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNEQ = data
+		case "metricsFirstTokenLatencyMsIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsIn = data
+		case "metricsFirstTokenLatencyMsNotIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNotIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNotIn = data
+		case "metricsFirstTokenLatencyMsGT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsGT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsGT = data
+		case "metricsFirstTokenLatencyMsGTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsGTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsGTE = data
+		case "metricsFirstTokenLatencyMsLT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsLT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsLT = data
+		case "metricsFirstTokenLatencyMsLTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsLTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsLTE = data
+		case "metricsFirstTokenLatencyMsIsNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsIsNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsIsNil = data
+		case "metricsFirstTokenLatencyMsNotNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMsNotNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMsNotNil = data
 		case "hasAPIKey":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hasAPIKey"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -42117,7 +42654,7 @@ func (ec *executionContext) unmarshalInputUpdateRequestInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"responseBody", "appendResponseBody", "clearResponseBody", "responseChunks", "appendResponseChunks", "clearResponseChunks", "externalID", "clearExternalID", "status", "channelID", "clearChannel"}
+	fieldsInOrder := [...]string{"responseBody", "appendResponseBody", "clearResponseBody", "responseChunks", "appendResponseChunks", "clearResponseChunks", "externalID", "clearExternalID", "status", "metricsLatencyMs", "clearMetricsLatencyMs", "metricsFirstTokenLatencyMs", "clearMetricsFirstTokenLatencyMs", "channelID", "clearChannel"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -42187,6 +42724,34 @@ func (ec *executionContext) unmarshalInputUpdateRequestInput(ctx context.Context
 				return it, err
 			}
 			it.Status = data
+		case "metricsLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsLatencyMs = data
+		case "clearMetricsLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearMetricsLatencyMs"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearMetricsLatencyMs = data
+		case "metricsFirstTokenLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFirstTokenLatencyMs"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MetricsFirstTokenLatencyMs = data
+		case "clearMetricsFirstTokenLatencyMs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearMetricsFirstTokenLatencyMs"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearMetricsFirstTokenLatencyMs = data
 		case "channelID":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("channelID"))
 			data, err := ec.unmarshalOID2ᚖgithubᚗcomᚋloopljᚋaxonhubᚋinternalᚋobjectsᚐGUID(ctx, v)
@@ -42218,7 +42783,7 @@ func (ec *executionContext) unmarshalInputUpdateRetryPolicyInput(ctx context.Con
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"maxChannelRetries", "maxSingleChannelRetries", "retryDelayMs", "enabled"}
+	fieldsInOrder := [...]string{"maxChannelRetries", "maxSingleChannelRetries", "retryDelayMs", "loadBalancerStrategy", "enabled"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -42246,6 +42811,13 @@ func (ec *executionContext) unmarshalInputUpdateRetryPolicyInput(ctx context.Con
 				return it, err
 			}
 			it.RetryDelayMs = data
+		case "loadBalancerStrategy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("loadBalancerStrategy"))
+			data, err := ec.unmarshalOString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LoadBalancerStrategy = data
 		case "enabled":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
 			data, err := ec.unmarshalOBoolean2bool(ctx, v)
@@ -42497,7 +43069,7 @@ func (ec *executionContext) unmarshalInputUpdateUsageLogInput(ctx context.Contex
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"promptTokens", "completionTokens", "totalTokens", "promptAudioTokens", "clearPromptAudioTokens", "promptCachedTokens", "clearPromptCachedTokens", "completionAudioTokens", "clearCompletionAudioTokens", "completionReasoningTokens", "clearCompletionReasoningTokens", "completionAcceptedPredictionTokens", "clearCompletionAcceptedPredictionTokens", "completionRejectedPredictionTokens", "clearCompletionRejectedPredictionTokens", "channelID", "clearChannel"}
+	fieldsInOrder := [...]string{"promptTokens", "completionTokens", "totalTokens", "promptAudioTokens", "clearPromptAudioTokens", "promptCachedTokens", "clearPromptCachedTokens", "promptWriteCachedTokens", "clearPromptWriteCachedTokens", "completionAudioTokens", "clearCompletionAudioTokens", "completionReasoningTokens", "clearCompletionReasoningTokens", "completionAcceptedPredictionTokens", "clearCompletionAcceptedPredictionTokens", "completionRejectedPredictionTokens", "clearCompletionRejectedPredictionTokens", "channelID", "clearChannel"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -42553,6 +43125,20 @@ func (ec *executionContext) unmarshalInputUpdateUsageLogInput(ctx context.Contex
 				return it, err
 			}
 			it.ClearPromptCachedTokens = data
+		case "promptWriteCachedTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokens"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokens = data
+		case "clearPromptWriteCachedTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearPromptWriteCachedTokens"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearPromptWriteCachedTokens = data
 		case "completionAudioTokens":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("completionAudioTokens"))
 			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
@@ -42840,7 +43426,7 @@ func (ec *executionContext) unmarshalInputUsageLogWhereInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "requestID", "requestIDNEQ", "requestIDIn", "requestIDNotIn", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "promptTokens", "promptTokensNEQ", "promptTokensIn", "promptTokensNotIn", "promptTokensGT", "promptTokensGTE", "promptTokensLT", "promptTokensLTE", "completionTokens", "completionTokensNEQ", "completionTokensIn", "completionTokensNotIn", "completionTokensGT", "completionTokensGTE", "completionTokensLT", "completionTokensLTE", "totalTokens", "totalTokensNEQ", "totalTokensIn", "totalTokensNotIn", "totalTokensGT", "totalTokensGTE", "totalTokensLT", "totalTokensLTE", "promptAudioTokens", "promptAudioTokensNEQ", "promptAudioTokensIn", "promptAudioTokensNotIn", "promptAudioTokensGT", "promptAudioTokensGTE", "promptAudioTokensLT", "promptAudioTokensLTE", "promptAudioTokensIsNil", "promptAudioTokensNotNil", "promptCachedTokens", "promptCachedTokensNEQ", "promptCachedTokensIn", "promptCachedTokensNotIn", "promptCachedTokensGT", "promptCachedTokensGTE", "promptCachedTokensLT", "promptCachedTokensLTE", "promptCachedTokensIsNil", "promptCachedTokensNotNil", "completionAudioTokens", "completionAudioTokensNEQ", "completionAudioTokensIn", "completionAudioTokensNotIn", "completionAudioTokensGT", "completionAudioTokensGTE", "completionAudioTokensLT", "completionAudioTokensLTE", "completionAudioTokensIsNil", "completionAudioTokensNotNil", "completionReasoningTokens", "completionReasoningTokensNEQ", "completionReasoningTokensIn", "completionReasoningTokensNotIn", "completionReasoningTokensGT", "completionReasoningTokensGTE", "completionReasoningTokensLT", "completionReasoningTokensLTE", "completionReasoningTokensIsNil", "completionReasoningTokensNotNil", "completionAcceptedPredictionTokens", "completionAcceptedPredictionTokensNEQ", "completionAcceptedPredictionTokensIn", "completionAcceptedPredictionTokensNotIn", "completionAcceptedPredictionTokensGT", "completionAcceptedPredictionTokensGTE", "completionAcceptedPredictionTokensLT", "completionAcceptedPredictionTokensLTE", "completionAcceptedPredictionTokensIsNil", "completionAcceptedPredictionTokensNotNil", "completionRejectedPredictionTokens", "completionRejectedPredictionTokensNEQ", "completionRejectedPredictionTokensIn", "completionRejectedPredictionTokensNotIn", "completionRejectedPredictionTokensGT", "completionRejectedPredictionTokensGTE", "completionRejectedPredictionTokensLT", "completionRejectedPredictionTokensLTE", "completionRejectedPredictionTokensIsNil", "completionRejectedPredictionTokensNotNil", "source", "sourceNEQ", "sourceIn", "sourceNotIn", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "hasRequest", "hasRequestWith", "hasProject", "hasProjectWith", "hasChannel", "hasChannelWith"}
+	fieldsInOrder := [...]string{"not", "and", "or", "id", "idNEQ", "idIn", "idNotIn", "idGT", "idGTE", "idLT", "idLTE", "createdAt", "createdAtNEQ", "createdAtIn", "createdAtNotIn", "createdAtGT", "createdAtGTE", "createdAtLT", "createdAtLTE", "updatedAt", "updatedAtNEQ", "updatedAtIn", "updatedAtNotIn", "updatedAtGT", "updatedAtGTE", "updatedAtLT", "updatedAtLTE", "requestID", "requestIDNEQ", "requestIDIn", "requestIDNotIn", "projectID", "projectIDNEQ", "projectIDIn", "projectIDNotIn", "channelID", "channelIDNEQ", "channelIDIn", "channelIDNotIn", "channelIDIsNil", "channelIDNotNil", "modelID", "modelIDNEQ", "modelIDIn", "modelIDNotIn", "modelIDGT", "modelIDGTE", "modelIDLT", "modelIDLTE", "modelIDContains", "modelIDHasPrefix", "modelIDHasSuffix", "modelIDEqualFold", "modelIDContainsFold", "promptTokens", "promptTokensNEQ", "promptTokensIn", "promptTokensNotIn", "promptTokensGT", "promptTokensGTE", "promptTokensLT", "promptTokensLTE", "completionTokens", "completionTokensNEQ", "completionTokensIn", "completionTokensNotIn", "completionTokensGT", "completionTokensGTE", "completionTokensLT", "completionTokensLTE", "totalTokens", "totalTokensNEQ", "totalTokensIn", "totalTokensNotIn", "totalTokensGT", "totalTokensGTE", "totalTokensLT", "totalTokensLTE", "promptAudioTokens", "promptAudioTokensNEQ", "promptAudioTokensIn", "promptAudioTokensNotIn", "promptAudioTokensGT", "promptAudioTokensGTE", "promptAudioTokensLT", "promptAudioTokensLTE", "promptAudioTokensIsNil", "promptAudioTokensNotNil", "promptCachedTokens", "promptCachedTokensNEQ", "promptCachedTokensIn", "promptCachedTokensNotIn", "promptCachedTokensGT", "promptCachedTokensGTE", "promptCachedTokensLT", "promptCachedTokensLTE", "promptCachedTokensIsNil", "promptCachedTokensNotNil", "promptWriteCachedTokens", "promptWriteCachedTokensNEQ", "promptWriteCachedTokensIn", "promptWriteCachedTokensNotIn", "promptWriteCachedTokensGT", "promptWriteCachedTokensGTE", "promptWriteCachedTokensLT", "promptWriteCachedTokensLTE", "promptWriteCachedTokensIsNil", "promptWriteCachedTokensNotNil", "completionAudioTokens", "completionAudioTokensNEQ", "completionAudioTokensIn", "completionAudioTokensNotIn", "completionAudioTokensGT", "completionAudioTokensGTE", "completionAudioTokensLT", "completionAudioTokensLTE", "completionAudioTokensIsNil", "completionAudioTokensNotNil", "completionReasoningTokens", "completionReasoningTokensNEQ", "completionReasoningTokensIn", "completionReasoningTokensNotIn", "completionReasoningTokensGT", "completionReasoningTokensGTE", "completionReasoningTokensLT", "completionReasoningTokensLTE", "completionReasoningTokensIsNil", "completionReasoningTokensNotNil", "completionAcceptedPredictionTokens", "completionAcceptedPredictionTokensNEQ", "completionAcceptedPredictionTokensIn", "completionAcceptedPredictionTokensNotIn", "completionAcceptedPredictionTokensGT", "completionAcceptedPredictionTokensGTE", "completionAcceptedPredictionTokensLT", "completionAcceptedPredictionTokensLTE", "completionAcceptedPredictionTokensIsNil", "completionAcceptedPredictionTokensNotNil", "completionRejectedPredictionTokens", "completionRejectedPredictionTokensNEQ", "completionRejectedPredictionTokensIn", "completionRejectedPredictionTokensNotIn", "completionRejectedPredictionTokensGT", "completionRejectedPredictionTokensGTE", "completionRejectedPredictionTokensLT", "completionRejectedPredictionTokensLTE", "completionRejectedPredictionTokensIsNil", "completionRejectedPredictionTokensNotNil", "source", "sourceNEQ", "sourceIn", "sourceNotIn", "format", "formatNEQ", "formatIn", "formatNotIn", "formatGT", "formatGTE", "formatLT", "formatLTE", "formatContains", "formatHasPrefix", "formatHasSuffix", "formatEqualFold", "formatContainsFold", "hasRequest", "hasRequestWith", "hasProject", "hasProjectWith", "hasChannel", "hasChannelWith"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -43613,6 +44199,76 @@ func (ec *executionContext) unmarshalInputUsageLogWhereInput(ctx context.Context
 				return it, err
 			}
 			it.PromptCachedTokensNotNil = data
+		case "promptWriteCachedTokens":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokens"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokens = data
+		case "promptWriteCachedTokensNEQ":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensNEQ"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensNEQ = data
+		case "promptWriteCachedTokensIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensIn = data
+		case "promptWriteCachedTokensNotIn":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensNotIn"))
+			data, err := ec.unmarshalOInt2ᚕint64ᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensNotIn = data
+		case "promptWriteCachedTokensGT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensGT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensGT = data
+		case "promptWriteCachedTokensGTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensGTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensGTE = data
+		case "promptWriteCachedTokensLT":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensLT"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensLT = data
+		case "promptWriteCachedTokensLTE":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensLTE"))
+			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensLTE = data
+		case "promptWriteCachedTokensIsNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensIsNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensIsNil = data
+		case "promptWriteCachedTokensNotNil":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptWriteCachedTokensNotNil"))
+			data, err := ec.unmarshalOBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptWriteCachedTokensNotNil = data
 		case "completionAudioTokens":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("completionAudioTokens"))
 			data, err := ec.unmarshalOInt2ᚖint64(ctx, v)
@@ -50787,6 +51443,10 @@ func (ec *executionContext) _Request(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "metricsLatencyMs":
+			out.Values[i] = ec._Request_metricsLatencyMs(ctx, field, obj)
+		case "metricsFirstTokenLatencyMs":
+			out.Values[i] = ec._Request_metricsFirstTokenLatencyMs(ctx, field, obj)
 		case "apiKey":
 			field := field
 
@@ -51422,6 +52082,10 @@ func (ec *executionContext) _RequestExecution(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "metricsLatencyMs":
+			out.Values[i] = ec._RequestExecution_metricsLatencyMs(ctx, field, obj)
+		case "metricsFirstTokenLatencyMs":
+			out.Values[i] = ec._RequestExecution_metricsFirstTokenLatencyMs(ctx, field, obj)
 		case "request":
 			field := field
 
@@ -51843,6 +52507,11 @@ func (ec *executionContext) _RetryPolicy(ctx context.Context, sel ast.SelectionS
 			}
 		case "retryDelayMs":
 			out.Values[i] = ec._RetryPolicy_retryDelayMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "loadBalancerStrategy":
+			out.Values[i] = ec._RetryPolicy_loadBalancerStrategy(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -54407,6 +55076,8 @@ func (ec *executionContext) _UsageLog(ctx context.Context, sel ast.SelectionSet,
 			out.Values[i] = ec._UsageLog_promptAudioTokens(ctx, field, obj)
 		case "promptCachedTokens":
 			out.Values[i] = ec._UsageLog_promptCachedTokens(ctx, field, obj)
+		case "promptWriteCachedTokens":
+			out.Values[i] = ec._UsageLog_promptWriteCachedTokens(ctx, field, obj)
 		case "completionAudioTokens":
 			out.Values[i] = ec._UsageLog_completionAudioTokens(ctx, field, obj)
 		case "completionReasoningTokens":

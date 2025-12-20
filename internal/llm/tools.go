@@ -3,15 +3,20 @@ package llm
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // Tool represents a function tool.
 type Tool struct {
 	// Type is the type of the tool.
-	// Any of "function", "image_generation".
+	// Any of "function", "image_generation", or "google" (for Google-specific tools).
 	Type            string           `json:"type"`
-	Function        Function         `json:"function"`
+	Function        Function         `json:"function,omitempty"`
 	ImageGeneration *ImageGeneration `json:"image_generation,omitempty"`
+
+	// Google contains Google/Gemini-specific grounding tools.
+	// This namespace isolates Google's tools from other providers.
+	Google *GoogleTools `json:"google,omitempty"`
 
 	// CacheControl is used for provider-specific cache control (e.g., Anthropic).
 	// This field is not serialized in JSON.
@@ -25,6 +30,8 @@ func (t Tool) MarshalJSON() ([]byte, error) {
 	m := toolJSONMarshaller(t)
 	// ImageGeneration is not a valid field for chat completion, so we should remove it from the request.
 	m.ImageGeneration = nil
+	// Google tools are provider-specific and handled by transformers.
+	m.Google = nil
 
 	return json.Marshal(m)
 }
@@ -143,4 +150,114 @@ type ImageGeneration struct {
 	// Whether to add a watermark to the generated image. Default: false.
 	// It only works for the models support watermark, it will be ignored otherwise.
 	Watermark bool `json:"watermark,omitempty"`
+}
+
+// GoogleTools contains Google/Gemini-specific grounding tools.
+// This namespace isolates Google's tools from other providers,
+// allowing for provider-specific implementations without naming conflicts.
+type GoogleTools struct {
+	// Search enables Google Search grounding for real-time web searches.
+	Search *GoogleSearch `json:"search,omitempty"`
+	// CodeExecution enables code execution as part of generation.
+	CodeExecution *GoogleCodeExecution `json:"code_execution,omitempty"`
+	// UrlContext enables URL context grounding for Gemini 2.0+.
+	UrlContext *GoogleUrlContext `json:"url_context,omitempty"`
+}
+
+// GoogleSearch represents Google Search grounding tool for Gemini.
+// This enables the model to perform real-time web searches.
+type GoogleSearch struct{}
+
+// GoogleCodeExecution represents code execution tool for Gemini.
+// This enables the model to execute code as part of generation.
+type GoogleCodeExecution struct{}
+
+// GoogleUrlContext represents URL context grounding tool for Gemini 2.0+.
+// This allows the model to fetch and process content from specified URLs.
+type GoogleUrlContext struct{}
+
+// ContainsGoogleNativeTools checks if the tools slice contains any Google native tools.
+// Google native tools include GoogleSearch, GoogleCodeExecution, and GoogleUrlContext.
+// These tools are only supported by native Gemini API format (gemini/gemini_vertex),
+// not by OpenAI-compatible endpoints (gemini_openai).
+func ContainsGoogleNativeTools(tools []Tool) bool {
+	for _, tool := range tools {
+		if IsGoogleNativeTool(tool) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsGoogleNativeTool checks if a single tool is a Google native tool.
+// Google native tools follow the naming convention "google_*".
+func IsGoogleNativeTool(tool Tool) bool {
+	return strings.HasPrefix(tool.Type, "google_")
+}
+
+// FilterGoogleNativeTools removes Google native tools from the tools slice.
+// This is useful as a fallback when routing to channels that don't support native tools.
+func FilterGoogleNativeTools(tools []Tool) []Tool {
+	if len(tools) == 0 {
+		return tools
+	}
+
+	filtered := make([]Tool, 0, len(tools))
+
+	for _, tool := range tools {
+		if !IsGoogleNativeTool(tool) {
+			filtered = append(filtered, tool)
+		}
+	}
+
+	return filtered
+}
+
+// ContainsAnthropicNativeTools checks if the tools slice contains any Anthropic native tools.
+// Currently, this checks for the web_search function which maps to Anthropic's native
+// web_search_20250305 tool type.
+func ContainsAnthropicNativeTools(tools []Tool) bool {
+	for _, tool := range tools {
+		if IsAnthropicNativeTool(tool) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsAnthropicNativeTool checks if a single tool is an Anthropic native tool.
+// A tool is considered Anthropic native if:
+// 1. It's a function tool with name "web_search" (OpenAI format input), OR
+// 2. It's already transformed to type "web_search_20250305" (Anthropic native format).
+func IsAnthropicNativeTool(tool Tool) bool {
+	// Match function tool with web_search name (OpenAI format input)
+	if tool.Type == ToolType && tool.Function.Name == AnthropicWebSearchFunctionName {
+		return true
+	}
+	// Match already-transformed Anthropic native tool type
+	if tool.Type == ToolTypeAnthropicWebSearch {
+		return true
+	}
+
+	return false
+}
+
+// FilterAnthropicNativeTools removes Anthropic native tools from the tools slice.
+// This is useful as a fallback when routing to channels that don't support native tools.
+func FilterAnthropicNativeTools(tools []Tool) []Tool {
+	if len(tools) == 0 {
+		return tools
+	}
+
+	filtered := make([]Tool, 0, len(tools))
+
+	for _, tool := range tools {
+		if !IsAnthropicNativeTool(tool) {
+			filtered = append(filtered, tool)
+		}
+	}
+
+	return filtered
 }

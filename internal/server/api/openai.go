@@ -10,7 +10,7 @@ import (
 	"github.com/looplj/axonhub/internal/llm/transformer/openai/responses"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
 	"github.com/looplj/axonhub/internal/server/biz"
-	"github.com/looplj/axonhub/internal/server/chat"
+	"github.com/looplj/axonhub/internal/server/orchestrator"
 )
 
 type OpenAIHandlersParams struct {
@@ -27,12 +27,13 @@ type OpenAIHandlers struct {
 	ChannelService             *biz.ChannelService
 	ChatCompletionHandlers     *ChatCompletionHandlers
 	ResponseCompletionHandlers *ChatCompletionHandlers
+	EmbeddingHandlers          *ChatCompletionHandlers
 }
 
 func NewOpenAIHandlers(params OpenAIHandlersParams) *OpenAIHandlers {
 	return &OpenAIHandlers{
 		ChatCompletionHandlers: &ChatCompletionHandlers{
-			ChatCompletionProcessor: chat.NewChatCompletionProcessor(
+			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
 				params.RequestService,
 				params.HttpClient,
@@ -42,11 +43,21 @@ func NewOpenAIHandlers(params OpenAIHandlersParams) *OpenAIHandlers {
 			),
 		},
 		ResponseCompletionHandlers: &ChatCompletionHandlers{
-			ChatCompletionProcessor: chat.NewChatCompletionProcessor(
+			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
 				params.RequestService,
 				params.HttpClient,
 				responses.NewInboundTransformer(),
+				params.SystemService,
+				params.UsageLogService,
+			),
+		},
+		EmbeddingHandlers: &ChatCompletionHandlers{
+			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
+				params.ChannelService,
+				params.RequestService,
+				params.HttpClient,
+				openai.NewEmbeddingInboundTransformer(),
 				params.SystemService,
 				params.UsageLogService,
 			),
@@ -61,6 +72,10 @@ func (handlers *OpenAIHandlers) ChatCompletion(c *gin.Context) {
 
 func (handlers *OpenAIHandlers) CreateResponse(c *gin.Context) {
 	handlers.ResponseCompletionHandlers.ChatCompletion(c)
+}
+
+func (handlers *OpenAIHandlers) CreateEmbedding(c *gin.Context) {
+	handlers.EmbeddingHandlers.ChatCompletion(c)
 }
 
 type OpenAIModel struct {
