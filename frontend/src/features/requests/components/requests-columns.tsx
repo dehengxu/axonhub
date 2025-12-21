@@ -3,11 +3,13 @@
 import { format } from 'date-fns'
 import { ColumnDef } from '@tanstack/react-table'
 import { zhCN, enUS } from 'date-fns/locale'
+import { FileText } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { extractNumberID } from '@/lib/utils'
 import { usePaginationSearch } from '@/hooks/use-pagination-search'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useRequestPermissions } from '../../../hooks/useRequestPermissions'
 import { Request } from '../data/schema'
 import { DataTableColumnHeader } from './data-table-column-header'
@@ -221,6 +223,25 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
         return <div className='font-mono text-xs'>{formatDuration(request.metricsFirstTokenLatencyMs)}</div>
       },
       enableSorting: false,
+    },
+    {
+      id: 'details',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.details')} />,
+      cell: ({ row }) => {
+        const handleViewDetails = () => {
+          navigateWithSearch({
+            to: '/project/requests/$requestId',
+            params: { requestId: row.original.id },
+          })
+        }
+
+        return (
+          <Button variant='outline' size='sm' onClick={handleViewDetails}>
+            <FileText className='mr-2 h-4 w-4' />
+            {t('requests.actions.viewDetails')}
+          </Button>
+        )
+      },
     },
     {
       accessorKey: 'createdAt',
