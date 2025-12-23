@@ -37,9 +37,9 @@ export function DailyRequestStats() {
       value: stat.count,
     })) || []
 
-  // Calculate dynamic YAxis max value (max daily count, rounded up to nearest integer)
+  // Calculate dynamic YAxis max value (max daily count, rounded up to nearest 500)
   const maxCount = Math.max(...chartData.map((d) => d.value), 1)
-  const yAxisMax = Math.ceil(maxCount)
+  const yAxisMax = Math.ceil(maxCount / 500) * 500
 
   return (
     <ResponsiveContainer width='100%' height={350}>
