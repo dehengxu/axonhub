@@ -37,6 +37,8 @@ const (
 	FieldCredentials = "credentials"
 	// FieldSupportedModels holds the string denoting the supported_models field in the database.
 	FieldSupportedModels = "supported_models"
+	// FieldAutoSyncSupportedModels holds the string denoting the auto_sync_supported_models field in the database.
+	FieldAutoSyncSupportedModels = "auto_sync_supported_models"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
 	// FieldDefaultTestModel holds the string denoting the default_test_model field in the database.
@@ -101,6 +103,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldCredentials,
 	FieldSupportedModels,
+	FieldAutoSyncSupportedModels,
 	FieldTags,
 	FieldDefaultTestModel,
 	FieldSettings,
@@ -138,6 +141,8 @@ var (
 	DefaultDeletedAt int
 	// DefaultCredentials holds the default value on creation for the "credentials" field.
 	DefaultCredentials *objects.ChannelCredentials
+	// DefaultAutoSyncSupportedModels holds the default value on creation for the "auto_sync_supported_models" field.
+	DefaultAutoSyncSupportedModels bool
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
 	// DefaultSettings holds the default value on creation for the "settings" field.
@@ -185,6 +190,7 @@ const (
 	TypeBurncloud         Type = "burncloud"
 	TypeModelscope        Type = "modelscope"
 	TypeBailian           Type = "bailian"
+	TypeJina              Type = "jina"
 )
 
 func (_type Type) String() string {
@@ -194,7 +200,7 @@ func (_type Type) String() string {
 // TypeValidator is a validator for the "type" field enum values. It is called by the builders before save.
 func TypeValidator(_type Type) error {
 	switch _type {
-	case TypeOpenai, TypeOpenaiResponses, TypeVercel, TypeAnthropic, TypeAnthropicAWS, TypeAnthropicGcp, TypeGeminiOpenai, TypeGemini, TypeGeminiVertex, TypeDeepseek, TypeDeepseekAnthropic, TypeDoubao, TypeDoubaoAnthropic, TypeMoonshot, TypeMoonshotAnthropic, TypeZhipu, TypeZai, TypeZhipuAnthropic, TypeZaiAnthropic, TypeAnthropicFake, TypeOpenaiFake, TypeOpenrouter, TypeXai, TypePpio, TypeSiliconflow, TypeVolcengine, TypeLongcat, TypeLongcatAnthropic, TypeMinimax, TypeMinimaxAnthropic, TypeAihubmix, TypeBurncloud, TypeModelscope, TypeBailian:
+	case TypeOpenai, TypeOpenaiResponses, TypeVercel, TypeAnthropic, TypeAnthropicAWS, TypeAnthropicGcp, TypeGeminiOpenai, TypeGemini, TypeGeminiVertex, TypeDeepseek, TypeDeepseekAnthropic, TypeDoubao, TypeDoubaoAnthropic, TypeMoonshot, TypeMoonshotAnthropic, TypeZhipu, TypeZai, TypeZhipuAnthropic, TypeZaiAnthropic, TypeAnthropicFake, TypeOpenaiFake, TypeOpenrouter, TypeXai, TypePpio, TypeSiliconflow, TypeVolcengine, TypeLongcat, TypeLongcatAnthropic, TypeMinimax, TypeMinimaxAnthropic, TypeAihubmix, TypeBurncloud, TypeModelscope, TypeBailian, TypeJina:
 		return nil
 	default:
 		return fmt.Errorf("channel: invalid enum value for type field: %q", _type)
@@ -269,6 +275,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByAutoSyncSupportedModels orders the results by the auto_sync_supported_models field.
+func ByAutoSyncSupportedModels(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoSyncSupportedModels, opts...).ToFunc()
 }
 
 // ByDefaultTestModel orders the results by the default_test_model field.

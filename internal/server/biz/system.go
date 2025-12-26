@@ -60,6 +60,10 @@ const (
 	// SystemKeyOnboarded is the key used to store the onboarding status and version.
 	// The value is JSON-encoded OnboardingInfo struct.
 	SystemKeyOnboarded = "system_onboarded"
+
+	// SystemKeyModelSettings is the key used to store model-related settings.
+	// The value is JSON-encoded ModelSettings struct.
+	SystemKeyModelSettings = "system_model_settings"
 )
 
 // StoragePolicy represents the storage policy configuration.
@@ -92,14 +96,36 @@ type RetryPolicy struct {
 	Enabled bool `json:"enabled"`
 }
 
-// OnboardingInfo represents the onboarding status and version information.
-type OnboardingInfo struct {
-	// Onboarded indicates whether the user has completed onboarding
+// ModelSettings represents model-related configuration settings.
+type ModelSettings struct {
+	// FallbackToChannelsOnModelNotFound controls whether to fall back to legacy channel
+	// selection when the requested model is not found in AxonHub Model associations.
+	// When true, if a model has no associations or doesn't exist, the system will
+	// attempt to find enabled channels that support the requested model directly.
+	// When false, such requests will return an error instead of falling back.
+	FallbackToChannelsOnModelNotFound bool `json:"fallback_to_channels_on_model_not_found"`
+
+	// QueryAllChannelModels controls whether models API returns all models from channels
+	// or only configured models (models with explicit Model entity configuration).
+	// When true, the models API will return all models supported by enabled channels.
+	// When false, only models that have explicit Model entity configuration will be returned.
+	QueryAllChannelModels bool `json:"query_all_channel_models"`
+}
+
+// OnboardingRecord represents the onboarding status and version information.
+type OnboardingRecord struct {
+	// Onboarded indicates whether the user has completed onboarding for the system.
 	Onboarded bool `json:"onboarded"`
 	// Version is the system version when onboarding was completed
 	Version string `json:"version"`
 	// CompletedAt is the timestamp when onboarding was completed
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+
+	// SystemModelSetting tracks the onboarding status for system model configuration
+	SystemModelSetting *struct {
+		Onboarded   bool       `json:"onboarded"`
+		CompletedAt *time.Time `json:"completed_at,omitempty"`
+	} `json:"system_model_setting"`
 }
 
 type SystemServiceParams struct {
@@ -412,6 +438,11 @@ var defaultRetryPolicy = RetryPolicy{
 	Enabled:                 true,
 }
 
+var defaultModelSettings = ModelSettings{
+	FallbackToChannelsOnModelNotFound: true,
+	QueryAllChannelModels:             true,
+}
+
 // StoragePolicy retrieves the storage policy configuration.
 func (s *SystemService) StoragePolicy(ctx context.Context) (*StoragePolicy, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
@@ -508,6 +539,55 @@ func (s *SystemService) SetRetryPolicy(ctx context.Context, policy *RetryPolicy)
 	return s.setSystemValue(ctx, SystemKeyRetryPolicy, string(jsonBytes))
 }
 
+// ModelSettings retrieves the model settings configuration.
+func (s *SystemService) ModelSettings(ctx context.Context) (*ModelSettings, error) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	value, err := s.getSystemValue(ctx, SystemKeyModelSettings)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultModelSettings), nil
+		}
+
+		return nil, fmt.Errorf("failed to get model settings: %w", err)
+	}
+
+	var settings ModelSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal model settings: %w", err)
+	}
+
+	return &settings, nil
+}
+
+// ModelSettingsOrDefault retrieves the model settings or returns the default if not available.
+func (s *SystemService) ModelSettingsOrDefault(ctx context.Context) *ModelSettings {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	settings, err := s.ModelSettings(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultModelSettings)
+		}
+
+		log.Warn(ctx, "failed to get model settings", log.Cause(err))
+
+		return lo.ToPtr(defaultModelSettings)
+	}
+
+	return settings
+}
+
+// SetModelSettings sets the model settings configuration.
+func (s *SystemService) SetModelSettings(ctx context.Context, settings ModelSettings) error {
+	jsonBytes, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal model settings: %w", err)
+	}
+
+	return s.setSystemValue(ctx, SystemKeyModelSettings, string(jsonBytes))
+}
+
 // DefaultDataStorageID retrieves the default data storage ID from system settings.
 // Returns 0 if not set.
 func (s *SystemService) DefaultDataStorageID(ctx context.Context) (int, error) {
@@ -559,7 +639,7 @@ func (s *SystemService) SetVersion(ctx context.Context, version string) error {
 
 // OnboardingInfo retrieves the onboarding information from system settings.
 // Returns nil if not set.
-func (s *SystemService) OnboardingInfo(ctx context.Context) (*OnboardingInfo, error) {
+func (s *SystemService) OnboardingInfo(ctx context.Context) (*OnboardingRecord, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
 	value, err := s.getSystemValue(ctx, SystemKeyOnboarded)
@@ -571,7 +651,7 @@ func (s *SystemService) OnboardingInfo(ctx context.Context) (*OnboardingInfo, er
 		return nil, fmt.Errorf("failed to get onboarding info: %w", err)
 	}
 
-	var info OnboardingInfo
+	var info OnboardingRecord
 	if err := json.Unmarshal([]byte(value), &info); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal onboarding info: %w", err)
 	}
@@ -580,7 +660,7 @@ func (s *SystemService) OnboardingInfo(ctx context.Context) (*OnboardingInfo, er
 }
 
 // SetOnboardingInfo sets the onboarding information.
-func (s *SystemService) SetOnboardingInfo(ctx context.Context, info *OnboardingInfo) error {
+func (s *SystemService) SetOnboardingInfo(ctx context.Context, info *OnboardingRecord) error {
 	jsonBytes, err := json.Marshal(info)
 	if err != nil {
 		return fmt.Errorf("failed to marshal onboarding info: %w", err)
@@ -616,10 +696,45 @@ func (s *SystemService) CompleteOnboarding(ctx context.Context) error {
 		return fmt.Errorf("failed to get current version: %w", err)
 	}
 
-	info := &OnboardingInfo{
+	existingInfo, err := s.OnboardingInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get existing onboarding info: %w", err)
+	}
+
+	info := &OnboardingRecord{
 		Onboarded:   true,
 		Version:     currentVersion,
 		CompletedAt: lo.ToPtr(time.Now()),
+	}
+
+	if existingInfo != nil && existingInfo.SystemModelSetting != nil {
+		info.SystemModelSetting = existingInfo.SystemModelSetting
+	}
+
+	return s.SetOnboardingInfo(ctx, info)
+}
+
+// CompleteSystemModelSettingOnboarding marks system model setting onboarding as completed.
+func (s *SystemService) CompleteSystemModelSettingOnboarding(ctx context.Context) error {
+	existingInfo, err := s.OnboardingInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get existing onboarding info: %w", err)
+	}
+
+	info := &OnboardingRecord{}
+	if existingInfo != nil {
+		info.Onboarded = existingInfo.Onboarded
+		info.Version = existingInfo.Version
+		info.CompletedAt = existingInfo.CompletedAt
+	}
+
+	now := time.Now()
+	info.SystemModelSetting = &struct {
+		Onboarded   bool       `json:"onboarded"`
+		CompletedAt *time.Time `json:"completed_at,omitempty"`
+	}{
+		Onboarded:   true,
+		CompletedAt: &now,
 	}
 
 	return s.SetOnboardingInfo(ctx, info)

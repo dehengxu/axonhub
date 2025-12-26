@@ -65,12 +65,13 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian", "jina"}},
 		{Name: "base_url", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled", "archived"}, Default: "disabled"},
 		{Name: "credentials", Type: field.TypeJSON},
 		{Name: "supported_models", Type: field.TypeJSON},
+		{Name: "auto_sync_supported_models", Type: field.TypeBool, Default: false},
 		{Name: "tags", Type: field.TypeJSON, Nullable: true},
 		{Name: "default_test_model", Type: field.TypeString},
 		{Name: "settings", Type: field.TypeJSON, Nullable: true},
@@ -195,6 +196,36 @@ var (
 				Name:    "data_sources_by_name",
 				Unique:  true,
 				Columns: []*schema.Column{DataStoragesColumns[4]},
+			},
+		},
+	}
+	// ModelsColumns holds the columns for the "models" table.
+	ModelsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
+		{Name: "developer", Type: field.TypeString},
+		{Name: "model_id", Type: field.TypeString},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"chat", "embedding", "rerank"}, Default: "chat"},
+		{Name: "name", Type: field.TypeString},
+		{Name: "icon", Type: field.TypeString},
+		{Name: "group", Type: field.TypeString},
+		{Name: "model_card", Type: field.TypeJSON},
+		{Name: "settings", Type: field.TypeJSON},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled", "archived"}, Default: "disabled"},
+		{Name: "remark", Type: field.TypeString, Nullable: true},
+	}
+	// ModelsTable holds the schema information for the "models" table.
+	ModelsTable = &schema.Table{
+		Name:       "models",
+		Columns:    ModelsColumns,
+		PrimaryKey: []*schema.Column{ModelsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "Models_by_name",
+				Unique:  true,
+				Columns: []*schema.Column{ModelsColumns[7], ModelsColumns[3]},
 			},
 		},
 	}
@@ -711,6 +742,7 @@ var (
 		ChannelOverrideTemplatesTable,
 		ChannelPerformancesTable,
 		DataStoragesTable,
+		ModelsTable,
 		ProjectsTable,
 		RequestsTable,
 		RequestExecutionsTable,

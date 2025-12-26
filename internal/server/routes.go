@@ -24,7 +24,7 @@ type Handlers struct {
 	Playground *api.PlaygroundHandlers
 	System     *api.SystemHandlers
 	Auth       *api.AuthHandlers
-	Rerank     *api.RerankHandlers
+	Jina       *api.JinaHandlers
 }
 
 type Services struct {
@@ -90,23 +90,32 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		middleware.WithTrace(server.Config.Trace, services.TraceService),
 	)
 
-	openaiGroup := apiGroup.Group("/v1")
 	{
+		openaiGroup := apiGroup.Group("/v1")
 		openaiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
 		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
-		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
-		openaiGroup.POST("/rerank", handlers.Rerank.Rerank)
+		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
+
+		// Compatible with OpenAI API
+		openaiGroup.POST("/rerank", handlers.Jina.Rerank)
 	}
 
-	anthropicGroup := apiGroup.Group("/anthropic/v1")
 	{
+		jinaGroup := apiGroup.Group("/jina/v1")
+		jinaGroup.POST("/embeddings", handlers.Jina.CreateEmbedding)
+		jinaGroup.POST("/rerank", handlers.Jina.Rerank)
+	}
+
+	{
+		anthropicGroup := apiGroup.Group("/anthropic/v1")
 		anthropicGroup.POST("/messages", handlers.Anthropic.CreateMessage)
 		anthropicGroup.GET("/models", handlers.Anthropic.ListModels)
 	}
 
-	geminiGroup := apiGroup.Group("/gemini/:gemini-api-version")
 	{
+		geminiGroup := apiGroup.Group("/gemini/:gemini-api-version")
 		geminiGroup.POST("/models/*action", handlers.Gemini.GenerateContent)
+		geminiGroup.GET("/models", handlers.Gemini.ListModels)
 	}
 }

@@ -55,6 +55,16 @@ func (r *mutationResolver) UpdateRetryPolicy(ctx context.Context, input biz.Retr
 	return true, nil
 }
 
+// UpdateSystemModelSettings is the resolver for the updateSystemModelSettings field.
+func (r *mutationResolver) UpdateSystemModelSettings(ctx context.Context, input biz.ModelSettings) (bool, error) {
+	err := r.systemService.SetModelSettings(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update system model settings: %w", err)
+	}
+
+	return true, nil
+}
+
 // UpdateDefaultDataStorage is the resolver for the updateDefaultDataStorage field.
 func (r *mutationResolver) UpdateDefaultDataStorage(ctx context.Context, input UpdateDefaultDataStorageInput) (bool, error) {
 	err := r.systemService.SetDefaultDataStorageID(ctx, input.DataStorageID.ID)
@@ -70,6 +80,16 @@ func (r *mutationResolver) CompleteOnboarding(ctx context.Context, input Complet
 	err := r.systemService.CompleteOnboarding(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to complete onboarding: %w", err)
+	}
+
+	return true, nil
+}
+
+// CompleteSystemModelSettingOnboarding is the resolver for the completeSystemModelSettingOnboarding field.
+func (r *mutationResolver) CompleteSystemModelSettingOnboarding(ctx context.Context, input CompleteSystemModelSettingOnboardingInput) (bool, error) {
+	err := r.systemService.CompleteSystemModelSettingOnboarding(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to complete system model setting onboarding: %w", err)
 	}
 
 	return true, nil
@@ -117,6 +137,16 @@ func (r *queryResolver) RetryPolicy(ctx context.Context) (*biz.RetryPolicy, erro
 	return r.systemService.RetryPolicy(ctx)
 }
 
+// SystemModelSettings is the resolver for the systemModelSettings field.
+func (r *queryResolver) SystemModelSettings(ctx context.Context) (*biz.ModelSettings, error) {
+	settings, err := r.systemService.ModelSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system model settings: %w", err)
+	}
+
+	return settings, nil
+}
+
 // DefaultDataStorageID is the resolver for the defaultDataStorageID field.
 func (r *queryResolver) DefaultDataStorageID(ctx context.Context) (*objects.GUID, error) {
 	id, err := r.systemService.DefaultDataStorageID(ctx)
@@ -135,13 +165,30 @@ func (r *queryResolver) DefaultDataStorageID(ctx context.Context) (*objects.GUID
 }
 
 // OnboardingInfo is the resolver for the onboardingInfo field.
-func (r *queryResolver) OnboardingInfo(ctx context.Context) (*biz.OnboardingInfo, error) {
+func (r *queryResolver) OnboardingInfo(ctx context.Context) (*OnboardingInfo, error) {
 	info, err := r.systemService.OnboardingInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get onboarding info: %w", err)
 	}
 
-	return info, nil
+	if info == nil {
+		return nil, nil
+	}
+
+	result := &OnboardingInfo{
+		Onboarded:   info.Onboarded,
+		Version:     info.Version,
+		CompletedAt: info.CompletedAt,
+	}
+
+	if info.SystemModelSetting != nil {
+		result.SystemModelSetting = &SystemModelSettingOnboarding{
+			Onboarded:   info.SystemModelSetting.Onboarded,
+			CompletedAt: info.SystemModelSetting.CompletedAt,
+		}
+	}
+
+	return result, nil
 }
 
 // SystemVersion is the resolver for the systemVersion field.

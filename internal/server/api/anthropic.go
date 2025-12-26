@@ -17,6 +17,7 @@ type AnthropicHandlersParams struct {
 	fx.In
 
 	ChannelService  *biz.ChannelService
+	ModelService    *biz.ModelService
 	RequestService  *biz.RequestService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
@@ -25,6 +26,8 @@ type AnthropicHandlersParams struct {
 
 type AnthropicHandlers struct {
 	ChannelService         *biz.ChannelService
+	ModelService           *biz.ModelService
+	SystemService          *biz.SystemService
 	ChatCompletionHandlers *ChatCompletionHandlers
 }
 
@@ -33,6 +36,7 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 		ChatCompletionHandlers: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
+				params.ModelService,
 				params.RequestService,
 				params.HttpClient,
 				anthropic.NewInboundTransformer(),
@@ -41,6 +45,8 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 			),
 		},
 		ChannelService: params.ChannelService,
+		ModelService:   params.ModelService,
+		SystemService:  params.SystemService,
 	}
 }
 
@@ -54,8 +60,16 @@ type AnthropicModel struct {
 	CreatedAt   time.Time `json:"created"`
 }
 
+// ListModels returns all available models.
+// It uses QueryAllChannelModels setting from system config to determine model source.
 func (handlers *AnthropicHandlers) ListModels(c *gin.Context) {
-	models := handlers.ChannelService.ListEnabledModels(c.Request.Context())
+	ctx := c.Request.Context()
+
+	models := handlers.ModelService.ListEnabledModels(ctx)
+	if models == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list models"})
+		return
+	}
 
 	anthropicModels := make([]AnthropicModel, 0, len(models))
 	for _, model := range models {

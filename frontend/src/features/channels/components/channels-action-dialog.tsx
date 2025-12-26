@@ -20,8 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AutoCompleteSelect } from '@/components/auto-complete-select'
 import { SelectDropdown } from '@/components/select-dropdown'
-import { TagsInput } from '@/components/ui/tags-input'
-import { useCreateChannel, useUpdateChannel, useFetchModels, useBulkCreateChannels, useAllChannelNames } from '../data/channels'
+import { TagsAutocompleteInput } from '@/components/ui/tags-autocomplete-input'
+import { useCreateChannel, useUpdateChannel, useFetchModels, useBulkCreateChannels, useAllChannelNames, useAllChannelTags } from '../data/channels'
 import { getDefaultBaseURL, getDefaultModels, CHANNEL_CONFIGS, OPENAI_CHAT_COMPLETIONS } from '../data/config_channels'
 import {
   PROVIDER_CONFIGS,
@@ -73,6 +73,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const updateChannel = useUpdateChannel()
   const fetchModels = useFetchModels()
   const { data: allChannelNames = [], isSuccess: allChannelNamesLoaded } = useAllChannelNames({ enabled: open && isDuplicate })
+  const { data: allTags = [], isLoading: isLoadingTags } = useAllChannelTags()
   const [supportedModels, setSupportedModels] = useState<string[]>(() => initialRow?.supportedModels || [])
   const [newModel, setNewModel] = useState('')
   const [selectedDefaultModels, setSelectedDefaultModels] = useState<string[]>([])
@@ -200,6 +201,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             baseURL: currentRow.baseURL,
             name: currentRow.name,
             supportedModels: currentRow.supportedModels,
+            autoSyncSupportedModels: currentRow.autoSyncSupportedModels,
             defaultTestModel: currentRow.defaultTestModel,
             tags: currentRow.tags || [],
             credentials: {
@@ -222,6 +224,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               baseURL: duplicateFromRow.baseURL,
               name: duplicateFromRow.name,
               supportedModels: duplicateFromRow.supportedModels,
+              autoSyncSupportedModels: duplicateFromRow.autoSyncSupportedModels,
               defaultTestModel: duplicateFromRow.defaultTestModel,
               tags: duplicateFromRow.tags || [],
               settings: duplicateFromRow.settings ?? undefined,
@@ -768,6 +771,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
                   {/* Right Side - Form Fields */}
                   <div className='flex-1 space-y-6'>
+                    {selectedProvider !== 'jina' && (
                     <FormItem className='grid grid-cols-8 items-start gap-x-6'>
                       <FormLabel className='col-span-2 pt-2 text-right font-medium'>
                         {t('channels.dialogs.fields.apiFormat.label')}
@@ -809,6 +813,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         )}
                       </div>
                     </FormItem>
+                    )}
 
                     <FormField
                       control={form.control}
@@ -1072,9 +1077,16 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                           <Button type='button' onClick={addModel} size='sm'>
                             {t('channels.dialogs.buttons.add')}
                           </Button>
-                          <Button type='button' onClick={batchAddModels} size='sm' variant='outline'>
-                            {t('channels.dialogs.buttons.batchAdd')}
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button type='button' onClick={batchAddModels} size='sm' variant='outline'>
+                                {t('channels.dialogs.buttons.batchAdd')}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{t('channels.dialogs.buttons.batchAddTooltip')}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
 
                         {supportedModels.length === 0 && (
@@ -1105,6 +1117,31 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                               })}
                             </Button>
                           )}
+                        </div>
+
+                        {/* Auto sync checkbox */}
+                        <div className='pt-3'>
+                          <FormField
+                            control={form.control}
+                            name='autoSyncSupportedModels'
+                            render={({ field }) => (
+                              <FormItem className='flex items-center gap-2'>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  data-testid='auto-sync-supported-models-checkbox'
+                                />
+                                <div className='space-y-0.5'>
+                                  <FormLabel className='cursor-pointer text-sm font-normal'>
+                                    {t('channels.dialogs.fields.autoSyncSupportedModels.label')}
+                                  </FormLabel>
+                                  <p className='text-muted-foreground text-xs'>
+                                    {t('channels.dialogs.fields.autoSyncSupportedModels.description')}
+                                  </p>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
                         </div>
 
                         {/* Quick add models section */}
@@ -1187,11 +1224,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                             {t('channels.dialogs.fields.tags.label')}
                           </FormLabel>
                           <div className='col-span-6 space-y-1'>
-                            <TagsInput
+                            <TagsAutocompleteInput
                               value={field.value || []}
                               onChange={field.onChange}
                               placeholder={t('channels.dialogs.fields.tags.placeholder')}
-                              data-testid='channel-tags-input'
+                              suggestions={allTags}
+                              isLoading={isLoadingTags}
                             />
                             <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.tags.description')}</p>
                             <FormMessage />
@@ -1270,9 +1308,16 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         }`}
                       >
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleFetchedModelSelection(model)} />
-                        <span className='flex-1 cursor-pointer truncate' onClick={() => toggleFetchedModelSelection(model)}>
-                          {model}
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className='flex-1 cursor-pointer truncate' onClick={() => toggleFetchedModelSelection(model)}>
+                              {model}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className='max-w-xs break-all'>{model}</p>
+                          </TooltipContent>
+                        </Tooltip>
                         {isAdded && !isSelected && (
                           <Badge variant='secondary' className='text-xs'>
                             {t('channels.dialogs.fields.supportedModels.added')}

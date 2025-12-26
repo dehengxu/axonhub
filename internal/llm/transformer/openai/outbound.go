@@ -117,25 +117,30 @@ func (t *OutboundTransformer) APIFormat() llm.APIFormat {
 }
 
 // TransformRequest transforms ChatCompletionRequest to Request.
-func (t *OutboundTransformer) TransformRequest(
-	ctx context.Context,
-	chatReq *llm.Request,
-) (*httpclient.Request, error) {
-	if chatReq == nil {
+func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.Request) (*httpclient.Request, error) {
+	if llmReq == nil {
 		return nil, fmt.Errorf("chat completion request is nil")
 	}
 
-	// Validate required fields
-	if chatReq.Model == "" {
+	//nolint:exhaustive // Checked.
+	switch llmReq.RequestType {
+	case llm.RequestTypeEmbedding:
+		return t.transformEmbeddingRequest(ctx, llmReq)
+	case llm.RequestTypeRerank:
+		return nil, fmt.Errorf("%w: rerank is not supported", transformer.ErrInvalidRequest)
+	}
+
+	// Validate required fields for chat requests
+	if llmReq.Model == "" {
 		return nil, fmt.Errorf("model is required")
 	}
 
-	if len(chatReq.Messages) == 0 {
+	if len(llmReq.Messages) == 0 {
 		return nil, fmt.Errorf("%w: messages are required", transformer.ErrInvalidRequest)
 	}
 
 	// If this is an image generation request, use the Image Generation API.
-	if chatReq.IsImageGenerationRequest() {
+	if llmReq.IsImageGenerationRequest() {
 		// Platform routing: For now, only standard OpenAI Image Generation API is supported.
 		//nolint:exhaustive // Chcked.
 		switch t.config.Type {
@@ -145,12 +150,13 @@ func (t *OutboundTransformer) TransformRequest(
 			// ok
 		}
 
-		return t.buildImageGenerationAPIRequest(ctx, chatReq)
+		return t.buildImageGenerationAPIRequest(ctx, llmReq)
 	}
 
-	chatReq.ClearHelpFields()
+	// Convert to OpenAI Request format (this strips helper fields)
+	oaiReq := RequestFromLLM(llmReq)
 
-	body, err := json.Marshal(chatReq)
+	body, err := json.Marshal(oaiReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transform request: %w", err)
 	}
@@ -178,7 +184,7 @@ func (t *OutboundTransformer) TransformRequest(
 	}
 
 	// Build platform-specific URL
-	url, err := t.buildPlatformURL(chatReq)
+	url, err := t.buildPlatformURL(llmReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build platform URL: %w", err)
 	}
@@ -211,28 +217,30 @@ func (t *OutboundTransformer) TransformResponse(
 		return nil, fmt.Errorf("response body is empty")
 	}
 
-	// If this looks like Responses API, delegate to responses transformer
+	// Route to specialized transformers based on request metadata
 	if httpResp.Request != nil && httpResp.Request.TransformerMetadata != nil {
-		if fmt, ok := httpResp.Request.TransformerMetadata["outbound_format_type"].(string); ok && fmt == llm.APIFormatOpenAIResponse.String() {
-			return t.rt.TransformResponse(ctx, httpResp)
+		if fmtType, ok := httpResp.Request.TransformerMetadata["outbound_format_type"].(string); ok {
+			switch fmtType {
+			case llm.APIFormatOpenAIResponse.String():
+				return t.rt.TransformResponse(ctx, httpResp)
+			case llm.APIFormatOpenAIImageGeneration.String():
+				return transformImageGenerationResponse(httpResp)
+			case llm.APIFormatOpenAIEmbedding.String():
+				return t.transformEmbeddingResponse(ctx, httpResp)
+			}
 		}
 	}
 
-	// If this looks like Image Generation API, use image generation response transformer
-	if httpResp.Request != nil && httpResp.Request.TransformerMetadata != nil {
-		if fmt, ok := httpResp.Request.TransformerMetadata["outbound_format_type"].(string); ok && fmt == llm.APIFormatOpenAIImageGeneration.String() {
-			return transformImageGenerationResponse(httpResp)
-		}
-	}
+	// Parse into OpenAI Response type
+	var oaiResp Response
 
-	var chatResp Response
-
-	err := json.Unmarshal(httpResp.Body, &chatResp)
+	err := json.Unmarshal(httpResp.Body, &oaiResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal chat completion response: %w", err)
 	}
 
-	return chatResp.ToLLMResponse(), nil
+	// Convert to unified llm.Response
+	return oaiResp.ToLLMResponse(), nil
 }
 
 func (t *OutboundTransformer) TransformStream(ctx context.Context, stream streams.Stream[*httpclient.StreamEvent]) (streams.Stream[*llm.Response], error) {
@@ -380,14 +388,20 @@ func (t *OutboundTransformer) TransformError(ctx context.Context, rawErr *httpcl
 
 	// Try to parse as OpenAI error format first
 	var openaiError struct {
-		Error llm.ErrorDetail `json:"error"`
+		Error  llm.ErrorDetail `json:"error"`
+		Errors llm.ErrorDetail `json:"errors"`
 	}
 
 	err := json.Unmarshal(rawErr.Body, &openaiError)
-	if err == nil && openaiError.Error.Message != "" {
+	if err == nil && (openaiError.Error.Message != "" || openaiError.Errors.Message != "") {
+		errDetail := openaiError.Error
+		if errDetail.Message == "" {
+			errDetail = openaiError.Errors
+		}
+
 		return &llm.ResponseError{
 			StatusCode: rawErr.StatusCode,
-			Detail:     openaiError.Error,
+			Detail:     errDetail,
 		}
 	}
 
@@ -399,4 +413,169 @@ func (t *OutboundTransformer) TransformError(ctx context.Context, rawErr *httpcl
 			Type:    "api_error",
 		},
 	}
+}
+
+// transformEmbeddingRequest transforms unified llm.Request to HTTP embedding request.
+func (t *OutboundTransformer) transformEmbeddingRequest(
+	_ context.Context,
+	llmReq *llm.Request,
+) (*httpclient.Request, error) {
+	if llmReq == nil {
+		return nil, fmt.Errorf("llm request is nil")
+	}
+
+	if llmReq.Embedding == nil {
+		return nil, fmt.Errorf("embedding request is nil in llm.Request")
+	}
+
+	embReq := EmbeddingRequest{
+		Input:          llmReq.Embedding.Input,
+		Model:          llmReq.Model,
+		EncodingFormat: llmReq.Embedding.EncodingFormat,
+		Dimensions:     llmReq.Embedding.Dimensions,
+		User:           llmReq.Embedding.User,
+	}
+
+	// Re-marshal to JSON (ensure clean output)
+	body, err := json.Marshal(embReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal embedding request: %w", err)
+	}
+
+	// Prepare headers
+	headers := make(http.Header)
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept", "application/json")
+
+	// Build URL, reuse same logic as chat
+	url := t.buildEmbeddingURL()
+
+	// Build auth config
+	var auth *httpclient.AuthConfig
+
+	//nolint:exhaustive // Checked.
+	switch t.config.Type {
+	case PlatformAzure:
+		auth = &httpclient.AuthConfig{
+			Type:      "api_key",
+			APIKey:    t.config.APIKey,
+			HeaderKey: "Api-Key",
+		}
+	default:
+		auth = &httpclient.AuthConfig{
+			Type:   "bearer",
+			APIKey: t.config.APIKey,
+		}
+	}
+
+	httpReq := &httpclient.Request{
+		Method:  http.MethodPost,
+		URL:     url,
+		Headers: headers,
+		Body:    body,
+		Auth:    auth,
+	}
+
+	// Set metadata for response routing
+	if httpReq.TransformerMetadata == nil {
+		httpReq.TransformerMetadata = make(map[string]any)
+	}
+
+	httpReq.TransformerMetadata["outbound_format_type"] = llm.APIFormatOpenAIEmbedding.String()
+
+	return httpReq, nil
+}
+
+// buildEmbeddingURL constructs the embedding API URL.
+func (t *OutboundTransformer) buildEmbeddingURL() string {
+	//nolint:exhaustive // Checked.
+	switch t.config.Type {
+	case PlatformAzure:
+		if strings.HasSuffix(t.config.BaseURL, "/openai/v1") {
+			// Azure URL already includes /openai/v1
+			return fmt.Sprintf("%s/embeddings?api-version=%s",
+				t.config.BaseURL, t.config.APIVersion)
+		}
+
+		if strings.HasSuffix(t.config.BaseURL, "/openai") {
+			// Azure URL includes /openai but not /v1
+			return fmt.Sprintf("%s/v1/embeddings?api-version=%s",
+				t.config.BaseURL, t.config.APIVersion)
+		}
+		// Default case for other Azure URLs
+		return fmt.Sprintf("%s/openai/v1/embeddings?api-version=%s",
+			t.config.BaseURL, t.config.APIVersion)
+	default:
+		// Standard OpenAI API
+		if strings.HasSuffix(t.config.BaseURL, "/v1") {
+			return t.config.BaseURL + "/embeddings"
+		}
+
+		return t.config.BaseURL + "/v1/embeddings"
+	}
+}
+
+// transformEmbeddingResponse transforms HTTP embedding response to unified llm.Response.
+func (t *OutboundTransformer) transformEmbeddingResponse(
+	ctx context.Context,
+	httpResp *httpclient.Response,
+) (*llm.Response, error) {
+	if httpResp == nil {
+		return nil, fmt.Errorf("http response is nil")
+	}
+
+	// Check HTTP status codes, 4xx/5xx should return standard format error
+	// Note: httpclient usually already returns *httpclient.Error for 4xx/5xx,
+	// this is defensive code to ensure error format conforms to OpenAI spec
+	if httpResp.StatusCode >= 400 {
+		return nil, t.TransformError(ctx, &httpclient.Error{
+			StatusCode: httpResp.StatusCode,
+			Body:       httpResp.Body,
+		})
+	}
+
+	// Check for empty response body
+	if len(httpResp.Body) == 0 {
+		return nil, fmt.Errorf("response body is empty")
+	}
+
+	// Parse OpenAI embedding response
+	var embResp EmbeddingResponse
+	if err := json.Unmarshal(httpResp.Body, &embResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal embedding response: %w", err)
+	}
+
+	// Convert OpenAI EmbeddingData to llm.EmbeddingData
+	llmEmbeddingData := make([]llm.EmbeddingData, len(embResp.Data))
+	for i, data := range embResp.Data {
+		llmEmbeddingData[i] = llm.EmbeddingData{
+			Object:    data.Object,
+			Embedding: data.Embedding,
+			Index:     data.Index,
+		}
+	}
+
+	// Build unified embedding response
+	var usage *llm.EmbeddingUsage
+	if embResp.Usage.PromptTokens > 0 || embResp.Usage.TotalTokens > 0 {
+		usage = &llm.EmbeddingUsage{
+			PromptTokens: embResp.Usage.PromptTokens,
+			TotalTokens:  embResp.Usage.TotalTokens,
+		}
+	}
+
+	llmEmbeddingResp := &llm.EmbeddingResponse{
+		Object: embResp.Object,
+		Data:   llmEmbeddingData,
+		Usage:  usage,
+	}
+
+	llmResp := &llm.Response{
+		RequestType: llm.RequestTypeEmbedding,
+		APIFormat:   llm.APIFormatOpenAIEmbedding,
+		Embedding:   llmEmbeddingResp,
+		Model:       embResp.Model,
+	}
+
+	return llmResp, nil
 }

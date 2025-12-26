@@ -1,0 +1,373 @@
+package biz
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"entgo.io/ent/dialect/sql"
+	"github.com/samber/lo"
+	"go.uber.org/fx"
+
+	"github.com/looplj/axonhub/internal/ent"
+	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/model"
+	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/objects"
+)
+
+type ModelServiceParams struct {
+	fx.In
+
+	ChannelService *ChannelService
+	SystemService  *SystemService
+	Ent            *ent.Client
+}
+
+func NewModelService(params ModelServiceParams) *ModelService {
+	return &ModelService{
+		AbstractService: &AbstractService{
+			db: params.Ent,
+		},
+		channelService: params.ChannelService,
+		systemService:  params.SystemService,
+	}
+}
+
+type ModelService struct {
+	*AbstractService
+
+	channelService *ChannelService
+	systemService  *SystemService
+}
+
+// CreateModel creates a new model with the provided input.
+func (svc *ModelService) CreateModel(ctx context.Context, input ent.CreateModelInput) (*ent.Model, error) {
+	// Check if a model with the same developer and modelId already exists
+	existing, err := svc.entFromContext(ctx).Model.Query().
+		Where(
+			model.Developer(input.Developer),
+			model.ModelID(input.ModelID),
+		).
+		First(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to check model existence: %w", err)
+	}
+
+	if existing != nil {
+		return nil, fmt.Errorf("model with developer '%s' and modelId '%s' already exists", input.Developer, input.ModelID)
+	}
+
+	createBuilder := svc.entFromContext(ctx).Model.Create().
+		SetDeveloper(input.Developer).
+		SetModelID(input.ModelID).
+		SetIcon(input.Icon).
+		SetType(*input.Type).
+		SetName(input.Name).
+		SetGroup(input.Group).
+		SetModelCard(input.ModelCard).
+		SetSettings(input.Settings)
+
+	if input.Remark != nil {
+		createBuilder.SetRemark(*input.Remark)
+	}
+
+	model, err := createBuilder.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create model: %w", err)
+	}
+
+	return model, nil
+}
+
+// BulkCreateModels creates multiple models with the provided inputs.
+func (svc *ModelService) BulkCreateModels(ctx context.Context, inputs []*ent.CreateModelInput) ([]*ent.Model, error) {
+	// Check for duplicates in the input
+	inputMap := make(map[string]bool)
+
+	for _, input := range inputs {
+		key := fmt.Sprintf("%s:%s", input.Developer, input.ModelID)
+		if inputMap[key] {
+			return nil, fmt.Errorf("duplicate model in input: developer '%s' and modelId '%s'", input.Developer, input.ModelID)
+		}
+
+		inputMap[key] = true
+	}
+
+	// Check if any models already exist
+	existingModels, err := svc.entFromContext(ctx).Model.Query().
+		Where(func(s *sql.Selector) {
+			var predicates []*sql.Predicate
+			for _, input := range inputs {
+				predicates = append(predicates, sql.And(
+					sql.EQ(model.FieldDeveloper, input.Developer),
+					sql.EQ(model.FieldModelID, input.ModelID),
+				))
+			}
+
+			s.Where(sql.Or(predicates...))
+		}).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing models: %w", err)
+	}
+
+	if len(existingModels) > 0 {
+		existingKeys := lo.Map(existingModels, func(m *ent.Model, _ int) string {
+			return fmt.Sprintf("%s:%s", m.Developer, m.ModelID)
+		})
+
+		return nil, fmt.Errorf("models already exist: %v", existingKeys)
+	}
+
+	// Create all models in a transaction
+	bulk := make([]*ent.ModelCreate, len(inputs))
+	for i, input := range inputs {
+		createBuilder := svc.entFromContext(ctx).Model.Create().
+			SetDeveloper(input.Developer).
+			SetModelID(input.ModelID).
+			SetIcon(input.Icon).
+			SetType(*input.Type).
+			SetName(input.Name).
+			SetGroup(input.Group).
+			SetModelCard(input.ModelCard).
+			SetSettings(input.Settings)
+
+		if input.Remark != nil {
+			createBuilder.SetRemark(*input.Remark)
+		}
+
+		bulk[i] = createBuilder
+	}
+
+	models, err := svc.entFromContext(ctx).Model.CreateBulk(bulk...).Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bulk create models: %w", err)
+	}
+
+	return models, nil
+}
+
+// UpdateModel updates an existing model with the provided input.
+func (svc *ModelService) UpdateModel(ctx context.Context, id int, input *ent.UpdateModelInput) (*ent.Model, error) {
+	mut := svc.entFromContext(ctx).Model.UpdateOneID(id).
+		SetNillableName(input.Name).
+		SetNillableGroup(input.Group).
+		SetNillableStatus(input.Status).
+		SetNillableIcon(input.Icon)
+
+	if input.ModelCard != nil {
+		mut.SetModelCard(input.ModelCard)
+	}
+
+	if input.Settings != nil {
+		mut.SetSettings(input.Settings)
+	}
+
+	if input.Remark != nil {
+		mut.SetRemark(*input.Remark)
+	}
+
+	if input.ClearRemark {
+		mut.ClearRemark()
+	}
+
+	model, err := mut.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update model: %w", err)
+	}
+
+	return model, nil
+}
+
+// UpdateModelStatus updates the status of a model.
+func (svc *ModelService) UpdateModelStatus(ctx context.Context, id int, status model.Status) (*ent.Model, error) {
+	model, err := svc.entFromContext(ctx).Model.UpdateOneID(id).
+		SetStatus(status).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update model status: %w", err)
+	}
+
+	return model, nil
+}
+
+// DeleteModel deletes a model by ID.
+func (svc *ModelService) DeleteModel(ctx context.Context, id int) error {
+	if err := svc.entFromContext(ctx).Model.DeleteOneID(id).Exec(ctx); err != nil {
+		return fmt.Errorf("failed to delete model: %w", err)
+	}
+
+	return nil
+}
+
+// BulkArchiveModels archives multiple models by their IDs.
+func (svc *ModelService) BulkArchiveModels(ctx context.Context, ids []int) error {
+	_, err := svc.entFromContext(ctx).Model.Update().
+		Where(model.IDIn(ids...)).
+		SetStatus(model.StatusArchived).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to bulk archive models: %w", err)
+	}
+
+	return nil
+}
+
+// BulkDisableModels disables multiple models by their IDs.
+func (svc *ModelService) BulkDisableModels(ctx context.Context, ids []int) error {
+	_, err := svc.entFromContext(ctx).Model.Update().
+		Where(model.IDIn(ids...)).
+		SetStatus(model.StatusDisabled).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to bulk disable models: %w", err)
+	}
+
+	return nil
+}
+
+// BulkEnableModels enables multiple models by their IDs.
+func (svc *ModelService) BulkEnableModels(ctx context.Context, ids []int) error {
+	_, err := svc.entFromContext(ctx).Model.Update().
+		Where(model.IDIn(ids...)).
+		SetStatus(model.StatusEnabled).
+		Save(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to bulk enable models: %w", err)
+	}
+
+	return nil
+}
+
+// BulkDeleteModels deletes multiple models by their IDs.
+func (svc *ModelService) BulkDeleteModels(ctx context.Context, ids []int) error {
+	_, err := svc.entFromContext(ctx).Model.Delete().
+		Where(model.IDIn(ids...)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to bulk delete models: %w", err)
+	}
+
+	return nil
+}
+
+// QueryModelChannelConnections queries channels and their models based on model associations.
+// Results are ordered by the matching order of associations.
+func (svc *ModelService) QueryModelChannelConnections(ctx context.Context, associations []*objects.ModelAssociation) ([]*ModelChannelConnection, error) {
+	if len(associations) == 0 {
+		return []*ModelChannelConnection{}, nil
+	}
+
+	// Query all enabled/disabled channels
+	channels, err := svc.entFromContext(ctx).Channel.Query().
+		Where(channel.StatusIn(channel.StatusEnabled, channel.StatusDisabled)).
+		Order(channel.ByOrderingWeight(sql.OrderDesc())).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query channels: %w", err)
+	}
+
+	if len(channels) == 0 {
+		return []*ModelChannelConnection{}, nil
+	}
+
+	// Use the shared MatchAssociations function
+	return MatchAssociations(ctx, associations, lo.Map(channels, func(ch *ent.Channel, _ int) *Channel {
+		return &Channel{Channel: ch}
+	}))
+}
+
+// GetModelByModelID retrieves a model by its modelId and status.
+func (svc *ModelService) GetModelByModelID(ctx context.Context, modelID string, status model.Status) (*ent.Model, error) {
+	return svc.entFromContext(ctx).Model.Query().
+		Where(
+			model.ModelID(modelID),
+			model.StatusEQ(status),
+		).
+		First(ctx)
+}
+
+// ListConfiguredModels retrieves all models that have explicit Model entity configuration.
+// Returns models with their status.
+func (svc *ModelService) ListConfiguredModels(ctx context.Context, statusIn []model.Status) ([]*ModelIdentityWithStatus, error) {
+	query := svc.entFromContext(ctx).Model.Query()
+
+	// Apply status filter if provided
+	if len(statusIn) > 0 {
+		query = query.Where(model.StatusIn(statusIn...))
+	} else {
+		// Default to enabled models only
+		query = query.Where(model.StatusEQ(model.StatusEnabled))
+	}
+
+	models, err := query.All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query configured models: %w", err)
+	}
+
+	// Convert to ModelIdentityWithStatus
+	result := make([]*ModelIdentityWithStatus, 0, len(models))
+	for _, m := range models {
+		result = append(result, &ModelIdentityWithStatus{
+			ID:     m.ModelID,
+			Status: channel.Status(m.Status.String()),
+		})
+	}
+
+	return result, nil
+}
+
+// ListEnabledModels returns all unique models across all enabled channels,
+// considering model mappings, prefixes, and auto-trimmed models.
+// It uses GetModelEntries to reduce code duplication.
+// When QueryAllChannelModels in system settings is false, it returns configured models instead.
+func (svc *ModelService) ListEnabledModels(ctx context.Context) []objects.ModelFacade {
+	// Read system settings to determine whether to query all channels
+	settings := svc.systemService.ModelSettingsOrDefault(ctx)
+	queryAllChannels := settings.QueryAllChannelModels
+
+	if !queryAllChannels {
+		// Return configured models when queryAllChannels is false
+		configuredModels, err := svc.ListConfiguredModels(ctx, nil)
+		if err != nil {
+			log.Warn(ctx, "failed to list configured models", log.Cause(err))
+			return nil
+		}
+
+		result := make([]objects.ModelFacade, 0, len(configuredModels))
+		for _, m := range configuredModels {
+			result = append(result, objects.ModelFacade{
+				ID:          m.ID,
+				DisplayName: m.ID,
+				CreatedAt:   time.Time{},
+				Created:     0,
+				OwnedBy:     "configured",
+			})
+		}
+
+		return result
+	}
+
+	modelSet := make(map[string]objects.ModelFacade)
+
+	for _, ch := range svc.channelService.GetEnabledChannels() {
+		entries := ch.GetModelEntries()
+
+		for requestModel := range entries {
+			if _, ok := modelSet[requestModel]; ok {
+				continue
+			}
+
+			modelSet[requestModel] = objects.ModelFacade{
+				ID:          requestModel,
+				DisplayName: requestModel,
+				CreatedAt:   ch.CreatedAt,
+				Created:     ch.CreatedAt.Unix(),
+				OwnedBy:     ch.Channel.Type.String(),
+			}
+		}
+	}
+
+	return lo.Values(modelSet)
+}

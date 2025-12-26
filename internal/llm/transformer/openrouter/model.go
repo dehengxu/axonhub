@@ -3,9 +3,6 @@ package openrouter
 import (
 	"strings"
 
-	"github.com/samber/lo"
-
-	"github.com/looplj/axonhub/internal/llm"
 	"github.com/looplj/axonhub/internal/llm/transformer/openai"
 )
 
@@ -17,37 +14,39 @@ type Response struct {
 
 func (r *Response) ToOpenAIResponse() *openai.Response {
 	for _, choice := range r.Choices {
-		r.Response.Choices = append(r.Response.Choices, choice.ToLLMChoice())
+		r.Response.Choices = append(r.Response.Choices, choice.ToOpenAIChoice())
 	}
 
 	return &r.Response
 }
 
 type Choice struct {
-	llm.Choice
+	openai.Choice
 
 	Message *Message `json:"message,omitempty"`
 	Delta   *Message `json:"delta,omitempty"`
 }
 
-type Image llm.MessageContentPart
+type Image openai.MessageContentPart
 
-func (c *Choice) ToLLMChoice() llm.Choice {
+func (c *Choice) ToOpenAIChoice() openai.Choice {
 	if c.Message != nil {
-		c.Choice.Message = lo.ToPtr(c.Message.ToLLMMessage())
+		msg := c.Message.ToOpenAIMessage()
+		c.Choice.Message = &msg
 	}
 
 	if c.Delta != nil {
-		c.Choice.Delta = lo.ToPtr(c.Delta.ToLLMMessage())
+		delta := c.Delta.ToOpenAIMessage()
+		c.Choice.Delta = &delta
 	}
 
 	return c.Choice
 }
 
 // Message is the message content from the OpenRouter response.
-// The difference from llm.Message is that it has Reasoning field.
+// The difference from openai.Message is that it has Reasoning field.
 type Message struct {
-	llm.Message
+	openai.Message
 
 	Reasoning        *string           `json:"reasoning,omitempty"`
 	ReasoningDetails []ReasoningDetail `json:"reasoning_details,omitempty"`
@@ -61,7 +60,7 @@ type ReasoningDetail struct {
 	Index  int    `json:"index"`
 }
 
-func (m *Message) ToLLMMessage() llm.Message {
+func (m *Message) ToOpenAIMessage() openai.Message {
 	// Handle reasoning content - prefer reasoning_details if available, fallback to reasoning
 	if len(m.ReasoningDetails) > 0 {
 		var reasoningText strings.Builder
@@ -76,9 +75,9 @@ func (m *Message) ToLLMMessage() llm.Message {
 	}
 
 	if len(m.Images) > 0 {
-		var parts []llm.MessageContentPart
+		var parts []openai.MessageContentPart
 		if m.Content.Content != nil && *m.Content.Content != "" {
-			parts = append(parts, llm.MessageContentPart{
+			parts = append(parts, openai.MessageContentPart{
 				Type: "text",
 				Text: m.Content.Content,
 			})
@@ -87,10 +86,19 @@ func (m *Message) ToLLMMessage() llm.Message {
 		}
 
 		for _, image := range m.Images {
-			parts = append(parts, llm.MessageContentPart(image))
+			parts = append(parts, openai.MessageContentPart(image))
 		}
 
-		m.Content = llm.MessageContent{MultipleContent: parts}
+		m.Content = openai.MessageContent{MultipleContent: parts}
+	} else {
+		// Preserve nil for empty slices to match test expectations
+		if len(m.Content.MultipleContent) == 0 {
+			m.Content.MultipleContent = nil
+		}
+
+		if len(m.ToolCalls) == 0 {
+			m.ToolCalls = nil
+		}
 	}
 
 	return m.Message

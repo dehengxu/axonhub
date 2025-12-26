@@ -95,17 +95,29 @@ func (t *OutboundTransformer) APIFormat() llm.APIFormat {
 }
 
 // TransformRequest transforms the unified request to Gemini HTTP request.
-func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm.Request) (*httpclient.Request, error) {
-	if chatReq.Model == "" {
-		return nil, fmt.Errorf("model is required,%v", chatReq.Model)
+func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.Request) (*httpclient.Request, error) {
+	if llmReq == nil {
+		return nil, fmt.Errorf("request is nil")
 	}
 
-	if len(chatReq.Messages) == 0 {
-		return nil, fmt.Errorf("messages are required,%v", chatReq.Messages)
+	//nolint:exhaustive // Checked.
+	switch llmReq.RequestType {
+	case llm.RequestTypeChat, "":
+		// continue
+	default:
+		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
+	}
+
+	if llmReq.Model == "" {
+		return nil, fmt.Errorf("model is required,%v", llmReq.Model)
+	}
+
+	if len(llmReq.Messages) == 0 {
+		return nil, fmt.Errorf("%w: messages are required,%v", transformer.ErrInvalidRequest, llmReq.Messages)
 	}
 
 	// Convert to Gemini request format
-	geminiReq := convertLLMToGeminiRequest(chatReq)
+	geminiReq := convertLLMToGeminiRequest(llmReq)
 
 	body, err := json.Marshal(geminiReq)
 	if err != nil {
@@ -127,8 +139,24 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm
 		}
 	}
 
+	//nolint:exhaustive // Checked.
+	switch llmReq.RequestType {
+	case llm.RequestTypeChat, "":
+		// continue
+	default:
+		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
+	}
+
+	if llmReq.Model == "" {
+		return nil, fmt.Errorf("model is required,%v", llmReq.Model)
+	}
+
+	if len(llmReq.Messages) == 0 {
+		return nil, fmt.Errorf("%w: messages are required,%v", transformer.ErrInvalidRequest, llmReq.Messages)
+	}
+
 	// Build URL
-	url := t.buildFullRequestURL(chatReq)
+	url := t.buildFullRequestURL(llmReq)
 
 	return &httpclient.Request{
 		Method:  http.MethodPost,
@@ -140,10 +168,10 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, chatReq *llm
 }
 
 // buildFullRequestURL constructs the appropriate URL for the Gemini API.
-func (t *OutboundTransformer) buildFullRequestURL(chatReq *llm.Request) string {
+func (t *OutboundTransformer) buildFullRequestURL(llmReq *llm.Request) string {
 	// Determine endpoint based on streaming
 	var action string
-	if chatReq.Stream != nil && *chatReq.Stream {
+	if llmReq.Stream != nil && *llmReq.Stream {
 		// Use SSE for streaming.
 		action = "streamGenerateContent?alt=sse"
 	} else {
@@ -154,8 +182,8 @@ func (t *OutboundTransformer) buildFullRequestURL(chatReq *llm.Request) string {
 	if version == "" {
 		version = DefaultAPIVersion
 
-		if chatReq.RawRequest != nil && chatReq.RawRequest.RawRequest != nil {
-			requestVersion := chatReq.RawRequest.RawRequest.PathValue("gemini-api-version")
+		if llmReq.RawRequest != nil && llmReq.RawRequest.RawRequest != nil {
+			requestVersion := llmReq.RawRequest.RawRequest.PathValue("gemini-api-version")
 			if requestVersion != "" {
 				version = requestVersion
 			}
@@ -165,11 +193,11 @@ func (t *OutboundTransformer) buildFullRequestURL(chatReq *llm.Request) string {
 	// For Vertex AI platform, use different URL format:
 	// https://${API_ENDPOINT}/v1/publishers/google/models/${MODEL_ID}:${ACTION}?key=${API_KEY}
 	if t.config.PlatformType == PlatformVertex {
-		return fmt.Sprintf("%s/v1/publishers/google/models/%s:%s", t.config.BaseURL, chatReq.Model, action)
+		return fmt.Sprintf("%s/v1/publishers/google/models/%s:%s", t.config.BaseURL, llmReq.Model, action)
 	}
 
 	// Format: /base_url/{version}/models/{model}:generateContent
-	return fmt.Sprintf("%s/%s/models/%s:%s", t.config.BaseURL, version, chatReq.Model, action)
+	return fmt.Sprintf("%s/%s/models/%s:%s", t.config.BaseURL, version, llmReq.Model, action)
 }
 
 // TransformResponse transforms the Gemini HTTP response to unified response format.

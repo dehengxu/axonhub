@@ -32,7 +32,6 @@ type OutboundTransformer struct {
 }
 
 // NewOutboundTransformer creates a new Zai OutboundTransformer with legacy parameters.
-// Deprecated: Use NewOutboundTransformerWithConfig instead.
 func NewOutboundTransformer(baseURL, apiKey string) (transformer.Outbound, error) {
 	config := &Config{
 		BaseURL: baseURL,
@@ -59,7 +58,7 @@ func NewOutboundTransformerWithConfig(config *Config) (transformer.Outbound, err
 }
 
 type Request struct {
-	llm.Request
+	openai.Request
 
 	UserID    string    `json:"user_id,omitempty"`
 	RequestID string    `json:"request_id,omitempty"`
@@ -75,38 +74,47 @@ type Thinking struct {
 // TransformRequest transforms ChatCompletionRequest to Request.
 func (t *OutboundTransformer) TransformRequest(
 	ctx context.Context,
-	chatReq *llm.Request,
+	llmReq *llm.Request,
 ) (*httpclient.Request, error) {
-	if chatReq == nil {
+	if llmReq == nil {
 		return nil, fmt.Errorf("chat completion request is nil")
 	}
 
+	//nolint:exhaustive // Checked.
+	switch llmReq.RequestType {
+	case llm.RequestTypeChat, "":
+		// continue
+	default:
+		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
+	}
+
 	// Validate required fields
-	if chatReq.Model == "" {
+	if llmReq.Model == "" {
 		return nil, fmt.Errorf("model is required")
 	}
 
-	if len(chatReq.Messages) == 0 {
+	if len(llmReq.Messages) == 0 {
 		return nil, fmt.Errorf("%w: messages are required", transformer.ErrInvalidRequest)
 	}
 
 	// If this is an image generation request, use the Image Generation API.
-	if chatReq.IsImageGenerationRequest() {
-		return t.buildImageGenerationAPIRequest(chatReq)
+	if llmReq.IsImageGenerationRequest() {
+		return t.buildImageGenerationAPIRequest(llmReq)
 	}
 
-	chatReq.ClearHelpFields()
+	// Convert llm.Request to openai.Request first
+	oaiReq := openai.RequestFromLLM(llmReq)
 
-	// Create Zai-specific request by removing Metadata and adding request_id/user_id
+	// Create Zai-specific request by adding request_id/user_id
 	zaiReq := Request{
-		Request:   *chatReq,
+		Request:   *oaiReq,
 		UserID:    "",
 		RequestID: "",
 	}
 
-	if chatReq.Metadata != nil {
-		zaiReq.UserID = chatReq.Metadata["user_id"]
-		zaiReq.RequestID = chatReq.Metadata["request_id"]
+	if llmReq.Metadata != nil {
+		zaiReq.UserID = llmReq.Metadata["user_id"]
+		zaiReq.RequestID = llmReq.Metadata["request_id"]
 	}
 
 	if zaiReq.RequestID == "" {
@@ -116,16 +124,16 @@ func (t *OutboundTransformer) TransformRequest(
 
 	// zai only support auto tool choice.
 	if zaiReq.ToolChoice != nil {
-		zaiReq.ToolChoice = &llm.ToolChoice{
+		zaiReq.ToolChoice = &openai.ToolChoice{
 			ToolChoice: lo.ToPtr("auto"),
 		}
 	}
 
-	// zai request does not support metadata.
+	// zai request does not support metadata (extracted to user_id/request_id)
 	zaiReq.Metadata = nil
 
 	// Convert ReasoningEffort to Thinking if present
-	if chatReq.ReasoningEffort != "" {
+	if llmReq.ReasoningEffort != "" {
 		zaiReq.Thinking = &Thinking{
 			Type: "enabled",
 		}

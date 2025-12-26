@@ -13,6 +13,7 @@ import (
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
 	"github.com/looplj/axonhub/internal/pkg/streams"
 	"github.com/looplj/axonhub/internal/pkg/xerrors"
+	"github.com/looplj/axonhub/internal/pkg/xjson"
 )
 
 // InboundTransformer implements transformer.Inbound for OpenAI format.
@@ -50,26 +51,30 @@ func (t *InboundTransformer) TransformRequest(
 		return nil, fmt.Errorf("%w: unsupported content type: %s", transformer.ErrInvalidRequest, contentType)
 	}
 
-	var chatReq llm.Request
+	// Parse into OpenAI-specific Request type
+	var oaiReq Request
 
-	err := json.Unmarshal(httpReq.Body, &chatReq)
+	err := json.Unmarshal(httpReq.Body, &oaiReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed to decode openai request: %w", transformer.ErrInvalidRequest, err)
 	}
 
 	// Validate required fields
-	if chatReq.Model == "" {
+	if oaiReq.Model == "" {
 		return nil, fmt.Errorf("%w: model is required", transformer.ErrInvalidRequest)
 	}
 
-	if len(chatReq.Messages) == 0 {
+	if len(oaiReq.Messages) == 0 {
 		return nil, fmt.Errorf("%w: messages are required", transformer.ErrInvalidRequest)
 	}
 
+	// Convert to unified llm.Request
+	chatReq := oaiReq.ToLLMRequest()
 	chatReq.RawRequest = httpReq
-	chatReq.RawAPIFormat = llm.APIFormatOpenAIChatCompletion
+	chatReq.RequestType = llm.RequestTypeChat
+	chatReq.APIFormat = llm.APIFormatOpenAIChatCompletion
 
-	return &chatReq, nil
+	return chatReq, nil
 }
 
 // TransformResponse transforms ChatCompletionResponse to Response.
@@ -81,7 +86,10 @@ func (t *InboundTransformer) TransformResponse(
 		return nil, fmt.Errorf("chat completion response is nil")
 	}
 
-	body, err := json.Marshal(chatResp)
+	// Convert to OpenAI Response format
+	oaiResp := ResponseFromLLM(chatResp)
+
+	body, err := json.Marshal(oaiResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal chat completion response: %w", err)
 	}
@@ -127,8 +135,11 @@ func (t *InboundTransformer) TransformStreamChunk(
 		return nil, nil
 	}
 
+	// Convert to OpenAI Response format
+	oaiResp := ResponseFromLLM(chatResp)
+
 	// For OpenAI, we keep the original response format as the event data
-	eventData, err := json.Marshal(chatResp)
+	eventData, err := json.Marshal(oaiResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal chat completion response: %w", err)
 	}
@@ -174,7 +185,7 @@ func (t *InboundTransformer) TransformError(ctx context.Context, rawErr error) *
 		return &httpclient.Error{
 			StatusCode: http.StatusInternalServerError,
 			Status:     http.StatusText(http.StatusInternalServerError),
-			Body:       []byte(`{"error":{"message":"An unexpected error occurred","type":"unexpected_error"}}`),
+			Body:       xjson.MustMarshal(&OpenAIError{Detail: llm.ErrorDetail{Message: "An unexpected error occurred", Type: "unexpected_error"}}),
 		}
 	}
 
@@ -182,12 +193,7 @@ func (t *InboundTransformer) TransformError(ctx context.Context, rawErr error) *
 		return &httpclient.Error{
 			StatusCode: http.StatusUnprocessableEntity,
 			Status:     http.StatusText(http.StatusUnprocessableEntity),
-			Body: []byte(
-				fmt.Sprintf(
-					`{"error":{"message":"%s","type":"invalid_model_error"}}`,
-					strings.TrimPrefix(rawErr.Error(), transformer.ErrInvalidModel.Error()+": "),
-				),
-			),
+			Body:       xjson.MustMarshal(&OpenAIError{Detail: llm.ErrorDetail{Message: rawErr.Error(), Type: "invalid_model_error"}}),
 		}
 	}
 
@@ -200,35 +206,21 @@ func (t *InboundTransformer) TransformError(ctx context.Context, rawErr error) *
 		return &httpclient.Error{
 			StatusCode: http.StatusBadRequest,
 			Status:     http.StatusText(http.StatusBadRequest),
-			Body: []byte(
-				fmt.Sprintf(
-					`{"error":{"message":"%s","type":"invalid_request_error"}}`,
-					strings.TrimPrefix(rawErr.Error(), transformer.ErrInvalidRequest.Error()+": "),
-				),
-			),
+			Body:       xjson.MustMarshal(&OpenAIError{Detail: llm.ErrorDetail{Message: rawErr.Error(), Type: "invalid_request_error"}}),
 		}
 	}
 
 	if llmErr, ok := xerrors.As[*llm.ResponseError](rawErr); ok {
-		body, err := json.Marshal(llmErr)
-		if err != nil {
-			return &httpclient.Error{
-				StatusCode: http.StatusInternalServerError,
-				Status:     http.StatusText(http.StatusInternalServerError),
-				Body:       []byte(`{"error":{"message":"internal server error","type":"internal_server_error"}}`),
-			}
-		}
-
 		return &httpclient.Error{
 			StatusCode: llmErr.StatusCode,
 			Status:     http.StatusText(llmErr.StatusCode),
-			Body:       body,
+			Body:       xjson.MustMarshal(&OpenAIError{Detail: llmErr.Detail}),
 		}
 	}
 
 	return &httpclient.Error{
 		StatusCode: http.StatusInternalServerError,
 		Status:     http.StatusText(http.StatusInternalServerError),
-		Body:       []byte(fmt.Sprintf(`{"error":{"message":"%s","type":"internal_server_error"}}`, rawErr.Error())),
+		Body:       xjson.MustMarshal(&OpenAIError{Detail: llm.ErrorDetail{Message: rawErr.Error(), Type: "internal_server_error"}}),
 	}
 }

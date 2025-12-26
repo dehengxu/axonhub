@@ -18,6 +18,7 @@ import (
 
 func NewChatCompletionOrchestrator(
 	channelService *biz.ChannelService,
+	modelService *biz.ModelService,
 	requestService *biz.RequestService,
 	httpClient *httpclient.HttpClient,
 	inbound transformer.Inbound,
@@ -48,7 +49,7 @@ func NewChatCompletionOrchestrator(
 		},
 		PipelineFactory:      pipeline.NewFactory(httpClient),
 		ModelMapper:          NewModelMapper(),
-		channelSelector:      NewDefaultSelector(channelService),
+		channelSelector:      NewDefaultSelector(channelService, modelService, systemService),
 		selectedChannelIds:   []int{},
 		connectionTracker:    connectionTracker,
 		adaptiveLoadBalancer: adaptiveLoadBalancer,
@@ -70,7 +71,7 @@ type ChatCompletionOrchestrator struct {
 	// The runtime fields.
 
 	// The default channel selector.
-	channelSelector ChannelSelector
+	channelSelector CandidateSelector
 	// The runtime selected channel ids.
 	selectedChannelIds []int
 	// The load balancer for channel load balancing.
@@ -84,7 +85,7 @@ type ChatCompletionOrchestrator struct {
 	proxy *objects.ProxyConfig
 }
 
-func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector ChannelSelector) *ChatCompletionOrchestrator {
+func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector CandidateSelector) *ChatCompletionOrchestrator {
 	c := *processor
 	c.channelSelector = selector
 
@@ -93,7 +94,7 @@ func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector Channe
 
 func (processor *ChatCompletionOrchestrator) WithAllowedChannels(allowedChannelIDs []int) *ChatCompletionOrchestrator {
 	c := *processor
-	c.channelSelector = NewSelectedChannelsSelector(processor.channelSelector, allowedChannelIDs)
+	c.channelSelector = WithSelectedChannelsSelector(processor.channelSelector, allowedChannelIDs)
 
 	return &c
 }
@@ -137,16 +138,17 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 	}
 
 	state := &PersistenceState{
-		APIKey:          apiKey,
-		User:            user,
-		RequestService:  processor.RequestService,
-		UsageLogService: processor.UsageLogService,
-		ChannelService:  processor.ChannelService,
-		ChannelSelector: processor.channelSelector,
-		LoadBalancer:    loadBalancer,
-		ModelMapper:     processor.ModelMapper,
-		Proxy:           processor.proxy,
-		ChannelIndex:    0,
+		APIKey:              apiKey,
+		User:                user,
+		RequestService:      processor.RequestService,
+		UsageLogService:     processor.UsageLogService,
+		ChannelService:      processor.ChannelService,
+		RetryPolicyProvider: processor.SystemService,
+		CandidateSelector:   processor.channelSelector,
+		LoadBalancer:        loadBalancer,
+		ModelMapper:         processor.ModelMapper,
+		Proxy:               processor.proxy,
+		CandidateIndex:      0,
 	}
 
 	var pipelineOpts []pipeline.Option
@@ -170,7 +172,7 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 	// Add inbound middlewares (executed after inbound.TransformRequest)
 	middlewares = append(middlewares,
 		applyApiKeyModelMapping(inbound),
-		selectChannels(inbound),
+		selectCandidates(inbound),
 		persistRequest(inbound),
 	)
 

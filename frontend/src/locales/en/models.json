@@ -1,0 +1,227 @@
+{
+  "models": {
+    "title": "Models",
+    "description": "Manage AI models and their configurations",
+    "columns": {
+      "selectAll": "Select all",
+      "selectRow": "Select row",
+      "icon": "Icon",
+      "name": "Name",
+      "modelId": "Model ID",
+      "developer": "Developer",
+      "type": "Type",
+      "capabilities": "Capabilities",
+      "input": "Input",
+      "output": "Output",
+      "toolCall": "Tool Call",
+      "context": "Context",
+      "contextWindow": "Context",
+      "contextWindowFull": "Context Window",
+      "maxOutput": "Max Output",
+      "maxOutputFull": "Max Output Tokens",
+      "association": "Association",
+      "status": "Status",
+      "createdAt": "Created At",
+      "updatedAt": "Updated At",
+      "group": "Group",
+      "remark": "Remark"
+    },
+    "types": {
+      "chat": "Chat",
+      "embedding": "Embedding",
+      "rerank": "Rerank"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "archived": "Archived"
+    },
+    "actions": {
+      "create": "Add Model",
+      "bulkAdd": "Bulk Add",
+      "addAssociation": "Add",
+      "manageAssociation": "Manage Association",
+      "settings": "Settings"
+    },
+    "filters": {
+      "filterByName": "Filter by name..."
+    },
+    "fields": {
+      "developer": "Developer",
+      "selectDeveloper": "Select developer",
+      "modelId": "Model ID",
+      "modelIdPlaceholder": "Enter or select model ID",
+      "noModels": "No models available",
+      "selectModel": "Select model",
+      "name": "Name",
+      "icon": "Icon",
+      "selectIcon": "Select icon",
+      "noIcons": "No icons available",
+      "group": "Group",
+      "type": "Type",
+      "status": "Status",
+      "remark": "Remark"
+    },
+    "dialogs": {
+      "create": {
+        "title": "Add Model",
+        "description": "Create a new AI model configuration"
+      },
+      "edit": {
+        "title": "Edit Model",
+        "description": "Update model configuration and settings"
+      },
+      "batchCreate": {
+        "title": "Batch Add Models",
+        "description": "Add multiple models at once by entering model IDs",
+        "addRow": "Add Row",
+        "required": "Required",
+        "validationError": "Please fill in all required fields (Developer, Model ID, Name, Icon) for each row",
+        "maxRowsReached": "Maximum {{max}} rows allowed"
+      },
+      "delete": {
+        "title": "Delete Model",
+        "description": "Are you sure you want to delete {{name}}? This action cannot be undone.",
+        "bulkDescription": "Are you sure you want to delete {{count}} models? This action cannot be undone."
+      },
+      "association": {
+        "title": "Model Association",
+        "description": "Configure associated models for {{name}}. During request processing, higher priority (lower value = higher priority) associated models will be used first.",
+        "association": "Association",
+        "priority": "Priority",
+        "priorityTooltip": "Lower value = higher priority",
+        "type": "Type",
+        "types": {
+          "channelModel": "Channel Exact Match",
+          "channelRegex": "Channel Regex Match",
+          "regex": "Global Regex Match",
+          "model": "Global Exact Match"
+        },
+        "channelId": "Channel ID",
+        "channelIdPlaceholder": "Enter channel ID",
+        "selectChannel": "Select channel",
+        "modelId": "Model ID",
+        "modelIdPlaceholder": "Enter model ID",
+        "selectModel": "Select model",
+        "noModelsAvailable": "No models available",
+        "noChannelModelsAvailable": "No models available for this channel",
+        "selectChannelFirst": "Please select a channel first",
+        "pattern": "Pattern",
+        "patternPlaceholder": "Enter regex pattern",
+        "addRule": "Add Rule",
+        "noRules": "No association rules configured. Click 'Add Rule' to create one.",
+        "invalidRegex": "Invalid regex pattern",
+        "preview": "Preview",
+        "previewDescription": "Real-time preview of associated channels and models",
+        "filterByChannel": "Filter by channel name...",
+        "noConnections": "No channel connections. Add rules to see preview.",
+        "noFilteredConnections": "No channels found matching filter.",
+        "ruleHints": {
+          "channelModel": "Use model {{model}} in channel {{channel}}",
+          "channelRegex": "Use model matching {{pattern}} in channel {{channel}}",
+          "model": "Use model {{model}} across all channels",
+          "regex": "Use model matching {{pattern}} across all channels"
+        }
+      },
+      "status": {
+        "enableTitle": "Enable Model",
+        "enableDescription": "Are you sure you want to enable {{name}}?",
+        "disableTitle": "Disable Model",
+        "disableDescription": "Are you sure you want to disable {{name}}?"
+      },
+      "bulkDisable": {
+        "title": "Bulk Disable Models",
+        "description": "Are you sure you want to disable {{count}} models?",
+        "warning": "Disabled models will not be used for AI requests until they are re-enabled."
+      },
+      "bulkEnable": {
+        "title": "Bulk Enable Models",
+        "description": "Are you sure you want to enable {{count}} models?",
+        "warning": "Enabling models will allow them to be used for AI requests."
+      },
+      "settings": {
+        "title": "Model Settings",
+        "description": "Configure global model-related settings",
+        "fallbackToChannels": {
+          "label": "Fallback to Channels",
+          "description": "When enabled, if a requested model is not found in model associations, the system will attempt to find enabled channels that support the requested model directly."
+        },
+        "queryAllChannelModels": {
+          "label": "Query All Channel Models",
+          "description": "When enabled, models API returns all models from enabled channels. When disabled, only models with explicit Model entity configuration will be returned."
+        }
+      }
+    },
+    "modelCard": {
+      "title": "Model Card",
+      "capabilities": "Capabilities",
+      "reasoning": "Reasoning",
+      "reasoningSupported": "Supported",
+      "reasoningDefault": "Default",
+      "toolCall": "Tool Call",
+      "vision": "Vision",
+      "temperature": "Temperature",
+      "modalities": "Modalities",
+      "input": "Input",
+      "output": "Output",
+      "cost": "Cost",
+      "cacheRead": "Cache Read",
+      "cacheWrite": "Cache Write",
+      "limit": "Limits",
+      "limitHelp": "Use numbers like 128000 for 128K tokens",
+      "context": "Context",
+      "dates": "Dates",
+      "knowledge": "Knowledge Cutoff",
+      "releaseDate": "Release Date",
+      "lastUpdated": "Last Updated",
+      "noData": "No model card data available",
+      "text": "Text",
+      "image": "Image",
+      "audio": "Audio",
+      "video": "Video"
+    },
+    "expandedRow": {
+      "basic": "Basic Info",
+      "capabilities": "Capabilities"
+    },
+    "messages": {
+      "createSuccess": "Model created successfully",
+      "createError": "Failed to create model: {{error}}",
+      "bulkCreateSuccess": "Successfully created {{count}} models",
+      "bulkCreateError": "Failed to create models: {{error}}",
+      "updateSuccess": "Model updated successfully",
+      "updateError": "Failed to update model: {{error}}",
+      "deleteSuccess": "Model deleted successfully",
+      "deleteError": "Failed to delete model: {{error}}",
+      "bulkDisableSuccess": "Successfully disabled {{count}} models",
+      "bulkDisableError": "Failed to disable models: {{error}}",
+      "bulkEnableSuccess": "Successfully enabled {{count}} models",
+      "bulkEnableError": "Failed to enable models: {{error}}"
+    },
+    "onboarding": {
+      "title": "Welcome to Models",
+      "description": "Let's take a quick tour to help you understand model settings",
+      "startTour": "Start Tour",
+      "skipTour": "Skip Tour",
+      "completeTour": "Onboarding completed!",
+      "steps": {
+        "welcome": {
+          "title": "Models Management",
+          "description": "This is where you manage all your AI models. You can configure model associations, settings, and more."
+        },
+        "settingsButton": {
+          "title": "Model Settings",
+          "description": "Click here to access global model settings. Let's explore what you can configure."
+        },
+        "fallbackEnabled": {
+          "title": "Fallback to Channels",
+          "description": "When enabled, if a requested model is not found in model associations, the system will attempt to find enabled channels that support the requested model directly."
+        },
+        "queryAllChannelModels": {
+          "title": "Query All Channel Models",
+          "description": "When enabled, the models API returns all models from enabled channels. When disabled, only models with explicit Model entity configuration will be returned."
+        }
+      }
+    }
+  }
+}

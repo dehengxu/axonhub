@@ -10,6 +10,7 @@
     "items": {
       "dashboard": "Dashboard",
       "channels": "Channels",
+      "models": "Models",
       "dataStorages": "Data Storages",
       "users": "Users",
       "roles": "Roles",
@@ -93,7 +94,8 @@
     "previousPage": "Go to previous page",
     "nextPage": "Go to next page",
     "hasPrevious": "Has previous",
-    "hasNext": "Has next"
+    "hasNext": "Has next",
+    "showing": "Showing {{start}}-{{end}} of {{total}}"
   },
   "common": {
     "refresh": "Refresh",
@@ -132,6 +134,7 @@
     },
     "buttons": {
       "cancel": "Cancel",
+      "confirm": "Confirm",
       "save": "Save",
       "saving": "Saving...",
       "saveChanges": "Save changes",
@@ -161,7 +164,9 @@
       "delete": "Delete"
     },
     "filters": {
-      "reset": "Reset"
+      "reset": "Reset",
+      "dateRange": "Pick date range",
+      "clearDateRange": "Clear date range"
     },
     "routeGuard": {
       "accessDenied": "Access Denied",

@@ -2,9 +2,6 @@ package llm
 
 // RerankRequest represents a rerank request.
 type RerankRequest struct {
-	// Model is the model ID used for reranking.
-	Model string `json:"model" binding:"required"`
-
 	// Query is the search query to compare documents against.
 	Query string `json:"query" binding:"required"`
 
@@ -13,10 +10,16 @@ type RerankRequest struct {
 
 	// TopN is the number of most relevant documents to return. Optional.
 	TopN *int `json:"top_n,omitempty"`
+
+	// ReturnDocuments is a flag to indicate whether to return the original documents in the response. Optional.
+	ReturnDocuments *bool `json:"return_documents,omitempty"`
 }
 
 // RerankResponse represents the response from a rerank request.
 type RerankResponse struct {
+	// Object is the object type, typically "list".
+	Object string `json:"object"`
+
 	// Results contains the reranked documents with relevance scores.
 	Results []RerankResult `json:"results"`
 
@@ -33,7 +36,11 @@ type RerankResult struct {
 	RelevanceScore float64 `json:"relevance_score"`
 
 	// Document is the original document text (optional, can be omitted to save bandwidth).
-	Document string `json:"document,omitempty"`
+	Document *RerankDocument `json:"document,omitempty"`
+}
+
+type RerankDocument struct {
+	Text string `json:"text"`
 }
 
 // RerankUsage represents token usage for rerank requests.

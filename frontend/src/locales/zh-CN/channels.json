@@ -72,7 +72,8 @@
       "aihubmix": "AiHubMix",
       "burncloud": "BurnCloud",
       "modelscope": "魔搭",
-      "bailian": "百炼"
+      "bailian": "百炼",
+      "jina": "Jina"
     },
     "providers": {
       "openai": "OpenAI",
@@ -94,7 +95,8 @@
       "aihubmix": "AiHubMix",
       "burncloud": "BurnCloud",
       "modelscope": "魔搭",
-      "bailian": "百炼"
+      "bailian": "百炼",
+      "jina": "Jina"
     },
     "actions": {
       "test": "测试",
@@ -281,15 +283,18 @@
           "required": "请至少添加一个支持的模型",
           "defaultModelsLabel": "快速添加模型",
           "fetchedModelsLabel": "已获取的模型",
-          "largeListHint": "已获取 {{count}} 个模型。使用上方搜索查找特定模型。",
           "showMore": "+{{count}} 个更多",
           "searchPlaceholder": "搜索模型...",
           "showAddedOnly": "仅显示已添加",
           "added": "已添加",
-          "clearAllTitle": "清空全部支持的模型？",
-          "clearAllDescription": "确定要清空全部 {{count}} 个模型吗？",
+          "clearAllTitle": "清空所有支持的模型？",
+          "clearAllDescription": "确定要清空所有 {{count}} 个模型吗？",
           "willRemove": "将移除",
           "allModels": "全部模型 ({{count}})"
+        },
+        "autoSyncSupportedModels": {
+          "label": "自动同步支持的模型",
+          "description": "每小时自动从提供商 API 同步支持的模型列表"
         },
         "defaultTestModel": {
           "label": "默认测试模型",
@@ -351,6 +356,7 @@
         "testing": "测试中...",
         "add": "添加",
         "batchAdd": "批量添加",
+        "batchAddTooltip": "输入多个模型，用逗号分隔，例如：gpt-4, gpt-3.5-turbo, claude-3-opus",
         "addSelected": "添加",
         "confirmSelection": "确定选中",
         "fetchModels": "获取",

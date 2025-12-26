@@ -88,7 +88,7 @@ func convertTools(tools []llm.Tool) []Tool {
 				Type: ToolTypeWebSearch20250305,
 				Name: llm.AnthropicWebSearchFunctionName,
 			})
-		} else if tool.Type == llm.ToolType {
+		} else if tool.Type == llm.ToolTypeFunction {
 			anthropicTools = append(anthropicTools, Tool{
 				Name:         tool.Function.Name,
 				Description:  tool.Function.Description,
@@ -323,12 +323,29 @@ func buildMessageContent(msg llm.Message) (MessageContent, bool) {
 		return MessageContent{Content: msg.Content.Content}, true
 	}
 
-	// Handle multiple content parts
-	if len(msg.Content.MultipleContent) > 0 {
-		return convertMultiplePartContent(msg)
+	var blocks []MessageContentBlock
+
+	if hasThinkingContent(msg) {
+		if block := buildThinkingBlock(msg.ReasoningContent, msg.ReasoningSignature); block != nil {
+			blocks = append(blocks, *block)
+		}
+
+		if block := buildRedactedThinkingBlock(msg.RedactedReasoningContent); block != nil {
+			blocks = append(blocks, *block)
+		}
 	}
 
-	return MessageContent{}, false
+	content, ok := convertMultiplePartContent(msg)
+
+	switch {
+	case ok && len(blocks) > 0:
+		return MessageContent{}, false
+	case len(blocks) > 0:
+		content.MultipleContent = append(blocks, content.MultipleContent...)
+		return content, true
+	}
+
+	return content, true
 }
 
 // hasThinkingContent checks if message has reasoning content.
@@ -594,10 +611,12 @@ func convertToLlmResponse(anthropicResp *Message, platformType PlatformType) *ll
 	}
 
 	resp := &llm.Response{
-		ID:      anthropicResp.ID,
-		Object:  "chat.completion",
-		Model:   anthropicResp.Model,
-		Created: 0, // Anthropic doesn't provide created timestamp
+		ID:          anthropicResp.ID,
+		Object:      "chat.completion",
+		Model:       anthropicResp.Model,
+		Created:     0, // Anthropic doesn't provide created timestamp
+		RequestType: llm.RequestTypeChat,
+		APIFormat:   llm.APIFormatAnthropicMessage,
 	}
 
 	// Convert content to message

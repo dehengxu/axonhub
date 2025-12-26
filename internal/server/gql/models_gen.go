@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
@@ -59,6 +60,10 @@ type ChannelTypeCount struct {
 }
 
 type CompleteOnboardingInput struct {
+	Dummy *string `json:"dummy,omitempty"`
+}
+
+type CompleteSystemModelSettingOnboardingInput struct {
 	Dummy *string `json:"dummy,omitempty"`
 }
 
@@ -137,7 +142,14 @@ type ModelTokenTrendData struct {
 	Dates  []string           `json:"dates"`
 }
 
-type ModelsInput struct {
+type OnboardingInfo struct {
+	Onboarded          bool                          `json:"onboarded"`
+	Version            string                        `json:"version"`
+	CompletedAt        *time.Time                    `json:"completedAt,omitempty"`
+	SystemModelSetting *SystemModelSettingOnboarding `json:"systemModelSetting,omitempty"`
+}
+
+type QueryModelsInput struct {
 	StatusIn       []channel.Status `json:"statusIn,omitempty"`
 	IncludeMapping *bool            `json:"includeMapping,omitempty"`
 	IncludePrefix  *bool            `json:"includePrefix,omitempty"`
@@ -179,6 +191,11 @@ type SignInInput struct {
 type SignInPayload struct {
 	User  *ent.User `json:"user"`
 	Token string    `json:"token"`
+}
+
+type SystemModelSettingOnboarding struct {
+	Onboarded   bool       `json:"onboarded"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
 }
 
 type SystemStatus struct {

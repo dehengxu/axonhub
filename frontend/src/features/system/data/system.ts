@@ -101,6 +101,10 @@ const ONBOARDING_INFO_QUERY = `
       onboarded
       version
       completedAt
+      systemModelSetting {
+        onboarded
+        completedAt
+      }
     }
   }
 `
@@ -108,6 +112,12 @@ const ONBOARDING_INFO_QUERY = `
 const COMPLETE_ONBOARDING_MUTATION = `
   mutation CompleteOnboarding($input: CompleteOnboardingInput!) {
     completeOnboarding(input: $input)
+  }
+`
+
+const COMPLETE_SYSTEM_MODEL_SETTING_ONBOARDING_MUTATION = `
+  mutation CompleteSystemModelSettingOnboarding($input: CompleteSystemModelSettingOnboardingInput!) {
+    completeSystemModelSettingOnboarding(input: $input)
   }
 `
 
@@ -168,13 +178,23 @@ export interface UpdateDefaultDataStorageInput {
   dataStorageID: string
 }
 
+export interface SystemModelSettingOnboarding {
+  onboarded: boolean
+  completedAt?: string
+}
+
 export interface OnboardingInfo {
   onboarded: boolean
   version: string
   completedAt?: string
+  systemModelSetting?: SystemModelSettingOnboarding
 }
 
 export interface CompleteOnboardingInput {
+  dummy?: string
+}
+
+export interface CompleteSystemModelSettingOnboardingInput {
   dummy?: string
 }
 
@@ -370,6 +390,26 @@ export function useCompleteOnboarding() {
   })
 }
 
+export function useCompleteSystemModelSettingOnboarding() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input?: CompleteSystemModelSettingOnboardingInput) => {
+      const data = await graphqlRequest<{ completeSystemModelSettingOnboarding: boolean }>(
+        COMPLETE_SYSTEM_MODEL_SETTING_ONBOARDING_MUTATION,
+        { input: input || {} }
+      )
+      return data.completeSystemModelSettingOnboarding
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['onboardingInfo'] })
+    },
+    onError: () => {
+      toast.error(i18n.t('common.errors.onboardingFailed'))
+    },
+  })
+}
+
 export function useSystemVersion() {
   return useQuery({
     queryKey: ['systemVersion'],
@@ -388,6 +428,67 @@ export function useCheckForUpdate() {
       return data.checkForUpdate
     },
     retry: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 60 * 60 * 1000, // 1 hour
+  })
+}
+
+// Model Settings
+const MODEL_SETTINGS_QUERY = `
+  query ModelSettings {
+    systemModelSettings {
+      fallbackToChannelsOnModelNotFound
+      queryAllChannelModels
+    }
+  }
+`
+
+const UPDATE_MODEL_SETTINGS_MUTATION = `
+  mutation UpdateModelSettings($input: UpdateSystemModelSettingsInput!) {
+    updateSystemModelSettings(input: $input)
+  }
+`
+
+export interface ModelSettings {
+  fallbackToChannelsOnModelNotFound: boolean
+  queryAllChannelModels: boolean
+}
+
+export interface UpdateModelSettingsInput {
+  fallbackToChannelsOnModelNotFound?: boolean
+  queryAllChannelModels?: boolean
+}
+
+export function useModelSettings() {
+  const { handleError } = useErrorHandler()
+
+  return useQuery({
+    queryKey: ['modelSettings'],
+    queryFn: async () => {
+      try {
+        const data = await graphqlRequest<{ systemModelSettings: ModelSettings }>(MODEL_SETTINGS_QUERY)
+        return data.systemModelSettings
+      } catch (error) {
+        handleError(error, i18n.t('common.errors.internalServerError'))
+        throw error
+      }
+    },
+  })
+}
+
+export function useUpdateModelSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: UpdateModelSettingsInput) => {
+      const data = await graphqlRequest<{ updateSystemModelSettings: boolean }>(UPDATE_MODEL_SETTINGS_MUTATION, { input })
+      return data.updateSystemModelSettings
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['modelSettings'] })
+      toast.success(i18n.t('common.success.systemUpdated'))
+    },
+    onError: () => {
+      toast.error(i18n.t('common.errors.systemUpdateFailed'))
+    },
   })
 }
