@@ -153,7 +153,7 @@ models:
       - github.com/looplj/axonhub/internal/objects.JSONRawMessage
   ModelIdentify:
     model:
-      - github.com/looplj/axonhub/internal/objects.ModelIdentify
+      - github.com/looplj/axonhub/internal/server/biz.ModelIdentify
   UserInfo:
     model:
       - github.com/looplj/axonhub/internal/objects.UserInfo
@@ -295,12 +295,33 @@ models:
   ModelIDAssociationInput:    
     model:
       - github.com/looplj/axonhub/internal/objects.ModelIDAssociation
+  ExcludeAssociation:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ExcludeAssociation
+  ExcludeAssociationInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ExcludeAssociation
+  ChannelTagsModelAssociation:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelTagsModelAssociation
+  ChannelTagsModelAssociationInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelTagsModelAssociation
+  ChannelTagsRegexAssociation:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelTagsRegexAssociation
+  ChannelTagsRegexAssociationInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelTagsRegexAssociation
   ModelChannelConnection:
     model:
       - github.com/looplj/axonhub/internal/server/biz.ModelChannelConnection
   ChannelModelEntry:
     model:
-      - github.com/looplj/axonhub/internal/server/biz.ChannelModelEntry    
+      - github.com/looplj/axonhub/internal/server/biz.ChannelModelEntry
+  UnassociatedChannel:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.UnassociatedChannel
   HeaderEntry:
     model:
       - github.com/looplj/axonhub/internal/objects.HeaderEntry

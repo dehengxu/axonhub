@@ -268,13 +268,10 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
 
 	case channel.TypeAnthropicAWS:
-		// For anthropic_aws, we need to create a transformer with AWS credentials
-		// The transformer will handle AWS Bedrock integration
 		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-			Type:            anthropic.PlatformBedrock,
-			Region:          c.Credentials.AWS.Region,
-			AccessKeyID:     c.Credentials.AWS.AccessKeyID,
-			SecretAccessKey: c.Credentials.AWS.SecretAccessKey,
+			Type:    anthropic.PlatformBedrock,
+			BaseURL: c.BaseURL,
+			APIKey:  c.Credentials.APIKey,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -342,7 +339,7 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
 	case channel.TypeOpenai,
-		channel.TypeDeepseek, channel.TypeMoonshot, channel.TypeMinimax,
+		channel.TypeDeepseek, channel.TypeDeepinfra, channel.TypeMoonshot, channel.TypeMinimax,
 		channel.TypePpio, channel.TypeSiliconflow,
 		channel.TypeVercel, channel.TypeAihubmix, channel.TypeBurncloud, channel.TypeBailian:
 		transformer, err := openai.NewOutboundTransformerWithConfig(&openai.Config{
@@ -481,7 +478,39 @@ func (ch *Channel) GetModelEntries() map[string]ChannelModelEntry {
 		}
 	}
 
+	// 5. Hide original models if configured
+	// When hideOriginalModels is enabled, remove direct models from the entries
+	// This allows only transformed models (prefix, auto_trim, mapping) to be exposed
+	if ch.Settings.HideOriginalModels {
+		for key, entry := range entries {
+			if entry.Source == "direct" {
+				delete(entries, key)
+			}
+		}
+	}
+
 	ch.cachedModelEntries = entries
+
+	return entries
+}
+
+// GetDirectModelEntries returns the direct models this channel can handle.
+// This is used for testing purposes where we need to see all available models
+// regardless of the HideOriginalModels setting.
+// The difference from GetModelEntries is that this method does NOT filter out
+// direct models when HideOriginalModels is enabled.
+func (ch *Channel) GetDirectModelEntries() map[string]ChannelModelEntry {
+	entries := make(map[string]ChannelModelEntry)
+
+	for _, model := range ch.SupportedModels {
+		if _, exists := entries[model]; !exists {
+			entries[model] = ChannelModelEntry{
+				RequestModel: model,
+				ActualModel:  model,
+				Source:       "direct",
+			}
+		}
+	}
 
 	return entries
 }

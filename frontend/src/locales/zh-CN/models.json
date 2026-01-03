@@ -19,7 +19,8 @@
       "contextWindowFull": "上下文窗口",
       "maxOutput": "最大输出",
       "maxOutputFull": "最大输出令牌数",
-      "association": "关联",
+      "associationRules": "关联规则",
+      "associatedChannels": "关联渠道",
       "status": "状态",
       "createdAt": "创建时间",
       "updatedAt": "更新时间",
@@ -41,7 +42,8 @@
       "bulkAdd": "批量添加",
       "addAssociation": "添加",
       "manageAssociation": "管理关联",
-      "settings": "设置"
+      "settings": "设置",
+      "detectUnassociated": "检测未关联"
     },
     "filters": {
       "filterByName": "按名称筛选..."
@@ -94,12 +96,15 @@
         "types": {
           "channelModel": "渠道内精准匹配模型",
           "channelRegex": "渠道内正则匹配模型",
+          "channelTagsModel": "渠道标签精准匹配模型",
+          "channelTagsRegex": "渠道标签正则匹配模型",
           "regex": "全局正则匹配模型",
           "model": "全局精准匹配模型"
         },
         "channelId": "渠道 ID",
         "channelIdPlaceholder": "输入渠道 ID",
         "selectChannel": "选择渠道",
+        "selectChannelTags": "选择渠道标签",
         "modelId": "模型 ID",
         "modelIdPlaceholder": "输入模型 ID",
         "selectModel": "选择模型",
@@ -116,9 +121,16 @@
         "filterByChannel": "按渠道名称筛选...",
         "noConnections": "暂无渠道连接。添加规则以查看预览。",
         "noFilteredConnections": "未找到匹配的渠道。",
+        "excludeSection": "排除渠道",
+        "excludeChannelNamePattern": "排除渠道名称（正则）",
+        "excludeChannelIds": "排除渠道",
+        "excludeChannelTags": "排除渠道标签",
+        "noChannelsAvailable": "暂无可用渠道",
         "ruleHints": {
           "channelModel": "使用渠道 {{channel}} 的 {{model}} 模型",
           "channelRegex": "使用渠道 {{channel}} 匹配 {{pattern}} 的模型",
+          "channelTagsModel": "使用标签为 {{tags}} 的渠道的 {{model}} 模型",
+          "channelTagsRegex": "使用标签为 {{tags}} 的渠道匹配 {{pattern}} 的模型",
           "model": "使用所有渠道的 {{model}} 模型",
           "regex": "使用所有渠道匹配 {{pattern}} 的模型"
         }
@@ -151,6 +163,14 @@
           "description": "启用后，模型 API 将返回所有已启用渠道的模型。禁用后，仅返回具有显式模型实体配置的模型。"
         }
       }
+    },
+    "unassociated": {
+      "title": "未关联渠道检测",
+      "description": "检测渠道中未与任何模型配置关联的模型",
+      "summary": "发现 {{channelCount}} 个渠道有 {{modelCount}} 个未关联的模型",
+      "noUnassociated": "所有渠道模型都已正确关联",
+      "searchPlaceholder": "搜索模型...",
+      "noSearchResults": "未找到匹配的模型"
     },
     "modelCard": {
       "title": "模型卡片",

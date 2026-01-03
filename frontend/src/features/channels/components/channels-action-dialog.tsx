@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { X, RefreshCw, Search, ChevronLeft, ChevronRight, PanelLeft, Plus, Trash2 } from 'lucide-react'
+import { X, RefreshCw, Search, ChevronLeft, ChevronRight, PanelLeft, Plus, Trash2, Eye, EyeOff, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -91,6 +91,8 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const [supportedModelsExpanded, setSupportedModelsExpanded] = useState(false)
   const [showClearAllPopover, setShowClearAllPopover] = useState(false)
   const hasAutoSetDuplicateNameRef = useRef(false)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [showGcpJsonData, setShowGcpJsonData] = useState(false)
 
   // Provider-based selection state
   const [selectedProvider, setSelectedProvider] = useState<string>(() => {
@@ -111,6 +113,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     }
     return false
   })
+  const [useAnthropicAws, setUseAnthropicAws] = useState(() => {
+    if (initialRow) {
+      return initialRow.type === 'anthropic_aws'
+    }
+    return false
+  })
 
   useEffect(() => {
     if (!isEdit || !currentRow) return
@@ -120,6 +128,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     const apiFormat = CHANNEL_CONFIGS[currentRow.type]?.apiFormat || OPENAI_CHAT_COMPLETIONS
     setSelectedApiFormat(apiFormat)
     setUseGeminiVertex(currentRow.type === 'gemini_vertex')
+    setUseAnthropicAws(currentRow.type === 'anthropic_aws')
   }, [isEdit, currentRow])
 
   useEffect(() => {
@@ -187,8 +196,13 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       return 'gemini_vertex'
     }
     
+    // If anthropic/messages is selected and aws checkbox is checked, use anthropic_aws
+    if (selectedApiFormat === 'anthropic/messages' && useAnthropicAws) {
+      return 'anthropic_aws'
+    }
+    
     return getChannelTypeForApiFormat(selectedProvider, selectedApiFormat) || 'openai'
-  }, [isEdit, currentRow, selectedProvider, selectedApiFormat, useGeminiVertex])
+  }, [isEdit, currentRow, selectedProvider, selectedApiFormat, useGeminiVertex, useAnthropicAws])
 
   const formSchema = isEdit ? updateChannelInputSchema : createChannelInputSchema
 
@@ -204,17 +218,18 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             autoSyncSupportedModels: currentRow.autoSyncSupportedModels,
             defaultTestModel: currentRow.defaultTestModel,
             tags: currentRow.tags || [],
+            remark: currentRow.remark || '',
             credentials: {
-              apiKey: '', // credentials字段是敏感字段，不从API返回
+              apiKey: currentRow.credentials?.apiKey || '',
               aws: {
-                accessKeyID: '',
-                secretAccessKey: '',
-                region: '',
+                accessKeyID: currentRow.credentials?.aws?.accessKeyID || '',
+                secretAccessKey: currentRow.credentials?.aws?.secretAccessKey || '',
+                region: currentRow.credentials?.aws?.region || '',
               },
               gcp: {
-                region: '',
-                projectID: '',
-                jsonData: '',
+                region: currentRow.credentials?.gcp?.region || '',
+                projectID: currentRow.credentials?.gcp?.projectID || '',
+                jsonData: currentRow.credentials?.gcp?.jsonData || '',
               },
             },
           }
@@ -227,6 +242,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               autoSyncSupportedModels: duplicateFromRow.autoSyncSupportedModels,
               defaultTestModel: duplicateFromRow.defaultTestModel,
               tags: duplicateFromRow.tags || [],
+              remark: duplicateFromRow.remark || '',
               settings: duplicateFromRow.settings ?? undefined,
               credentials: {
                 apiKey: '',
@@ -262,6 +278,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             supportedModels: [],
             defaultTestModel: '',
             tags: [],
+            remark: '',
             settings: undefined,
           },
   })
@@ -301,6 +318,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       if (provider !== 'gemini') {
         setUseGeminiVertex(false)
       }
+      if (provider !== 'anthropic') {
+        setUseAnthropicAws(false)
+      }
       const formats = getApiFormatsForProvider(provider)
       // Default to first available format
       const newFormat = formats[0] || 'openai/chat_completions'
@@ -308,7 +328,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       const newChannelType =
         provider === 'gemini' && newFormat === 'gemini/contents' && useGeminiVertex
           ? 'gemini_vertex'
-          : getChannelTypeForApiFormat(provider, newFormat)
+          : provider === 'anthropic' && newFormat === 'anthropic/messages' && useAnthropicAws
+            ? 'anthropic_aws'
+            : getChannelTypeForApiFormat(provider, newFormat)
       if (newChannelType) {
         form.setValue('type', newChannelType)
         const baseURL = getDefaultBaseURL(newChannelType)
@@ -321,7 +343,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         setUseFetchedModels(false)
       }
     },
-    [isEdit, form, useGeminiVertex]
+    [isEdit, form, useGeminiVertex, useAnthropicAws]
   )
 
   const handleApiFormatChange = useCallback(
@@ -333,9 +355,18 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       if (format !== 'gemini/contents') {
         setUseGeminiVertex(false)
       }
+      // Reset aws checkbox if not anthropic/messages
+      if (format !== 'anthropic/messages') {
+        setUseAnthropicAws(false)
+      }
 
       const channelTypeFromFormat = getChannelTypeForApiFormat(selectedProvider, format)
-      const newChannelType = format === 'gemini/contents' && useGeminiVertex ? 'gemini_vertex' : channelTypeFromFormat
+      const newChannelType = 
+        format === 'gemini/contents' && useGeminiVertex 
+          ? 'gemini_vertex' 
+          : format === 'anthropic/messages' && useAnthropicAws
+            ? 'anthropic_aws'
+            : channelTypeFromFormat
       if (newChannelType) {
         form.setValue('type', newChannelType)
 
@@ -348,7 +379,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         }
       }
     },
-    [isEdit, selectedProvider, form, useGeminiVertex]
+    [isEdit, selectedProvider, form, useGeminiVertex, useAnthropicAws]
   )
 
   const handleGeminiVertexChange = useCallback(
@@ -372,6 +403,27 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     [isEdit, selectedApiFormat, form]
   )
 
+  const handleAnthropicAwsChange = useCallback(
+    (checked: boolean) => {
+      if (isEdit) return
+      setUseAnthropicAws(checked)
+      
+      if (selectedApiFormat === 'anthropic/messages') {
+        const newChannelType = checked ? 'anthropic_aws' : 'anthropic'
+        form.setValue('type', newChannelType)
+        
+        const baseURLFieldState = form.getFieldState('baseURL', form.formState)
+        if (!baseURLFieldState.isDirty) {
+          const baseURL = getDefaultBaseURL(newChannelType)
+          if (baseURL) {
+            form.resetField('baseURL', { defaultValue: baseURL })
+          }
+        }
+      }
+    },
+    [isEdit, selectedApiFormat, form]
+  )
+
   useEffect(() => {
     if (isEdit) return
     if (!availableApiFormats.includes(selectedApiFormat)) {
@@ -381,6 +433,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   }, [availableApiFormats, selectedApiFormat, handleApiFormatChange, isEdit])
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    // Check if there are selected fetched models that haven't been confirmed
+    if (selectedFetchedModels.length > 0) {
+      toast.error(t('channels.dialogs.messages.modelsNotConfirmed'))
+      return
+    }
+
     try {
       const valuesForSubmit =
         isEdit
@@ -533,19 +591,20 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     }
 
     try {
-      // Only use the first API key when multiple keys are provided
-      const firstApiKey = isEdit
-        ? undefined
-        : apiKey
-            ?.split('\n')
-            .map((key) => key.trim())
-            .filter((key) => key.length > 0)[0] || ''
+      // Extract first API key from potentially multi-line input
+      const firstApiKey = apiKey
+        ?.split('\n')
+        .map((key) => key.trim())
+        .filter((key) => key.length > 0)[0] || ''
 
+      // If in edit mode and user has provided a new API key, use it instead of channelID
+      const hasEditedApiKey = isEdit && firstApiKey && firstApiKey.length > 0
+      
       const result = await fetchModels.mutateAsync({
         channelType,
         baseURL,
-        apiKey: firstApiKey,
-        channelID: isEdit ? currentRow?.id : undefined,
+        apiKey: hasEditedApiKey || !isEdit ? firstApiKey : undefined,
+        channelID: hasEditedApiKey || !isEdit ? undefined : currentRow?.id,
       })
 
       if (result.error) {
@@ -700,10 +759,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             setSelectedProvider(getProviderFromChannelType(initialRow.type) || 'openai')
             setSelectedApiFormat(CHANNEL_CONFIGS[initialRow.type as ChannelType]?.apiFormat || OPENAI_CHAT_COMPLETIONS)
             setUseGeminiVertex(initialRow.type === 'gemini_vertex')
+            setUseAnthropicAws(initialRow.type === 'anthropic_aws')
           } else {
             setSelectedProvider('openai')
             setSelectedApiFormat(OPENAI_CHAT_COMPLETIONS)
             setUseGeminiVertex(false)
+            setUseAnthropicAws(false)
           }
         }
         onOpenChange(state)
@@ -806,9 +867,22 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                               />
                               <span>{t('channels.dialogs.fields.apiFormat.geminiVertex.label')}</span>
                             </label>
-                            <p className='text-muted-foreground mt-1 text-xs'>
-                              {t('channels.dialogs.fields.apiFormat.geminiVertex.description')}
-                            </p>
+                          </div>
+                        )}
+                        {selectedApiFormat === 'anthropic/messages' && selectedProvider === 'anthropic' && (
+                          <div className='mt-3'>
+                            <label
+                              className={`flex items-center gap-2 text-sm ${
+                                isEdit ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={useAnthropicAws}
+                                onCheckedChange={(checked) => handleAnthropicAwsChange(checked === true)}
+                                disabled={isEdit}
+                              />
+                              <span>{t('channels.dialogs.fields.apiFormat.anthropicAWS.label')}</span>
+                            </label>
                           </div>
                         )}
                       </div>
@@ -859,7 +933,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       )}
                     />
 
-                    {selectedType !== 'anthropic_aws' && selectedType !== 'anthropic_gcp' && (
+                    {selectedType !== 'anthropic_gcp' && (
                       <FormField
                         control={form.control}
                         name='credentials.apiKey'
@@ -870,15 +944,42 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                             </FormLabel>
                             <div className='col-span-6 space-y-1'>
                               {isEdit ? (
-                                <Input
-                                  type='password'
-                                  placeholder={t('channels.dialogs.fields.apiKey.editPlaceholder')}
-                                  className='col-span-6'
-                                  autoComplete='off'
-                                  aria-invalid={!!fieldState.error}
-                                  data-testid='channel-api-key-input'
-                                  {...field}
-                                />
+                                <div className='relative'>
+                                  <Input
+                                    type={showApiKey ? 'text' : 'password'}
+                                    placeholder={t('channels.dialogs.fields.apiKey.editPlaceholder')}
+                                    className='col-span-6 pr-20'
+                                    autoComplete='off'
+                                    aria-invalid={!!fieldState.error}
+                                    data-testid='channel-api-key-input'
+                                    {...field}
+                                  />
+                                  <div className='absolute right-1 top-1/2 flex -translate-y-1/2 gap-1'>
+                                    <Button
+                                      type='button'
+                                      variant='ghost'
+                                      size='sm'
+                                      className='h-7 w-7 p-0'
+                                      onClick={() => setShowApiKey(!showApiKey)}
+                                    >
+                                      {showApiKey ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                                    </Button>
+                                    <Button
+                                      type='button'
+                                      variant='ghost'
+                                      size='sm'
+                                      className='h-7 w-7 p-0'
+                                      onClick={() => {
+                                        if (field.value) {
+                                          navigator.clipboard.writeText(field.value)
+                                          toast.success(t('channels.messages.credentialsCopied'))
+                                        }
+                                      }}
+                                    >
+                                      <Copy className='h-4 w-4' />
+                                    </Button>
+                                  </div>
+                                </div>
                               ) : (
                                 <>
                                   <Textarea
@@ -897,78 +998,6 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                           </FormItem>
                         )}
                       />
-                    )}
-
-                    {selectedType === 'anthropic_aws' && (
-                      <>
-                        <FormField
-                          control={form.control}
-                          name='credentials.aws.accessKeyID'
-                          render={({ field, fieldState }) => (
-                            <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                              <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                {t('channels.dialogs.fields.awsAccessKeyID.label')}
-                              </FormLabel>
-                              <div className='col-span-6 space-y-1'>
-                                <Input
-                                  type='password'
-                                  placeholder={t('channels.dialogs.fields.awsAccessKeyID.placeholder')}
-                                  className='col-span-6'
-                                  autoComplete='off'
-                                  aria-invalid={!!fieldState.error}
-                                  {...field}
-                                />
-                                <FormMessage />
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name='credentials.aws.secretAccessKey'
-                          render={({ field, fieldState }) => (
-                            <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                              <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                {t('channels.dialogs.fields.awsSecretAccessKey.label')}
-                              </FormLabel>
-                              <div className='col-span-6 space-y-1'>
-                                <Input
-                                  type='password'
-                                  placeholder={t('channels.dialogs.fields.awsSecretAccessKey.placeholder')}
-                                  className='col-span-6'
-                                  autoComplete='off'
-                                  aria-invalid={!!fieldState.error}
-                                  {...field}
-                                />
-                                <FormMessage />
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name='credentials.aws.region'
-                          render={({ field, fieldState }) => (
-                            <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                              <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                {t('channels.dialogs.fields.awsRegion.label')}
-                              </FormLabel>
-                              <div className='col-span-6 space-y-1'>
-                                <Input
-                                  placeholder={t('channels.dialogs.fields.awsRegion.placeholder')}
-                                  className='col-span-6'
-                                  autoComplete='off'
-                                  aria-invalid={!!fieldState.error}
-                                  {...field}
-                                />
-                                <FormMessage />
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-                      </>
                     )}
 
                     {selectedType === 'anthropic_gcp' && (
@@ -1026,8 +1055,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                                 {t('channels.dialogs.fields.gcpJsonData.label')}
                               </FormLabel>
                               <div className='col-span-6 space-y-1'>
-                                <Textarea
-                                  placeholder={`{
+                                <div className='relative'>
+                                  <Textarea
+                                    placeholder={`{
   "type": "service_account",
   "project_id": "project-123",
   "private_key_id": "fdfd",
@@ -1040,10 +1070,38 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/xxx-compute%40developer.gserviceaccount.com",
   "universe_domain": "googleapis.com"
 }`}
-                                  className='col-span-6 min-h-[200px] resize-y font-mono text-xs'
-                                  aria-invalid={!!fieldState.error}
-                                  {...field}
-                                />
+                                    className='col-span-6 min-h-[200px] resize-y pr-10 font-mono text-xs'
+                                    aria-invalid={!!fieldState.error}
+                                    {...field}
+                                  />
+                                  {isEdit && field.value && (
+                                    <div className='absolute right-1 top-1 flex flex-col gap-1'>
+                                      <Button
+                                        type='button'
+                                        variant='ghost'
+                                        size='sm'
+                                        className='h-7 w-7 p-0'
+                                        onClick={() => setShowGcpJsonData(!showGcpJsonData)}
+                                      >
+                                        {showGcpJsonData ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                                      </Button>
+                                      <Button
+                                        type='button'
+                                        variant='ghost'
+                                        size='sm'
+                                        className='h-7 w-7 p-0'
+                                        onClick={() => {
+                                          if (field.value) {
+                                            navigator.clipboard.writeText(field.value)
+                                            toast.success(t('common.copied'))
+                                          }
+                                        }}
+                                      >
+                                        <Copy className='h-4 w-4' />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
                                 <FormMessage />
                               </div>
                             </FormItem>
@@ -1232,6 +1290,28 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                               isLoading={isLoadingTags}
                             />
                             <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.tags.description')}</p>
+                            <FormMessage />
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name='remark'
+                      render={({ field }) => (
+                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
+                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                            {t('channels.dialogs.fields.remark.label')}
+                          </FormLabel>
+                          <div className='col-span-6 space-y-1'>
+                            <Textarea
+                              placeholder={t('channels.dialogs.fields.remark.placeholder')}
+                              className='min-h-[80px] resize-y'
+                              {...field}
+                              value={field.value || ''}
+                            />
+                            <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.remark.description')}</p>
                             <FormMessage />
                           </div>
                         </FormItem>

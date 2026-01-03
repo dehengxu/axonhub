@@ -93,9 +93,20 @@ export function ChannelsTable({
   const { setSelectedChannels, setResetRowSelection, setOpen } = useChannels()
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [expanded, setExpanded] = useState<ExpandedState>({})
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    tags: false, // Hide tags column by default but keep it for filtering
+  
+  // Load column visibility from localStorage
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const stored = localStorage.getItem('channels-table-column-visibility')
+    if (stored) {
+      try {
+        return JSON.parse(stored)
+      } catch {
+        return { tags: false }
+      }
+    }
+    return { tags: false } // Hide tags column by default but keep it for filtering
   })
+  
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   // Sync server state to local column filters using useEffect
@@ -120,6 +131,11 @@ export function ChannelsTable({
 
     setColumnFilters(newColumnFilters)
   }, [nameFilter, typeFilter, statusFilter, tagFilter, modelFilter])
+
+  // Save column visibility to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('channels-table-column-visibility', JSON.stringify(columnVisibility))
+  }, [columnVisibility])
 
   // Handle column filter changes and sync with server
   const handleColumnFiltersChange = (
@@ -251,29 +267,29 @@ export function ChannelsTable({
         showErrorOnly={showErrorOnly}
         onExitErrorOnlyMode={onExitErrorOnlyMode}
       />
-      <div className='mt-4 flex-1 overflow-auto rounded-md border relative'>
-        <Table data-testid='channels-table'>
-          <TableHeader className='bg-background sticky top-0 z-10'>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className='group/row'>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      className={header.column.columnDef.meta?.className ?? ''}
-                    >
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
+      <div className='mt-4 flex-1 overflow-auto rounded-2xl shadow-soft border border-[var(--table-border)] relative'>
+          <Table data-testid='channels-table' className='bg-[var(--table-background)] rounded-2xl border-separate border-spacing-0'>
+            <TableHeader className='sticky top-0 z-20 bg-[var(--table-header)] shadow-sm'>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className='group/row border-0'>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead
+                        key={header.id}
+                        colSpan={header.colSpan}
+                        className={`${header.column.columnDef.meta?.className ?? ''} text-xs font-semibold text-muted-foreground uppercase tracking-wider border-0`}
+                      >
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody className='p-2 space-y-1 !bg-[var(--table-background)]'>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className='h-24 text-center'>
+              <TableRow className='border-0 !bg-[var(--table-background)]'>
+                <TableCell colSpan={columns.length} className='h-24 text-center border-0 !bg-[var(--table-background)]'>
                   {t('common.loading')}
                 </TableCell>
               </TableRow>
@@ -284,9 +300,9 @@ export function ChannelsTable({
                 const performance = channel.channelPerformance
                 return (
                   <React.Fragment key={row.id}>
-                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className='group/row'>
+                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'} className='group/row table-row-hover rounded-xl !bg-[var(--table-background)] border-0 transition-all duration-200 ease-in-out'>
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className={cell.column.columnDef.meta?.className ?? ''}>
+                        <TableCell key={cell.id} className={`${cell.column.columnDef.meta?.className ?? ''} px-4 py-3 border-0 !bg-[var(--table-background)]`}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
@@ -335,7 +351,7 @@ export function ChannelsTable({
                                   <h4 className='text-sm font-semibold'>{t('channels.expandedRow.additional')}</h4>
                                   <div className='space-y-2 text-sm'>
                                     <div className='flex justify-between items-center'>
-                                      <span className='text-muted-foreground'>{t('channels.columns.weight')}:</span>
+                                      <span className='text-muted-foreground'>{t('channels.columns.orderingWeight')}:</span>
                                       <span className='font-mono text-xs'>{channel.orderingWeight ?? 0}</span>
                                     </div>
                                     <div className='flex justify-between'>
@@ -420,8 +436,8 @@ export function ChannelsTable({
                 )
               })
             ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className='h-24 text-center'>
+              <TableRow className='!bg-[var(--table-background)]'>
+                <TableCell colSpan={columns.length} className='h-24 text-center !bg-[var(--table-background)]'>
                   {t('common.noData')}
                 </TableCell>
               </TableRow>

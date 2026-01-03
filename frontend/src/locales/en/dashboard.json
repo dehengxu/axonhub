@@ -17,17 +17,20 @@
       "topProjects": "Top Projects",
       "requestsByChannel": "Requests by Channel",
       "requestsByModel": "Requests by Model",
+      "channelSuccessRate": "Channel Success Rate",
       "errorLoadingChart": "Error loading chart data:",
       "errorLoadingTopUsers": "Error loading top users:",
       "errorLoadingTopProjects": "Error loading top projects:",
       "errorLoadingChannelData": "Error loading channel data:",
       "errorLoadingModelData": "Error loading model data:",
+      "errorLoadingChannelSuccessRate": "Failed to load channel success rate:",
       "noUserData": "No user data available",
       "noProjectData": "No project data available",
       "noChannelData": "No channel data available",
       "noModelData": "No model data available",
       "requestsByChannelDescription": "Distribution of requests across different channels.",
-      "requestsByModelDescription": "Distribution of requests across different AI models."
+      "requestsByModelDescription": "Distribution of requests across different AI models.",
+      "channelSuccessRateDescription": "Success rate of requests across different channels."
     },
     "stats": {
       "totalUsersInSystem": "Total users in system",
@@ -35,6 +38,10 @@
       "thisMonth": "This month",
       "thisWeek": "This week",
       "today": "Today",
+      "this": "This",
+      "month": "MO",
+      "week": "WK",
+      "day": "Day",
       "failedRequests": "Failed requests",
       "fromLastMonth": "from last month",
       "sinceYesterday": "since yesterday",
@@ -47,7 +54,19 @@
       "totalTokens": "Total Tokens",
       "input": "Input",
       "output": "Output",
-      "cached": "Cached"
+      "cached": "Cached",
+      "vsLastWeek": "vs last week",
+      "average": "Average",
+      "todayRequests": "Today's Requests"
     }
+  },
+  "modelStats": {
+    "title": "Model Usage Statistics",
+    "description": "View token usage statistics for each AI model.",
+    "tokenTrends": "Token Trends by Model"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "export": "Export"
   }
 }

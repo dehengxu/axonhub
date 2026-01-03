@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns'
 import { ColumnDef } from '@tanstack/react-table'
+import { useCallback } from 'react'
 import { zhCN, enUS } from 'date-fns/locale'
 import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +10,7 @@ import { extractNumberID } from '@/lib/utils'
 import { usePaginationSearch } from '@/hooks/use-pagination-search'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DataTableColumnHeader } from '@/features/traces/components/data-table-column-header'
+import { DataTableColumnHeader } from '@/components/data-table-column-header'
 import type { Thread } from '../data/schema'
 
 export function useThreadsColumns(): ColumnDef<Thread>[] {
@@ -21,7 +22,23 @@ export function useThreadsColumns(): ColumnDef<Thread>[] {
     {
       accessorKey: 'id',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('threads.columns.id')} />,
-      cell: ({ row }) => <div className='font-mono text-xs'>#{extractNumberID(row.getValue('id'))}</div>,
+      cell: ({ row }) => {
+        const handleClick = useCallback(() => {
+          navigateWithSearch({
+            to: '/project/threads/$threadId',
+            params: { threadId: row.original.id },
+          })
+        }, [row.original.id, navigateWithSearch])
+        
+        return (
+          <button
+            onClick={handleClick}
+            className='font-mono text-xs text-primary hover:underline cursor-pointer'
+          >
+            #{extractNumberID(row.getValue('id'))}
+          </button>
+        )
+      },
       enableSorting: true,
       enableHiding: false,
     },

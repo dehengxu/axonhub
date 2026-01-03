@@ -63,9 +63,7 @@ func clenupConfig(config Config) Config {
 
 	if config.APIVersion == "" {
 		config.APIVersion = DefaultAPIVersion
-		config.BaseURL = strings.TrimSuffix(config.BaseURL, "/v1beta")
-		config.BaseURL = strings.TrimSuffix(config.BaseURL, "/v1")
-	} else {
+
 		if strings.HasSuffix(config.BaseURL, "/v1beta") {
 			config.APIVersion = "v1beta"
 			config.BaseURL = strings.TrimSuffix(config.BaseURL, "/v1beta")
@@ -75,6 +73,8 @@ func clenupConfig(config Config) Config {
 			config.APIVersion = "v1"
 			config.BaseURL = strings.TrimSuffix(config.BaseURL, "/v1")
 		}
+	} else {
+		config.BaseURL = strings.TrimSuffix(config.BaseURL, "/"+config.APIVersion)
 	}
 
 	return config
@@ -192,8 +192,14 @@ func (t *OutboundTransformer) buildFullRequestURL(llmReq *llm.Request) string {
 
 	// For Vertex AI platform, use different URL format:
 	// https://${API_ENDPOINT}/v1/publishers/google/models/${MODEL_ID}:${ACTION}?key=${API_KEY}
+	// If base URL starts with Cloudflare gateway, don't add /v1 prefix
 	if t.config.PlatformType == PlatformVertex {
-		return fmt.Sprintf("%s/v1/publishers/google/models/%s:%s", t.config.BaseURL, llmReq.Model, action)
+		baseURL := strings.TrimSuffix(t.config.BaseURL, "/")
+		if strings.Contains(baseURL, "/v1/") {
+			return fmt.Sprintf("%s/publishers/google/models/%s:%s", baseURL, llmReq.Model, action)
+		}
+
+		return fmt.Sprintf("%s/v1/publishers/google/models/%s:%s", baseURL, llmReq.Model, action)
 	}
 
 	// Format: /base_url/{version}/models/{model}:generateContent

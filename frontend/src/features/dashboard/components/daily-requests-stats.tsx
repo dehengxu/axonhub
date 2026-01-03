@@ -1,14 +1,14 @@
 'use client'
 
 import { useTranslation } from 'react-i18next'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts'
+import { CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip, Area, AreaChart } from 'recharts'
 import { formatNumber } from '@/utils/format-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDailyRequestStats } from '../data/dashboard'
 
 export function DailyRequestStats() {
   const { t } = useTranslation()
-  const { data: dailyStats, isLoading, error } = useDailyRequestStats(30)
+  const { data: dailyStats, isLoading, error } = useDailyRequestStats()
 
   if (isLoading) {
     return (
@@ -29,27 +29,48 @@ export function DailyRequestStats() {
   // Transform data for the chart
   const chartData =
     dailyStats?.map((stat) => ({
-      name: new Date(stat.date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
+      name: new Date(stat.date).toLocaleDateString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
       }),
-      display: formatNumber(stat.count),
-      value: stat.count,
+      total: stat.count,
     })) || []
 
-  // Calculate dynamic YAxis max value (max daily count, rounded up to nearest 500)
-  const maxCount = Math.max(...chartData.map((d) => d.value), 1)
-  const yAxisMax = Math.ceil(maxCount / 500) * 500
+  // Calculate max value for Y-axis domain
+  const maxValue = Math.max(...chartData.map((d) => d.total), 0)
+  const yAxisMax = Math.max(10, Math.ceil(maxValue * 1.1))
 
   return (
     <ResponsiveContainer width='100%' height={350}>
-      <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray='3 3' />
-        <XAxis dataKey='name' stroke='#888888' fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis stroke='#888888' fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} domain={[0, yAxisMax]} />
-        <Tooltip formatter={(value: number) => [formatNumber(value), '']} labelStyle={{ color: 'var(--foreground)' }} />
-        <Bar dataKey='value' fill='var(--chart-1)' radius={[4, 4, 0, 0]} />
-      </BarChart>
+      <AreaChart data={chartData}>
+        <defs>
+          <linearGradient id='colorTotal' x1='0' y1='0' x2='0' y2='1'>
+            <stop offset='5%' stopColor='var(--primary)' stopOpacity={0.2} />
+            <stop offset='95%' stopColor='var(--primary)' stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray='3 3' stroke='var(--border)' vertical={false} />
+        <XAxis dataKey='name' stroke='var(--muted-foreground)' fontSize={12} tickLine={false} axisLine={false} />
+        <YAxis
+          stroke='var(--muted-foreground)'
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          domain={[0, yAxisMax]}
+          tickFormatter={(value) => formatNumber(value)}
+        />
+        <Tooltip formatter={(value) => formatNumber(Number(value))} />
+        <Area
+          type='monotone'
+          dataKey='total'
+          stroke='var(--primary)'
+          strokeWidth={2}
+          fillOpacity={1}
+          fill='url(#colorTotal)'
+          dot={false}
+          activeDot={{ r: 5 }}
+        />
+      </AreaChart>
     </ResponsiveContainer>
   )
 }

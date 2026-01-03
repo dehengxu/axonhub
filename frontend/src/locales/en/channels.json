@@ -18,13 +18,13 @@
       "tags": "Tags",
       "baseURL": "Base URL",
       "supportedModels": "Models",
-      "performance": "Performance",
+      "channelPerformance": "Performance",
       "firstTokenLatency": "FTL",
       "tokensPerSecond": "TPS",
       "firstTokenLatencyFull": "First Token Latency",
       "tokensPerSecondFull": "Tokens/Second",
-      "weight": "Weight",
-      "test": "Test",
+      "orderingWeight": "Weight",
+      "action": "Action",
       "createdAt": "Created At",
       "updatedAt": "Updated At",
       "actions": "Actions",
@@ -46,12 +46,13 @@
       "gemini_openai": "Gemini (OpenAI)",
       "gemini_vertex": "Gemini (Vertex AI)",
       "deepseek": "DeepSeek",
+      "deepseek_anthropic": "DeepSeek (Anthropic)",
+      "deepinfra": "DeepInfra",
       "doubao": "Doubao",
       "doubao_anthropic": "Doubao (Anthropic)",
       "moonshot": "Moonshot",
-      "openrouter": "OpenRouter",
-      "deepseek_anthropic": "DeepSeek (Anthropic)",
       "moonshot_anthropic": "Moonshot (Anthropic)",
+      "openrouter": "OpenRouter",
       "zhipu": "Zhipu",
       "zai": "Zai",
       "zhipu_anthropic": "Zhipu (Anthropic)",
@@ -77,6 +78,7 @@
       "openai": "OpenAI",
       "anthropic": "Anthropic",
       "deepseek": "DeepSeek",
+      "deepinfra": "DeepInfra",
       "gemini": "Gemini",
       "moonshot": "Moonshot",
       "zhipu": "Zhipu",
@@ -116,6 +118,7 @@
       "filterByName": "Search by name"
     },
     "messages": {
+      "credentialsCopied": "Credentials copied to clipboard",
       "addAtLeastOneModel": "Please add at least one supported model",
       "createDescription": "Create a new Channel here.",
       "editDescription": "Update Channel information here.",
@@ -152,6 +155,7 @@
       "fetchModelsSuccessLarge": "Successfully fetched {{count}} models. Use search to find specific models.",
       "fetchModelsError": "Failed to fetch models: {{error}}",
       "fetchTypesError": "Failed to fetch channel types: {{error}}",
+      "modelsNotConfirmed": "You have selected models but not confirmed them. Please click the \"Confirm Selection\" button to confirm the selected models, or cancel the selection and then save.",
       "batchCreateSuccess": "Successfully created {{count}} channels",
       "batchCreateError": "Failed to create channels: {{error}}",
       "errorResolvedSuccess": "Channel error resolved successfully",
@@ -246,6 +250,11 @@
             "description": "Use Google Cloud Vertex AI instead of the standard Gemini API",
             "editDisabled": "Vertex AI setting cannot be changed"
           },
+          "anthropicAWS": {
+            "label": "Use AWS Bedrock",
+            "description": "Use AWS Bedrock instead of the standard Anthropic API",
+            "editDisabled": "AWS Bedrock setting cannot be changed"
+          },
           "formats": {
             "openai/chat_completions": "OpenAI (Chat Completions)",
             "openai/responses": "OpenAI (Responses)",
@@ -301,6 +310,11 @@
           "label": "Tags",
           "placeholder": "Add tags...",
           "description": "Add tags to categorize and filter channels. Press Enter, comma, or space to add a tag."
+        },
+        "remark": {
+          "label": "Remark",
+          "placeholder": "Enter a note or remark for this channel...",
+          "description": "Add notes or remarks about this channel for reference"
         },
         "modelName": {
           "label": "Model Name",
@@ -361,7 +375,8 @@
         "deselectAll": "Deselect All",
         "addSelectedCount": "Add Selected ({{count}})",
         "removeDeprecated": "Clean ({{count}})",
-        "clearAll": "Clear all"
+        "clearAll": "Clear all",
+        "addMappingButton": "Add Mapping"
       },
       "status": {
         "enable": {
@@ -415,7 +430,11 @@
           "validationRequired": "Both alias and target model are required",
           "targetInvalid": "Target model must be in supported models",
           "duplicateAlias": "Each original model can only be mapped once",
-          "useSuggestion": "Use {{alias}}"
+          "useSuggestion": "Use {{alias}}",
+          "hideOriginalModels": {
+            "label": "Hide Original Models",
+            "description": "When enabled, only the transformed model names will be exposed in the model list, hiding the original model names. This includes models with added prefixes, auto-trimmed prefixes, and aliases. Note: It's recommended not to use both Extra Model Prefix and Auto-Trimmed Model Prefixes at the same time."
+          }
         },
         "overrides": {
           "action": "Overrides",

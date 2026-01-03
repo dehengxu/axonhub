@@ -1,27 +1,5 @@
 package objects
 
-import (
-	"time"
-)
-
-// ModelIdentify move to biz.
-type ModelIdentify struct {
-	ID string `json:"id"`
-}
-
-// ModelFacade move to biz.
-type ModelFacade struct {
-	ID string `json:"id"`
-	// Display name, for user-friendly display from anthropic API.
-	DisplayName string `json:"display_name"`
-	// Created time in seconds.
-	Created int64 `json:"created"`
-	// Created time in time.Time.
-	CreatedAt time.Time `json:"created_at"`
-	// Owned by
-	OwnedBy string `json:"owned_by"`
-}
-
 type ModelCardReasoning struct {
 	Supported bool `json:"supported"`
 	Default   bool `json:"default"`
@@ -67,12 +45,22 @@ type ModelAssociation struct {
 	// channel_regex: the specified pattern in the specified channel
 	// regex: the pattern for all channels
 	// model: the specified model id
-	Type         string                   `json:"type"`
-	Priority     int                      `json:"priority"` // Lower value = higher priority, default 0
-	ChannelModel *ChannelModelAssociation `json:"channelModel"`
-	ChannelRegex *ChannelRegexAssociation `json:"channelRegex"`
-	Regex        *RegexAssociation        `json:"regex"`
-	ModelID      *ModelIDAssociation      `json:"modelId"`
+	// channel_tags_model: the specified model id in channels with specified tags (OR logic)
+	// channel_tags_regex: the specified pattern in channels with specified tags (OR logic)
+	Type             string                       `json:"type"`
+	Priority         int                          `json:"priority"` // Lower value = higher priority, default 0
+	ChannelModel     *ChannelModelAssociation     `json:"channelModel"`
+	ChannelRegex     *ChannelRegexAssociation     `json:"channelRegex"`
+	Regex            *RegexAssociation            `json:"regex"`
+	ModelID          *ModelIDAssociation          `json:"modelId"`
+	ChannelTagsModel *ChannelTagsModelAssociation `json:"channelTagsModel"`
+	ChannelTagsRegex *ChannelTagsRegexAssociation `json:"channelTagsRegex"`
+}
+
+type ExcludeAssociation struct {
+	ChannelNamePattern string   `json:"channelNamePattern"`
+	ChannelIds         []int    `json:"channelIds"`
+	ChannelTags        []string `json:"channelTags"`
 }
 
 type ChannelModelAssociation struct {
@@ -86,9 +74,21 @@ type ChannelRegexAssociation struct {
 }
 
 type RegexAssociation struct {
-	Pattern string `json:"pattern"`
+	Pattern string                `json:"pattern"`
+	Exclude []*ExcludeAssociation `json:"exclude"`
 }
 
 type ModelIDAssociation struct {
-	ModelID string `json:"modelId"`
+	ModelID string                `json:"modelId"`
+	Exclude []*ExcludeAssociation `json:"exclude"`
+}
+
+type ChannelTagsModelAssociation struct {
+	ChannelTags []string `json:"channelTags"`
+	ModelID     string   `json:"modelId"`
+}
+
+type ChannelTagsRegexAssociation struct {
+	ChannelTags []string `json:"channelTags"`
+	Pattern     string   `json:"pattern"`
 }

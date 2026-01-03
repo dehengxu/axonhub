@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react'
 import { format } from 'date-fns'
 import { ColumnDef, Row } from '@tanstack/react-table'
 import { IconCheck, IconX, IconLink, IconChevronDown, IconChevronRight } from '@tabler/icons-react'
-import { toc } from '@lobehub/icons'
 import * as Icons from '@lobehub/icons'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useModels } from '../context/models-context'
 import { Model } from '../data/schema'
-import { DataTableColumnHeader } from './data-table-column-header'
+import { DataTableColumnHeader } from '@/components/data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
 import { ModelsStatusDialog } from './models-status-dialog'
 
@@ -120,12 +119,12 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
       accessorKey: 'modelID',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('models.columns.modelId')} />,
       cell: ({ row }) => {
-        return <span className='font-mono text-sm'>{row.getValue('modelID')}</span>
+        return <span className='font-medium text-sm'>{row.getValue('modelID')}</span>
       },
       meta: {
         className: 'min-w-48',
       },
-      enableSorting: true,
+      enableSorting: false,
     },
     {
       accessorKey: 'developer',
@@ -245,8 +244,8 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
       enableHiding: false,
     },
     {
-      id: 'association',
-      header: ({ column }) => <DataTableColumnHeader column={column} title={t('models.columns.association')} />,
+      id: 'associationRules',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('models.columns.associationRules')} />,
       cell: ({ row }) => {
         const model = row.original
         const { setOpen, setCurrentRow } = useModels()
@@ -261,8 +260,23 @@ export const createColumns = (t: ReturnType<typeof useTranslation>['t']): Column
         return (
           <Button size='sm' variant='outline' className='h-8 px-3' onClick={handleOpenAssociationDialog}>
             <IconLink className='mr-1 h-3 w-3' />
-            {associationCount > 0 ? `${associationCount}` : t('models.actions.addAssociation')}
+            {`${associationCount}`}
           </Button>
+        )
+      },
+      enableSorting: false,
+    },
+    {
+      id: 'associatedChannels',
+      header: ({ column }) => <DataTableColumnHeader column={column} title={t('models.columns.associatedChannels')} />,
+      cell: ({ row }) => {
+        const model = row.original
+        const channelCount = model.associatedChannelCount || 0
+
+        return (
+          <div className='flex justify-center'>
+            <Badge variant='secondary'>{channelCount}</Badge>
+          </div>
         )
       },
       enableSorting: false,

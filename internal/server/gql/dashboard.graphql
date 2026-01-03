@@ -11,6 +11,7 @@ type DashboardOverview {
 type RequestStats {
   requestsToday: Int!
   requestsThisWeek: Int!
+  requestsLastWeek: Int!
   requestsThisMonth: Int!
 }
 
@@ -89,13 +90,23 @@ type TopRequestsProjects {
   requestCount: Int!
 }
 
+type ChannelSuccessRate {
+  channelId: ID!
+  channelName: String!
+  channelType: String!
+  successCount: Int!
+  failedCount: Int!
+  totalCount: Int!
+  successRate: Float!
+}
+
 extend type Query {
   dashboardOverview: DashboardOverview!
   requestStats: RequestStats!
   requestStatsByChannel: [RequestStatsByChannel!]!
   requestStatsByModel: [RequestStatsByModel!]!
-  dailyRequestStats(days: Int = 30): [DailyRequestStats!]!
-  topRequestsProjects(limit: Int = 10): [TopRequestsProjects!]!
+  dailyRequestStats: [DailyRequestStats!]!
+  topRequestsProjects: [TopRequestsProjects!]!
   tokenStats: TokenStats!
 
   # Model-specific token statistics queries
@@ -104,4 +115,6 @@ extend type Query {
     period: String = "day" # "day", "week", "month"
     date: String # ISO date format, defaults to today
   ): ModelTokenStatsSummary!
+
+  channelSuccessRates: [ChannelSuccessRate!]!
 }

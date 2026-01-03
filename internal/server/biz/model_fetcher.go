@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/samber/lo"
@@ -39,7 +40,7 @@ type FetchModelsInput struct {
 
 // FetchModelsResult represents the result of fetching models.
 type FetchModelsResult struct {
-	Models []objects.ModelIdentify
+	Models []ModelIdentify
 	Error  *string
 }
 
@@ -48,31 +49,39 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 	// do not support volcengine for now.
 	if input.ChannelType == channel.TypeVolcengine.String() {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 		}, nil
 	}
-	// Get API key from channel if not provided
-	apiKey := ""
+
+	var (
+		apiKey      string
+		proxyConfig *objects.ProxyConfig
+	)
+
 	if input.APIKey != nil && *input.APIKey != "" {
 		apiKey = *input.APIKey
 	} else if input.ChannelID != nil {
+		// Get API key from channel if not provided
 		// Query channel to get API key
 		ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
 		ch, err := f.channelService.entFromContext(ctx).Channel.Get(ctx, *input.ChannelID)
 		if err != nil {
 			return &FetchModelsResult{
-				Models: []objects.ModelIdentify{},
+				Models: []ModelIdentify{},
 				Error:  lo.ToPtr(fmt.Sprintf("failed to get channel: %v", err)),
 			}, nil
 		}
 
 		apiKey = ch.Credentials.APIKey
+		if ch.Settings != nil {
+			proxyConfig = ch.Settings.Proxy
+		}
 	}
 
 	if apiKey == "" {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 			Error:  lo.ToPtr("API key is required"),
 		}, nil
 	}
@@ -81,7 +90,7 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 	channelType := channel.Type(input.ChannelType)
 	if err := channel.TypeValidator(channelType); err != nil {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 			Error:  lo.ToPtr(fmt.Sprintf("invalid channel type: %v", err)),
 		}, nil
 	}
@@ -102,17 +111,24 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 		req.Headers.Set("Authorization", "Bearer "+apiKey)
 	}
 
-	resp, err := f.httpClient.Do(ctx, req)
+	var httpClient *httpclient.HttpClient
+	if proxyConfig != nil {
+		httpClient = httpclient.NewHttpClientWithProxy(proxyConfig)
+	} else {
+		httpClient = f.httpClient
+	}
+
+	resp, err := httpClient.Do(ctx, req)
 	if err != nil {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 			Error:  lo.ToPtr(fmt.Sprintf("failed to fetch models: %v", err)),
 		}, nil
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 			Error:  lo.ToPtr(fmt.Sprintf("failed to fetch models: %v", resp.StatusCode)),
 		}, nil
 	}
@@ -120,13 +136,13 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 	models, err := f.parseModelsResponse(resp.Body)
 	if err != nil {
 		return &FetchModelsResult{
-			Models: []objects.ModelIdentify{},
+			Models: []ModelIdentify{},
 			Error:  lo.ToPtr(fmt.Sprintf("failed to parse models response: %v", err)),
 		}, nil
 	}
 
 	return &FetchModelsResult{
-		Models: models,
+		Models: lo.Uniq(models),
 		Error:  nil,
 	}, nil
 }
@@ -137,12 +153,23 @@ func (f *ModelFetcher) prepareModelsEndpoint(channelType channel.Type, baseURL s
 
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
+	useRawURL := false
+
+	if before, ok := strings.CutSuffix(baseURL, "#"); ok {
+		baseURL = before
+		useRawURL = true
+	}
+
 	switch {
 	case channelType.IsAnthropic():
 		headers.Set("Anthropic-Version", "2023-06-01")
 
 		baseURL = strings.TrimSuffix(baseURL, "/anthropic")
 		baseURL = strings.TrimSuffix(baseURL, "/claude")
+
+		if useRawURL {
+			return baseURL + "/models", headers
+		}
 
 		if strings.HasSuffix(baseURL, "/v1") {
 			return baseURL + "/models", headers
@@ -161,17 +188,17 @@ func (f *ModelFetcher) prepareModelsEndpoint(channelType channel.Type, baseURL s
 
 		return baseURL + "/v1/models", headers
 	case channelType.IsGemini():
-		if strings.HasSuffix(baseURL, "/v1beta") {
-			return baseURL + "/models", headers
-		}
-
-		if strings.HasSuffix(baseURL, "/v1") {
+		if strings.Contains(baseURL, "/v1") {
 			return baseURL + "/models", headers
 		}
 
 		return baseURL + "/v1beta/models", headers
 	default:
-		if strings.HasSuffix(baseURL, "/v1") {
+		if useRawURL {
+			return baseURL + "/models", headers
+		}
+
+		if strings.Contains(baseURL, "/v1") {
 			return baseURL + "/models", headers
 		}
 
@@ -187,22 +214,42 @@ type GeminiModelResponse struct {
 	Description string `json:"description"`
 }
 
-// parseModelsResponse parses the models response from the provider API.
-func (f *ModelFetcher) parseModelsResponse(body []byte) ([]objects.ModelIdentify, error) {
-	// Most providers use OpenAI-compatible format
-	var response struct {
-		Data   []objects.ModelIdentify `json:"data"`
-		Models []GeminiModelResponse   `json:"models"`
+type commonModelsResponse struct {
+	Data   []ModelIdentify       `json:"data"`
+	Models []GeminiModelResponse `json:"models"`
+}
+
+var jsonArrayRegex = regexp.MustCompile(`\[[^\]]*\]`)
+
+// ExtractJSONArray uses regex to extract JSON array from body and unmarshal to target.
+func ExtractJSONArray(body []byte, target interface{}) error {
+	matches := jsonArrayRegex.FindAll(body, -1)
+	if len(matches) == 0 {
+		return fmt.Errorf("no JSON array found in response")
 	}
 
+	for _, match := range matches {
+		if err := json.Unmarshal(match, target); err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("failed to unmarshal any JSON array")
+}
+
+// parseModelsResponse parses the models response from the provider API.
+func (f *ModelFetcher) parseModelsResponse(body []byte) ([]ModelIdentify, error) {
+	var response commonModelsResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		if err := ExtractJSONArray(body, &response.Data); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
 	}
 
 	if len(response.Models) > 0 {
 		for _, model := range response.Models {
 			// remove "models/" prefix for gemini.
-			response.Data = append(response.Data, objects.ModelIdentify{
+			response.Data = append(response.Data, ModelIdentify{
 				ID: strings.TrimPrefix(model.Name, "models/"),
 			})
 		}

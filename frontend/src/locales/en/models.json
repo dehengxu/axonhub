@@ -19,7 +19,8 @@
       "contextWindowFull": "Context Window",
       "maxOutput": "Max Output",
       "maxOutputFull": "Max Output Tokens",
-      "association": "Association",
+      "associationRules": "Rules",
+      "associatedChannels": "Channels",
       "status": "Status",
       "createdAt": "Created At",
       "updatedAt": "Updated At",
@@ -41,7 +42,8 @@
       "bulkAdd": "Bulk Add",
       "addAssociation": "Add",
       "manageAssociation": "Manage Association",
-      "settings": "Settings"
+      "settings": "Settings",
+      "detectUnassociated": "Detect Unassociated"
     },
     "filters": {
       "filterByName": "Filter by name..."
@@ -94,12 +96,15 @@
         "types": {
           "channelModel": "Channel Exact Match",
           "channelRegex": "Channel Regex Match",
+          "channelTagsModel": "Channel Tags Exact Match",
+          "channelTagsRegex": "Channel Tags Regex Match",
           "regex": "Global Regex Match",
           "model": "Global Exact Match"
         },
         "channelId": "Channel ID",
         "channelIdPlaceholder": "Enter channel ID",
         "selectChannel": "Select channel",
+        "selectChannelTags": "Select channel tags",
         "modelId": "Model ID",
         "modelIdPlaceholder": "Enter model ID",
         "selectModel": "Select model",
@@ -116,9 +121,16 @@
         "filterByChannel": "Filter by channel name...",
         "noConnections": "No channel connections. Add rules to see preview.",
         "noFilteredConnections": "No channels found matching filter.",
+        "excludeSection": "Exclude Channels",
+        "excludeChannelNamePattern": "Exclude channel name (regex)",
+        "excludeChannelIds": "Exclude channels",
+        "excludeChannelTags": "Exclude channel tags",
+        "noChannelsAvailable": "No channels available",
         "ruleHints": {
           "channelModel": "Use model {{model}} in channel {{channel}}",
           "channelRegex": "Use model matching {{pattern}} in channel {{channel}}",
+          "channelTagsModel": "Use model {{model}} in channels with tags: {{tags}}",
+          "channelTagsRegex": "Use model matching {{pattern}} in channels with tags: {{tags}}",
           "model": "Use model {{model}} across all channels",
           "regex": "Use model matching {{pattern}} across all channels"
         }
@@ -151,6 +163,14 @@
           "description": "When enabled, models API returns all models from enabled channels. When disabled, only models with explicit Model entity configuration will be returned."
         }
       }
+    },
+    "unassociated": {
+      "title": "Unassociated Channels Detection",
+      "description": "Detect channels with models that are not associated with any model configuration",
+      "summary": "Found {{channelCount}} channels with {{modelCount}} unassociated models",
+      "noUnassociated": "All channel models are properly associated",
+      "searchPlaceholder": "Search models...",
+      "noSearchResults": "No models found matching your search"
     },
     "modelCard": {
       "title": "Model Card",

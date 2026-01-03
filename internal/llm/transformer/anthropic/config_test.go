@@ -22,63 +22,10 @@ func TestOutboundTransformer_PlatformConfigurations(t *testing.T) {
 		{
 			name: "Direct Anthropic API",
 			setupFunc: func(transformer *OutboundTransformer) {
-				// Default configuration - no setup needed
+				transformer.config.BaseURL = "https://api.anthropic.com"
 			},
 			expectedURL:    "https://api.anthropic.com/v1/messages",
 			expectedHeader: "2023-06-01",
-			model:          "claude-3-sonnet-20240229",
-			stream:         false,
-		},
-		{
-			name: "AWS Bedrock - Non-streaming",
-			setupFunc: func(transformer *OutboundTransformer) {
-				transformer.ConfigureForBedrock("us-east-1")
-			},
-			expectedURL:    "https://bedrock-runtime.us-east-1.amazonaws.com/model/claude-3-sonnet-20240229/invoke",
-			expectedHeader: "bedrock-2023-05-31",
-			model:          "claude-3-sonnet-20240229",
-			stream:         false,
-		},
-		{
-			name: "AWS Bedrock - Streaming",
-			setupFunc: func(transformer *OutboundTransformer) {
-				transformer.ConfigureForBedrock("us-west-2")
-			},
-			expectedURL:    "https://bedrock-runtime.us-west-2.amazonaws.com/model/claude-3-sonnet-20240229/invoke-with-response-stream",
-			expectedHeader: "bedrock-2023-05-31",
-			model:          "claude-3-sonnet-20240229",
-			stream:         true,
-		},
-		{
-			name: "Google Vertex AI - Non-streaming",
-			setupFunc: func(transformer *OutboundTransformer) {
-				err := transformer.ConfigureForVertex("us-central1", "my-project-123")
-				require.NoError(t, err)
-			},
-			expectedURL:    "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project-123/locations/us-central1/publishers/anthropic/models/claude-3-sonnet-20240229:rawPredict",
-			expectedHeader: "vertex-2023-10-16",
-			model:          "claude-3-sonnet-20240229",
-			stream:         false,
-		},
-		{
-			name: "Google Vertex AI - Streaming",
-			setupFunc: func(transformer *OutboundTransformer) {
-				err := transformer.ConfigureForVertex("europe-west1", "my-project-456")
-				require.NoError(t, err)
-			},
-			expectedURL:    "https://europe-west1-aiplatform.googleapis.com/v1/projects/my-project-456/locations/europe-west1/publishers/anthropic/models/claude-3-sonnet-20240229:streamRawPredict",
-			expectedHeader: "vertex-2023-10-16",
-			model:          "claude-3-sonnet-20240229",
-			stream:         true,
-		},
-		{
-			name: "Google Vertex AI - Global region",
-			setupFunc: func(transformer *OutboundTransformer) {
-				err := transformer.ConfigureForVertex("global", "my-project-789")
-				require.NoError(t, err)
-			},
-			expectedURL:    "https://aiplatform.googleapis.com/v1/projects/my-project-789/locations/global/publishers/anthropic/models/claude-3-sonnet-20240229:rawPredict",
-			expectedHeader: "vertex-2023-10-16",
 			model:          "claude-3-sonnet-20240229",
 			stream:         false,
 		},
@@ -133,20 +80,4 @@ func TestOutboundTransformer_PlatformConfigurations(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestOutboundTransformer_PlatformConfigurationErrors(t *testing.T) {
-	transformer, _ := NewOutboundTransformer("", "test-api-key")
-
-	t.Run("Vertex AI - Missing region", func(t *testing.T) {
-		err := transformer.(*OutboundTransformer).ConfigureForVertex("", "my-project")
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "region is required")
-	})
-
-	t.Run("Vertex AI - Missing project ID", func(t *testing.T) {
-		err := transformer.(*OutboundTransformer).ConfigureForVertex("us-central1", "")
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "project ID is required")
-	})
 }

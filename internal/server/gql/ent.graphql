@@ -401,6 +401,7 @@ Properties by which Channel connections can be ordered.
 enum ChannelOrderField {
   CREATED_AT
   UPDATED_AT
+  NAME
   ORDERING_WEIGHT
 }
 type ChannelOverrideTemplate implements Node {
@@ -984,6 +985,7 @@ enum ChannelType @goModel(model: "github.com/looplj/axonhub/internal/ent/channel
   gemini_vertex
   deepseek
   deepseek_anthropic
+  deepinfra
   doubao
   doubao_anthropic
   moonshot
@@ -1853,6 +1855,7 @@ Properties by which Model connections can be ordered.
 enum ModelOrderField {
   CREATED_AT
   UPDATED_AT
+  NAME
 }
 """
 ModelStatus is enum for the field status

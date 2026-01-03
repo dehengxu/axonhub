@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SortingState } from '@tanstack/react-table'
-import { IconPlus, IconSettings } from '@tabler/icons-react'
+import { IconPlus, IconSettings, IconAlertCircle } from '@tabler/icons-react'
 import { useDebounce } from '@/hooks/use-debounce'
 import { usePaginationSearch } from '@/hooks/use-pagination-search'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { Button } from '@/components/ui/button'
+import { PermissionGuard } from '@/components/permission-guard'
 import { createColumns } from './components/models-columns'
 import { ModelsDialogs } from './components/models-dialogs'
 import { ModelsTable } from './components/models-table'
@@ -21,9 +22,21 @@ function ModelsContent() {
     defaultPageSize: 20,
   })
   const [nameFilter, setNameFilter] = useState<string>('')
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: 'createdAt', desc: true },
-  ])
+  const [sorting, setSorting] = useState<SortingState>(() => {
+    const stored = localStorage.getItem('models-table-sorting')
+    if (stored) {
+      try {
+        return JSON.parse(stored)
+      } catch {
+        return [{ id: 'createdAt', desc: true }]
+      }
+    }
+    return [{ id: 'createdAt', desc: true }]
+  })
+
+  useEffect(() => {
+    localStorage.setItem('models-table-sorting', JSON.stringify(sorting))
+  }, [sorting])
 
   const debouncedNameFilter = useDebounce(nameFilter, 300)
 
@@ -143,12 +156,33 @@ function SettingsButton() {
   )
 }
 
+function DetectUnassociatedButton() {
+  const { t } = useTranslation()
+  const { setOpen } = useModels()
+
+  return (
+    <Button variant='outline' onClick={() => setOpen('unassociated')}>
+      <IconAlertCircle className='mr-2 h-4 w-4' />
+      {t('models.actions.detectUnassociated')}
+    </Button>
+  )
+}
+
 function ActionButtons() {
   return (
     <div className='flex gap-2'>
-      <SettingsButton />
-      <BulkAddButton />
-      <CreateButton />
+      <PermissionGuard requiredScope='write_channels'>
+        <DetectUnassociatedButton />
+      </PermissionGuard>
+      <PermissionGuard requiredScope='write_channels'>
+        <SettingsButton />
+      </PermissionGuard>
+      <PermissionGuard requiredScope='write_channels'>
+        <BulkAddButton />
+      </PermissionGuard>
+      <PermissionGuard requiredScope='write_channels'>
+        <CreateButton />
+      </PermissionGuard>
     </div>
   )
 }

@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useRequestPermissions } from '../../../hooks/useRequestPermissions'
 import { Request } from '../data/schema'
-import { DataTableColumnHeader } from './data-table-column-header'
+import { DataTableColumnHeader } from '@/components/data-table-column-header'
 import { getStatusColor } from './help'
 import { formatDuration } from '@/utils/format-duration'
 
@@ -64,7 +64,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       enableSorting: false,
       cell: ({ row }) => {
         const request = row.original
-        return <div className='font-mono text-xs'>{request.modelID || t('requests.columns.unknown')}</div>
+        return <div className='font-medium text-sm'>{request.modelID || t('requests.columns.unknown')}</div>
       },
     },
 

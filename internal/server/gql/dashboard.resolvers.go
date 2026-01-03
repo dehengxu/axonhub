@@ -17,6 +17,8 @@ import (
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/request"
+	"github.com/looplj/axonhub/internal/ent/requestexecution"
+	"github.com/looplj/axonhub/internal/ent/schema/schematype"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
@@ -56,6 +58,7 @@ func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOvervi
 		stats.RequestStats = &RequestStats{
 			RequestsToday:     0,
 			RequestsThisWeek:  0,
+			RequestsLastWeek:  0,
 			RequestsThisMonth: 0,
 		}
 	} else {
@@ -84,15 +87,16 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 	stats := &RequestStats{
 		RequestsToday:     0,
 		RequestsThisWeek:  0,
+		RequestsLastWeek:  0,
 		RequestsThisMonth: 0,
 	}
 
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekAgo := today.AddDate(0, 0, -7)
+	twoWeeksAgo := today.AddDate(0, 0, -14)
 	monthAgo := today.AddDate(0, -1, 0)
 
-	// Get requests for today
 	if requestsToday, err := r.client.Request.Query().
 		Where(request.CreatedAtGTE(today)).
 		Count(ctx); err != nil {
@@ -101,7 +105,6 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 		stats.RequestsToday = requestsToday
 	}
 
-	// Get requests for this week
 	if requestsThisWeek, err := r.client.Request.Query().
 		Where(request.CreatedAtGTE(weekAgo)).
 		Count(ctx); err != nil {
@@ -110,7 +113,14 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 		stats.RequestsThisWeek = requestsThisWeek
 	}
 
-	// Get requests for this month
+	if requestsLastWeek, err := r.client.Request.Query().
+		Where(request.CreatedAtGTE(twoWeeksAgo), request.CreatedAtLT(weekAgo)).
+		Count(ctx); err != nil {
+		log.Warn(ctx, "failed to count last week's requests", log.Cause(err))
+	} else {
+		stats.RequestsLastWeek = requestsLastWeek
+	}
+
 	if requestsThisMonth, err := r.client.Request.Query().
 		Where(request.CreatedAtGTE(monthAgo)).
 		Count(ctx); err != nil {
@@ -229,16 +239,10 @@ func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStat
 }
 
 // DailyRequestStats is the resolver for the dailyRequestStats field.
-func (r *queryResolver) DailyRequestStats(ctx context.Context, days *int) ([]*DailyRequestStats, error) {
+func (r *queryResolver) DailyRequestStats(ctx context.Context) ([]*DailyRequestStats, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	daysCount := 30
-	if days != nil {
-		daysCount = *days
-		if daysCount <= 0 || daysCount > 365 {
-			return nil, fmt.Errorf("invalid days parameter: must be between 1 and 365")
-		}
-	}
 
 	now := time.Now()
 	startDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -daysCount+1)
@@ -314,16 +318,10 @@ func (r *queryResolver) DailyRequestStats(ctx context.Context, days *int) ([]*Da
 }
 
 // TopRequestsProjects is the resolver for the topRequestsProjects field.
-func (r *queryResolver) TopRequestsProjects(ctx context.Context, limit *int) ([]*TopRequestsProjects, error) {
+func (r *queryResolver) TopRequestsProjects(ctx context.Context) ([]*TopRequestsProjects, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	limitCount := 10
-	if limit != nil {
-		limitCount = *limit
-		if limitCount <= 0 || limitCount > 100 {
-			return nil, fmt.Errorf("invalid limit parameter: must be between 1 and 100")
-		}
-	}
 
 	type projectRequestCount struct {
 		ProjectID    int `json:"project_id"`
@@ -655,4 +653,99 @@ func (r *queryResolver) ModelTokenStats(ctx context.Context, models []string, pe
 			Dates:  dates,
 		},
 	}, nil
+}
+
+// ChannelSuccessRates is the resolver for the channelSuccessRates field.
+func (r *queryResolver) ChannelSuccessRates(ctx context.Context) ([]*ChannelSuccessRate, error) {
+	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	limitCount := 5
+
+	type channelExecutionStats struct {
+		ChannelID    int `json:"channel_id"`
+		SuccessCount int `json:"success_count"`
+		FailedCount  int `json:"failed_count"`
+	}
+
+	var results []channelExecutionStats
+
+	// Use raw SQL to aggregate execution stats by channel
+	err := r.client.RequestExecution.Query().
+		Modify(func(s *sql.Selector) {
+			s.Select(
+				requestexecution.FieldChannelID,
+				sql.As("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)", "success_count"),
+				sql.As("SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)", "failed_count"),
+			).
+				Where(sql.NotNull(requestexecution.FieldChannelID)).
+				GroupBy(requestexecution.FieldChannelID)
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel execution stats: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*ChannelSuccessRate{}, nil
+	}
+
+	// Build response with success rate calculation
+	var response []*ChannelSuccessRate
+
+	for _, result := range results {
+		totalCount := result.SuccessCount + result.FailedCount
+
+		var successRate float64
+		if totalCount > 0 {
+			successRate = float64(result.SuccessCount) / float64(totalCount) * 100
+		}
+
+		response = append(response, &ChannelSuccessRate{
+			ChannelID:    objects.GUID{Type: "Channel", ID: result.ChannelID},
+			ChannelName:  "",
+			ChannelType:  "",
+			SuccessCount: result.SuccessCount,
+			FailedCount:  result.FailedCount,
+			TotalCount:   totalCount,
+			SuccessRate:  successRate,
+		})
+	}
+
+	// Order by total count (descending)
+	sort.Slice(response, func(i, j int) bool {
+		return response[i].TotalCount > response[j].TotalCount
+	})
+
+	// Apply limit
+	if len(response) > limitCount {
+		response = response[:limitCount]
+	}
+
+	// Get channel details for the top channels
+	channelIDs := lo.Map(response, func(item *ChannelSuccessRate, _ int) int {
+		return item.ChannelID.ID
+	})
+
+	ctx = schematype.SkipSoftDelete(ctx)
+
+	channels, err := r.client.Channel.Query().
+		Where(channel.IDIn(channelIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel details: %w", err)
+	}
+
+	channelMap := lo.SliceToMap(channels, func(ch *ent.Channel) (int, *ent.Channel) {
+		return ch.ID, ch
+	})
+
+	// Fill in channel details
+	for _, item := range response {
+		if ch, exists := channelMap[item.ChannelID.ID]; exists {
+			item.ChannelName = ch.Name
+			item.ChannelType = string(ch.Type)
+		}
+	}
+
+	return response, nil
 }

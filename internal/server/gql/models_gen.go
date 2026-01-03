@@ -54,6 +54,16 @@ type BulkUpdateChannelOrderingResult struct {
 	Channels []*ent.Channel `json:"channels"`
 }
 
+type ChannelSuccessRate struct {
+	ChannelID    objects.GUID `json:"channelId"`
+	ChannelName  string       `json:"channelName"`
+	ChannelType  string       `json:"channelType"`
+	SuccessCount int          `json:"successCount"`
+	FailedCount  int          `json:"failedCount"`
+	TotalCount   int          `json:"totalCount"`
+	SuccessRate  float64      `json:"successRate"`
+}
+
 type ChannelTypeCount struct {
 	Type  string `json:"type"`
 	Count int    `json:"count"`
@@ -86,8 +96,8 @@ type DashboardOverview struct {
 }
 
 type FetchModelsPayload struct {
-	Models []*objects.ModelIdentify `json:"models"`
-	Error  *string                  `json:"error,omitempty"`
+	Models []*biz.ModelIdentify `json:"models"`
+	Error  *string              `json:"error,omitempty"`
 }
 
 type HourlyRequestStats struct {
@@ -163,6 +173,7 @@ type RemoveUserFromProjectInput struct {
 type RequestStats struct {
 	RequestsToday     int `json:"requestsToday"`
 	RequestsThisWeek  int `json:"requestsThisWeek"`
+	RequestsLastWeek  int `json:"requestsLastWeek"`
 	RequestsThisMonth int `json:"requestsThisMonth"`
 }
 

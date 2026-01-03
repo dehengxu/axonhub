@@ -15,18 +15,19 @@ export const channelTypeSchema = z.enum([
   'gemini',
   'gemini_vertex',
   'deepseek',
+  'deepseek_anthropic',
+  'deepinfra',
   'doubao',
   'doubao_anthropic',
   'moonshot',
+  'moonshot_anthropic',
   'zhipu',
   'zai',
+  'zhipu_anthropic',
+  'zai_anthropic',
   'vercel',
   'anthropic_fake',
   'openai_fake',
-  'deepseek_anthropic',
-  'moonshot_anthropic',
-  'zhipu_anthropic',
-  'zai_anthropic',
   'openrouter',
   'xai',
   'ppio',
@@ -89,30 +90,63 @@ export const channelSettingsSchema = z.object({
   extraModelPrefix: z.string().optional(),
   modelMappings: z.array(modelMappingSchema).nullable(),
   autoTrimedModelPrefixes: z.array(z.string()).optional().nullable(),
+  hideOriginalModels: z.boolean().optional(),
   overrideParameters: z.string().optional(),
   overrideHeaders: z.array(headerEntrySchema).optional().nullable(),
   proxy: proxyConfigSchema.optional().nullable(),
 })
 export type ChannelSettings = z.infer<typeof channelSettingsSchema>
 
+// Channel Model Entry
+export const channelModelEntrySchema = z.object({
+  requestModel: z.string(),
+  actualModel: z.string(),
+  source: z.string(),
+})
+export type ChannelModelEntry = z.infer<typeof channelModelEntrySchema>
+
+// Channel Credentials
+export const channelCredentialsSchema = z.object({
+  apiKey: z.string().optional().nullable(),
+  aws: z
+    .object({
+      accessKeyID: z.string(),
+      secretAccessKey: z.string(),
+      region: z.string(),
+    })
+    .optional()
+    .nullable(),
+  gcp: z
+    .object({
+      region: z.string(),
+      projectID: z.string(),
+      jsonData: z.string(),
+    })
+    .optional()
+    .nullable(),
+})
+export type ChannelCredentials = z.infer<typeof channelCredentialsSchema>
+
 // Channel
 export const channelSchema = z.object({
   id: z.string(),
-  createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
   type: channelTypeSchema,
   baseURL: z.string(),
   name: z.string(),
   status: channelStatusSchema,
+  credentials: channelCredentialsSchema.optional().nullable(),
   supportedModels: z.array(z.string()),
   autoSyncSupportedModels: z.boolean().default(false),
   tags: z.array(z.string()).optional().default([]).nullable(),
   defaultTestModel: z.string(),
   settings: channelSettingsSchema.optional().nullable(),
-  orderingWeight: z.number().default(0),
+  orderingWeight: z.number().optional().default(0),
   errorMessage: z.string().optional().nullable(),
   remark: z.string().optional().nullable(),
   channelPerformance: channelPerformanceSchema.optional().nullable(),
+  allModelEntries: z.array(channelModelEntrySchema).optional(),
 })
 export type Channel = z.infer<typeof channelSchema>
 
@@ -126,6 +160,7 @@ export const createChannelInputSchema = z
     autoSyncSupportedModels: z.boolean().optional().default(false),
     tags: z.array(z.string()).optional().default([]),
     defaultTestModel: z.string().min(1, 'Please select a default test model'),
+    remark: z.string().optional(),
     settings: channelSettingsSchema.optional(),
     credentials: z.object({
       apiKey: z.string().min(1, 'API Key is required'),
@@ -146,31 +181,6 @@ export const createChannelInputSchema = z
     }),
   })
   .superRefine((data, ctx) => {
-    // 如果是 anthropic_aws 类型，AWS 字段必填（精确到字段级报错）
-    if (data.type === 'anthropic_aws') {
-      const aws = data.credentials?.aws
-      if (!aws?.accessKeyID) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Access Key ID is required',
-          path: ['credentials', 'aws', 'accessKeyID'],
-        })
-      }
-      if (!aws?.secretAccessKey) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Secret Access Key is required',
-          path: ['credentials', 'aws', 'secretAccessKey'],
-        })
-      }
-      if (!aws?.region) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Region is required',
-          path: ['credentials', 'aws', 'region'],
-        })
-      }
-    }
     // 如果是 anthropic_gcp 类型，GCP 字段必填（精确到字段级报错）
     if (data.type === 'anthropic_gcp') {
       const gcp = data.credentials?.gcp
@@ -234,31 +244,6 @@ export const updateChannelInputSchema = z
     orderingWeight: z.number().optional(),
   })
   .superRefine((data, ctx) => {
-    // 如果是 anthropic_aws 类型且提供了 credentials，AWS 字段必填（字段级报错）
-    if (data.type === 'anthropic_aws' && data.credentials) {
-      const aws = data.credentials.aws
-      if (!aws?.accessKeyID) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Access Key ID is required',
-          path: ['credentials', 'aws', 'accessKeyID'],
-        })
-      }
-      if (!aws?.secretAccessKey) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Secret Access Key is required',
-          path: ['credentials', 'aws', 'secretAccessKey'],
-        })
-      }
-      if (!aws?.region) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'AWS Region is required',
-          path: ['credentials', 'aws', 'region'],
-        })
-      }
-    }
     // 如果是 anthropic_gcp 类型且提供了 credentials，GCP 字段必填（字段级报错）
     if (data.type === 'anthropic_gcp' && data.credentials) {
       const gcp = data.credentials.gcp
@@ -346,6 +331,7 @@ export const channelOrderingItemSchema = z.object({
   orderingWeight: z.number(),
   tags: z.array(z.string()).optional().default([]).nullable(),
   supportedModels: z.array(z.string()).optional().default([]).nullable(),
+  allModelEntries: z.array(channelModelEntrySchema).optional(),
 })
 export type ChannelOrderingItem = z.infer<typeof channelOrderingItemSchema>
 

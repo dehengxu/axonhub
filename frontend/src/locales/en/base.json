@@ -11,6 +11,7 @@
       "dashboard": "Dashboard",
       "channels": "Channels",
       "models": "Models",
+      "modelStats": "Model Stats",
       "dataStorages": "Data Storages",
       "users": "Users",
       "roles": "Roles",
@@ -98,6 +99,7 @@
     "showing": "Showing {{start}}-{{end}} of {{total}}"
   },
   "common": {
+    "close": "Close",
     "refresh": "Refresh",
     "selected": "selected",
     "selectedItems": "{{count}} selected",
@@ -122,6 +124,7 @@
     "moveToBottom": "Move to bottom",
     "dragging": "Dragging",
     "unsavedChanges": "You have unsaved changes",
+    "copied": "Copied",
     "sort": {
       "ascending": "Ascending",
       "descending": "Descending",

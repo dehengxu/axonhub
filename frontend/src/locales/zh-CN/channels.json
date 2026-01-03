@@ -1,7 +1,6 @@
 {
   "channels": {
     "title": "渠道管理",
-    "view": "视图",
     "toggleColumns": "切换列",
     "description": "管理您的 AI 模型渠道和配置。",
     "addChannel": "添加渠道",
@@ -20,13 +19,13 @@
       "tags": "标签",
       "baseURL": "Base URL",
       "supportedModels": "支持的模型",
-      "performance": "性能",
+      "channelPerformance": "性能",
       "firstTokenLatency": "FTL",
       "tokensPerSecond": "TPS",
       "firstTokenLatencyFull": "首Token延迟",
       "tokensPerSecondFull": "Token/秒",
-      "weight": "权重",
-      "test": "测试",
+      "orderingWeight": "权重",
+      "action": "操作",
       "createdAt": "创建时间",
       "updatedAt": "更新时间",
       "actions": "操作",
@@ -48,12 +47,13 @@
       "gemini_openai": "Gemini (OpenAI)",
       "gemini_vertex": "Gemini (Vertex AI)",
       "deepseek": "DeepSeek",
+      "deepseek_anthropic": "DeepSeek (Anthropic)",
+      "deepinfra": "DeepInfra",
       "doubao": "Doubao",
       "doubao_anthropic": "Doubao (Anthropic)",
       "moonshot": "Moonshot",
-      "openrouter": "OpenRouter",
-      "deepseek_anthropic": "DeepSeek (Anthropic)",
       "moonshot_anthropic": "Moonshot (Anthropic)",
+      "openrouter": "OpenRouter",
       "zhipu": "智谱",
       "zai": "Zai",
       "zhipu_anthropic": "智谱 (Anthropic)",
@@ -79,6 +79,7 @@
       "openai": "OpenAI",
       "anthropic": "Anthropic",
       "deepseek": "DeepSeek",
+      "deepinfra": "DeepInfra",
       "gemini": "Gemini",
       "moonshot": "Moonshot",
       "zhipu": "智谱",
@@ -111,6 +112,7 @@
       "exitErrorOnlyButton": "退出错误模式"
     },
     "messages": {
+      "credentialsCopied": "权限凭证已经复制到剪贴板",
       "addAtLeastOneModel": "请至少添加一个支持的模型",
       "createDescription": "在此创建新的 Channel。",
       "editDescription": "在此更新 Channel 信息。",
@@ -147,6 +149,7 @@
       "fetchModelsSuccessLarge": "成功获取 {{count}} 个模型。使用搜索查找特定模型。",
       "fetchModelsError": "获取模型失败：{{error}}",
       "fetchTypesError": "获取渠道类型失败：{{error}}",
+      "modelsNotConfirmed": "您已选择了模型但未确认，请先点击\"确定选中\"按钮确认选择的模型，或取消选择后再保存。",
       "batchCreateSuccess": "成功创建 {{count}} 个渠道",
       "batchCreateError": "批量创建失败：{{error}}",
       "errorResolvedSuccess": "渠道错误解决成功",
@@ -249,6 +252,11 @@
             "description": "使用 Google Cloud Vertex AI 替代标准 Gemini API",
             "editDisabled": "无法更改 Vertex AI 设置"
           },
+          "anthropicAWS": {
+            "label": "使用 AWS Bedrock",
+            "description": "使用 AWS Bedrock 替代标准 Anthropic API",
+            "editDisabled": "无法更改 AWS Bedrock 设置"
+          },
           "formats": {
             "openai/chat_completions": "OpenAI (Chat Completions)",
             "openai/responses": "OpenAI (Responses)",
@@ -304,6 +312,11 @@
           "label": "标签",
           "placeholder": "添加标签...",
           "description": "添加标签来分类和过滤渠道。按回车键、逗号或空格来添加标签。"
+        },
+        "remark": {
+          "label": "备注",
+          "placeholder": "为此渠道输入备注或说明...",
+          "description": "添加关于此渠道的备注或说明以供参考"
         },
         "modelName": {
           "label": "模型名称",
@@ -364,7 +377,8 @@
         "deselectAll": "取消全选",
         "clearAll": "清空全部",
         "addSelectedCount": "确定选中 ({{count}})",
-        "removeDeprecated": "清理 ({{count}})"
+        "removeDeprecated": "清理 ({{count}})",
+        "addMappingButton": "添加映射"
       },
       "status": {
         "enable": {
@@ -418,7 +432,11 @@
           "validationRequired": "别名和目标模型都不能为空",
           "targetInvalid": "目标模型必须在支持的模型列表中",
           "duplicateAlias": "每个别名只能映射一次",
-          "useSuggestion": "使用 {{alias}}"
+          "useSuggestion": "使用 {{alias}}",
+          "hideOriginalModels": {
+            "label": "隐藏原始模型",
+            "description": "启用后，模型列表中将只显示转换后的模型名称，隐藏原始模型名称。包括添加了前缀的模型、自动移除前缀后的模型以及别名。注意：建议不要同时设置额外模型前缀和自动裁剪模型前缀。"
+          }
         },
         "overrides": {
           "action": "覆盖设置",

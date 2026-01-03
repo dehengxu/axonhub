@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/dialect"
 	"github.com/stretchr/testify/require"
 
+	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/enttest"
@@ -649,5 +650,403 @@ func TestModelService_ListEnabledModels(t *testing.T) {
 
 		require.True(t, resultMap["gpt-4"], "Auto-trimmed model should be included")
 		require.True(t, resultMap["gpt-3.5-turbo"], "Auto-trimmed model should be included")
+	})
+
+	t.Run("API key with active profile modelIDs returns only specified models", func(t *testing.T) {
+		// Create API key with active profile that restricts models
+		apiKey := &ent.APIKey{
+			ID:   1,
+			Name: "test-api-key",
+			Profiles: &objects.APIKeyProfiles{
+				ActiveProfile: "production",
+				Profiles: []objects.APIKeyProfile{
+					{
+						Name:     "production",
+						ModelIDs: []string{"gpt-4", "claude-3-opus"},
+					},
+				},
+			},
+		}
+
+		// Add API key to context
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should only return models specified in the profile
+		require.Len(t, result, 2, "Should only return 2 models from profile")
+
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["claude-3-opus"], "claude-3-opus should be in result")
+		require.False(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should not be in result")
+		require.False(t, resultMap["deepseek-chat"], "deepseek-chat should not be in result")
+
+		// Verify owned by is api_key_profile
+		for _, model := range result {
+			require.Equal(t, "api_key_profile", model.OwnedBy)
+		}
+	})
+
+	t.Run("API key with active profile but empty modelIDs returns all models", func(t *testing.T) {
+		// Create API key with active profile but no modelIDs
+		apiKey := &ent.APIKey{
+			ID:   2,
+			Name: "test-api-key-2",
+			Profiles: &objects.APIKeyProfiles{
+				ActiveProfile: "development",
+				Profiles: []objects.APIKeyProfile{
+					{
+						Name:          "development",
+						ModelIDs:      []string{},
+						ModelMappings: []objects.ModelMapping{{From: "gpt-4", To: "gpt-4"}},
+					},
+				},
+			},
+		}
+
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should return all models (not restricted)
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+		require.True(t, resultMap["claude-3-opus-20240229"], "claude-3-opus-20240229 should be in result")
+	})
+
+	t.Run("API key without profiles returns all models", func(t *testing.T) {
+		// Create API key without profiles
+		apiKey := &ent.APIKey{
+			ID:   3,
+			Name: "test-api-key-3",
+		}
+
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should return all models
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+	})
+
+	t.Run("API key with nil profiles returns all models", func(t *testing.T) {
+		// Create API key with nil profiles
+		apiKey := &ent.APIKey{
+			ID:       4,
+			Name:     "test-api-key-4",
+			Profiles: nil,
+		}
+
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should return all models
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+	})
+
+	t.Run("API key with empty active profile returns all models", func(t *testing.T) {
+		// Create API key with empty active profile
+		apiKey := &ent.APIKey{
+			ID:   5,
+			Name: "test-api-key-5",
+			Profiles: &objects.APIKeyProfiles{
+				ActiveProfile: "",
+				Profiles: []objects.APIKeyProfile{
+					{
+						Name:     "production",
+						ModelIDs: []string{"gpt-4"},
+					},
+				},
+			},
+		}
+
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should return all models when active profile is empty
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+	})
+
+	t.Run("API key with non-existent active profile returns all models", func(t *testing.T) {
+		// Create API key with active profile that doesn't exist
+		apiKey := &ent.APIKey{
+			ID:   6,
+			Name: "test-api-key-6",
+			Profiles: &objects.APIKeyProfiles{
+				ActiveProfile: "non-existent",
+				Profiles: []objects.APIKeyProfile{
+					{
+						Name:     "production",
+						ModelIDs: []string{"gpt-4"},
+					},
+				},
+			},
+		}
+
+		ctx := contexts.WithAPIKey(ctx, apiKey)
+
+		result := modelSvc.ListEnabledModels(ctx)
+
+		// Should return all models when active profile doesn't exist
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+	})
+
+	t.Run("no API key in context returns all models", func(t *testing.T) {
+		// Context without API key
+		ctxNoAPIKey := context.Background()
+		ctxNoAPIKey = ent.NewContext(ctxNoAPIKey, client)
+		ctxNoAPIKey = privacy.DecisionContext(ctxNoAPIKey, privacy.Allow)
+
+		result := modelSvc.ListEnabledModels(ctxNoAPIKey)
+
+		// Should return all models
+		resultMap := make(map[string]bool)
+		for _, model := range result {
+			resultMap[model.ID] = true
+		}
+
+		require.True(t, resultMap["gpt-4"], "gpt-4 should be in result")
+		require.True(t, resultMap["gpt-3.5-turbo"], "gpt-3.5-turbo should be in result")
+		require.True(t, resultMap["claude-3-opus-20240229"], "claude-3-opus-20240229 should be in result")
+	})
+}
+
+func TestFindUnassociatedChannels(t *testing.T) {
+	// Create test channels
+	channel1 := &ent.Channel{
+		ID:              1,
+		Type:            "openai",
+		Name:            "OpenAI Channel",
+		Status:          "enabled",
+		SupportedModels: []string{"gpt-4", "gpt-3.5-turbo"},
+	}
+
+	channel2 := &ent.Channel{
+		ID:              2,
+		Type:            "anthropic",
+		Name:            "Anthropic Channel",
+		Status:          "enabled",
+		SupportedModels: []string{"claude-3-opus", "claude-3-sonnet"},
+	}
+
+	channel3 := &ent.Channel{
+		ID:              3,
+		Type:            "gemini",
+		Name:            "Gemini Channel",
+		Status:          "disabled",
+		SupportedModels: []string{"gemini-pro", "gemini-1.5-pro"},
+	}
+
+	channels := []*ent.Channel{channel1, channel2, channel3}
+
+	t.Run("no associations - all channels unassociated", func(t *testing.T) {
+		result := findUnassociatedChannels(channels, []*objects.ModelAssociation{})
+		require.Len(t, result, 3)
+
+		// Verify all channels have unassociated models
+		for _, info := range result {
+			require.NotEmpty(t, info.Models)
+		}
+	})
+
+	t.Run("channel_model association", func(t *testing.T) {
+		associations := []*objects.ModelAssociation{
+			{
+				Type: "channel_model",
+				ChannelModel: &objects.ChannelModelAssociation{
+					ChannelID: 1,
+					ModelID:   "gpt-4",
+				},
+			},
+		}
+
+		result := findUnassociatedChannels(channels, associations)
+
+		// Find channel1 in results
+		var channel1Info *UnassociatedChannel
+
+		for _, info := range result {
+			if info.Channel.ID == 1 {
+				channel1Info = info
+				break
+			}
+		}
+
+		require.NotNil(t, channel1Info)
+		// gpt-4 should be associated, so only gpt-3.5-turbo should be unassociated
+		require.Contains(t, channel1Info.Models, "gpt-3.5-turbo")
+		require.NotContains(t, channel1Info.Models, "gpt-4")
+	})
+
+	t.Run("regex association", func(t *testing.T) {
+		associations := []*objects.ModelAssociation{
+			{
+				Type: "regex",
+				Regex: &objects.RegexAssociation{
+					Pattern: "^claude-3-.*",
+				},
+			},
+		}
+
+		result := findUnassociatedChannels(channels, associations)
+
+		// Find channel2 in results
+		var channel2Info *UnassociatedChannel
+
+		for _, info := range result {
+			if info.Channel.ID == 2 {
+				channel2Info = info
+				break
+			}
+		}
+
+		// claude-3-opus and claude-3-sonnet should be associated by regex
+		if channel2Info != nil {
+			require.NotContains(t, channel2Info.Models, "claude-3-opus")
+			require.NotContains(t, channel2Info.Models, "claude-3-sonnet")
+		}
+	})
+
+	t.Run("model association with exclude", func(t *testing.T) {
+		associations := []*objects.ModelAssociation{
+			{
+				Type: "model",
+				ModelID: &objects.ModelIDAssociation{
+					ModelID: "gemini-pro",
+					Exclude: []*objects.ExcludeAssociation{
+						{
+							ChannelIds: []int{3},
+						},
+					},
+				},
+			},
+		}
+
+		result := findUnassociatedChannels(channels, associations)
+
+		// Find channel3 in results
+		var channel3Info *UnassociatedChannel
+
+		for _, info := range result {
+			if info.Channel.ID == 3 {
+				channel3Info = info
+				break
+			}
+		}
+
+		require.NotNil(t, channel3Info)
+		// gemini-pro should be unassociated in channel3 due to exclude
+		require.Contains(t, channel3Info.Models, "gemini-pro")
+	})
+
+	t.Run("channel_regex association", func(t *testing.T) {
+		associations := []*objects.ModelAssociation{
+			{
+				Type: "channel_regex",
+				ChannelRegex: &objects.ChannelRegexAssociation{
+					ChannelID: 1,
+					Pattern:   "^gpt-.*",
+				},
+			},
+		}
+
+		result := findUnassociatedChannels(channels, associations)
+
+		// Find channel1 in results
+		var channel1Info *UnassociatedChannel
+
+		for _, info := range result {
+			if info.Channel.ID == 1 {
+				channel1Info = info
+				break
+			}
+		}
+
+		// Both gpt-4 and gpt-3.5-turbo should be associated by regex
+		if channel1Info != nil {
+			require.NotContains(t, channel1Info.Models, "gpt-4")
+			require.NotContains(t, channel1Info.Models, "gpt-3.5-turbo")
+		}
+	})
+
+	t.Run("multiple associations", func(t *testing.T) {
+		associations := []*objects.ModelAssociation{
+			{
+				Type: "model",
+				ModelID: &objects.ModelIDAssociation{
+					ModelID: "gpt-4",
+				},
+			},
+			{
+				Type: "model",
+				ModelID: &objects.ModelIDAssociation{
+					ModelID: "gpt-3.5-turbo",
+				},
+			},
+			{
+				Type: "regex",
+				Regex: &objects.RegexAssociation{
+					Pattern: "^claude-3-.*",
+				},
+			},
+			{
+				Type: "model",
+				ModelID: &objects.ModelIDAssociation{
+					ModelID: "gemini-pro",
+				},
+			},
+			{
+				Type: "model",
+				ModelID: &objects.ModelIDAssociation{
+					ModelID: "gemini-1.5-pro",
+				},
+			},
+		}
+
+		result := findUnassociatedChannels(channels, associations)
+
+		// All models should be associated
+		require.Empty(t, result)
+	})
+
+	t.Run("no channels", func(t *testing.T) {
+		result := findUnassociatedChannels([]*ent.Channel{}, []*objects.ModelAssociation{})
+		require.Empty(t, result)
 	})
 }

@@ -13,6 +13,7 @@ import {
   IconAB2,
   IconBaselineDensityMedium,
   IconAi,
+  IconChartBar,
 } from '@tabler/icons-react'
 import { Command } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -85,6 +86,11 @@ export function useSidebarData(): SidebarData {
           icon: IconRobot,
         } as NavLink,
         {
+          title: t('sidebar.items.modelStats'),
+          url: '/model-stats',
+          icon: IconChartBar,
+        } as NavLink,
+        {
           title: t('sidebar.items.dataStorages'),
           url: '/data-storages',
           icon: IconDatabase,
@@ -98,12 +104,6 @@ export function useSidebarData(): SidebarData {
           title: t('sidebar.items.roles'),
           url: '/roles',
           icon: IconShield,
-        } as NavLink,
-
-        {
-          title: t('sidebar.items.system'),
-          url: '/system',
-          icon: IconSettings,
         } as NavLink,
         // {
         //   title: 'Permission Demo',

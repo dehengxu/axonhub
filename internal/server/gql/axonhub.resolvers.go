@@ -20,9 +20,29 @@ import (
 	"github.com/looplj/axonhub/internal/ent/user"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/scopes"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/samber/lo"
 )
+
+// AllModelEntries is the resolver for the allModelEntries field.
+func (r *channelResolver) AllModelEntries(ctx context.Context, obj *ent.Channel) ([]*biz.ChannelModelEntry, error) {
+	ch := biz.Channel{Channel: obj}
+	entries := ch.GetModelEntries()
+	result := lo.Values(entries)
+
+	return lo.ToSlicePtr(result), nil
+}
+
+// Credentials is the resolver for the credentials field.
+func (r *channelResolver) Credentials(ctx context.Context, obj *ent.Channel) (*objects.ChannelCredentials, error) {
+	hasScope := scopes.UserHasScope(ctx, scopes.ScopeWriteChannels)
+	if hasScope {
+		return obj.Credentials, nil
+	}
+
+	return nil, nil
+}
 
 // CreateChannel is the resolver for the createChannel field.
 func (r *mutationResolver) CreateChannel(ctx context.Context, input ent.CreateChannelInput) (*ent.Channel, error) {
@@ -341,7 +361,7 @@ func (r *queryResolver) FetchModels(ctx context.Context, input biz.FetchModelsIn
 	}
 
 	// Convert result to GraphQL payload
-	models := make([]*objects.ModelIdentify, len(result.Models))
+	models := make([]*biz.ModelIdentify, len(result.Models))
 	for i := range result.Models {
 		models[i] = &result.Models[i]
 	}

@@ -72,14 +72,33 @@ const MODELS_QUERY = `
               }
               regex {
                 pattern
+                exclude {
+                  channelNamePattern
+                  channelIds
+                  channelTags
+                }
               }
               modelId {
                 modelId
+                exclude {
+                  channelNamePattern
+                  channelIds
+                  channelTags
+                }
+              }
+              channelTagsModel {
+                channelTags
+                modelId
+              }
+              channelTagsRegex {
+                channelTags
+                pattern
               }
             }
           }
           status
           remark
+          associatedChannelCount
         }
         cursor
       }
@@ -146,14 +165,25 @@ const CREATE_MODEL_MUTATION = `
           }
           regex {
             pattern
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
           modelId {
             modelId
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
         }
       }
       status
       remark
+      associatedChannelCount
     }
   }
 `
@@ -210,14 +240,25 @@ const BULK_CREATE_MODELS_MUTATION = `
           }
           regex {
             pattern
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
           modelId {
             modelId
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
         }
       }
       status
       remark
+      associatedChannelCount
     }
   }
 `
@@ -274,14 +315,25 @@ const UPDATE_MODEL_MUTATION = `
           }
           regex {
             pattern
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
           modelId {
             modelId
+            exclude {
+              channelNamePattern
+              channelIds
+              channelTags
+            }
           }
         }
       }
       status
       remark
+      associatedChannelCount
     }
   }
 `
@@ -301,6 +353,20 @@ const BULK_DISABLE_MODELS_MUTATION = `
 const BULK_ENABLE_MODELS_MUTATION = `
   mutation BulkEnableModels($ids: [ID!]!) {
     bulkEnableModels(ids: $ids)
+  }
+`
+
+const QUERY_UNASSOCIATED_CHANNELS = `
+  query QueryUnassociatedChannels {
+    queryUnassociatedChannels {
+      channel {
+        id
+        name
+        type
+        status
+      }
+      models
+    }
   }
 `
 
@@ -436,5 +502,28 @@ export function useBulkEnableModels() {
     onError: (error: Error) => {
       toast.error(t('models.messages.bulkEnableError', { error: error.message }))
     },
+  })
+}
+
+export interface UnassociatedChannel {
+  channel: {
+    id: string
+    name: string
+    type: string
+    status: string
+  }
+  models: string[]
+}
+
+export function useQueryUnassociatedChannels() {
+  return useQuery({
+    queryKey: ['unassociatedChannels'],
+    queryFn: async () => {
+      const data = await graphqlRequest<{ queryUnassociatedChannels: UnassociatedChannel[] }>(
+        QUERY_UNASSOCIATED_CHANNELS
+      )
+      return data.queryUnassociatedChannels
+    },
+    enabled: false,
   })
 }

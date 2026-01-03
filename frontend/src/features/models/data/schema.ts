@@ -58,23 +58,46 @@ export const channelRegexAssociationSchema = z.object({
 })
 export type ChannelRegexAssociation = z.infer<typeof channelRegexAssociationSchema>
 
+export const excludeAssociationSchema = z.object({
+  channelNamePattern: z.string().optional().nullable(),
+  channelIds: z.array(z.number()).optional().nullable(),
+  channelTags: z.array(z.string()).optional().nullable(),
+})
+export type ExcludeAssociation = z.infer<typeof excludeAssociationSchema>
+
 export const regexAssociationSchema = z.object({
   pattern: z.string(),
+  exclude: z.array(excludeAssociationSchema).optional().nullable(),
 })
 export type RegexAssociation = z.infer<typeof regexAssociationSchema>
 
 export const modelIDAssociationSchema = z.object({
   modelId: z.string(),
+  exclude: z.array(excludeAssociationSchema).optional().nullable(),
 })
 export type ModelIDAssociation = z.infer<typeof modelIDAssociationSchema>
 
+export const channelTagsModelAssociationSchema = z.object({
+  channelTags: z.array(z.string()),
+  modelId: z.string(),
+})
+export type ChannelTagsModelAssociation = z.infer<typeof channelTagsModelAssociationSchema>
+
+export const channelTagsRegexAssociationSchema = z.object({
+  channelTags: z.array(z.string()),
+  pattern: z.string(),
+})
+export type ChannelTagsRegexAssociation = z.infer<typeof channelTagsRegexAssociationSchema>
+
 export const modelAssociationSchema = z.object({
-  type: z.enum(['channel_model', 'channel_regex', 'model', 'regex',]),
+  type: z.enum(['channel_model', 'channel_regex', 'model', 'regex', 'channel_tags_model', 'channel_tags_regex']),
   priority: z.number().min(0).max(100).optional().default(0),
   channelModel: channelModelAssociationSchema.optional().nullable(),
   channelRegex: channelRegexAssociationSchema.optional().nullable(),
   regex: regexAssociationSchema.optional().nullable(),
   modelId: modelIDAssociationSchema.optional().nullable(),
+  channelTagsModel: channelTagsModelAssociationSchema.optional().nullable(),
+  channelTagsRegex: channelTagsRegexAssociationSchema.optional().nullable(),
 })
 export type ModelAssociation = z.infer<typeof modelAssociationSchema>
 
@@ -97,6 +120,7 @@ export const modelSchema = z.object({
   settings: modelSettingsSchema,
   status: modelStatusSchema,
   remark: z.string().optional().nullable(),
+  associatedChannelCount: z.number(),
 })
 export type Model = z.infer<typeof modelSchema>
 
