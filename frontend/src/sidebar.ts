@@ -14,51 +14,51 @@ import {
   IconBaselineDensityMedium,
   IconAi,
   IconChartBar,
-} from '@tabler/icons-react'
-import { Command } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { useAuthStore } from '@/stores/authStore'
-import { useRoutePermissions } from '@/hooks/useRoutePermissions'
-import { useMe } from '@/features/auth/data/auth'
-import { type SidebarData, type NavGroup, type NavLink } from './components/layout/types'
+} from '@tabler/icons-react';
+import { Command } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/stores/authStore';
+import { useRoutePermissions } from '@/hooks/useRoutePermissions';
+import { useMe } from '@/features/auth/data/auth';
+import { type SidebarData, type NavGroup, type NavLink } from './components/layout/types';
 
 export function useSidebarData(): SidebarData {
-  const { t } = useTranslation()
-  const { user: authUser } = useAuthStore((state) => state.auth)
-  const { data: meData } = useMe()
-  const { filterNavGroups } = useRoutePermissions()
+  const { t } = useTranslation();
+  const { user: authUser } = useAuthStore((state) => state.auth);
+  const { data: meData } = useMe();
+  const { filterNavGroups } = useRoutePermissions();
 
   // Use data from me query if available, otherwise fall back to auth store
-  const user = meData || authUser
+  const user = meData || authUser;
 
   // Generate user initials for avatar
   const getInitials = (firstName?: string, lastName?: string, email?: string) => {
     if (firstName && lastName) {
-      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
     }
     if (firstName) {
-      return firstName.slice(0, 2).toUpperCase()
+      return firstName.slice(0, 2).toUpperCase();
     }
     if (email) {
-      return email.split('@')[0].slice(0, 2).toUpperCase()
+      return email.split('@')[0].slice(0, 2).toUpperCase();
     }
-    return 'U'
-  }
+    return 'U';
+  };
 
   // Generate user display name
   const getDisplayName = (firstName?: string, lastName?: string, email?: string) => {
     if (firstName && lastName) {
-      return `${firstName} ${lastName}`
+      return `${firstName} ${lastName}`;
     }
     if (firstName) {
-      return firstName
+      return firstName;
     }
     if (email) {
-      const username = email.split('@')[0]
-      return username.charAt(0).toUpperCase() + username.slice(1)
+      const username = email.split('@')[0];
+      return username.charAt(0).toUpperCase() + username.slice(1);
     }
-    return 'User'
-  }
+    return 'User';
+  };
 
   // 原始导航组配置
   const rawNavGroups: NavGroup[] = [
@@ -182,10 +182,10 @@ export function useSidebarData(): SidebarData {
         // } as NavLink,
       ],
     },
-  ]
+  ];
 
   // 使用权限过滤导航组
-  const filteredNavGroups = filterNavGroups(rawNavGroups)
+  const filteredNavGroups = filterNavGroups(rawNavGroups);
 
   return {
     user: {
@@ -203,5 +203,5 @@ export function useSidebarData(): SidebarData {
       },
     ],
     navGroups: filteredNavGroups,
-  }
+  };
 }

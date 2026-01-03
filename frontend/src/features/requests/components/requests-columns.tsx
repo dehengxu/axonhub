@@ -1,37 +1,37 @@
-'use client'
+'use client';
 
-import { format } from 'date-fns'
-import { ColumnDef } from '@tanstack/react-table'
-import { zhCN, enUS } from 'date-fns/locale'
-import { FileText } from 'lucide-react'
-import { useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import { extractNumberID } from '@/lib/utils'
-import { usePaginationSearch } from '@/hooks/use-pagination-search'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { useRequestPermissions } from '../../../hooks/useRequestPermissions'
-import { Request } from '../data/schema'
-import { DataTableColumnHeader } from '@/components/data-table-column-header'
-import { getStatusColor } from './help'
-import { formatDuration } from '@/utils/format-duration'
+import { useCallback } from 'react';
+import { format } from 'date-fns';
+import { ColumnDef } from '@tanstack/react-table';
+import { zhCN, enUS } from 'date-fns/locale';
+import { FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { extractNumberID } from '@/lib/utils';
+import { formatDuration } from '@/utils/format-duration';
+import { usePaginationSearch } from '@/hooks/use-pagination-search';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DataTableColumnHeader } from '@/components/data-table-column-header';
+import { useRequestPermissions } from '../../../hooks/useRequestPermissions';
+import { Request } from '../data/schema';
+import { getStatusColor } from './help';
 
 // Removed unused statusColors - using getStatusColor helper instead
 
 export function useRequestsColumns(): ColumnDef<Request>[] {
-  const { t, i18n } = useTranslation()
-  const locale = i18n.language === 'zh' ? zhCN : enUS
-  const permissions = useRequestPermissions()
-  const { navigateWithSearch } = usePaginationSearch({ defaultPageSize: 20 })
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'zh' ? zhCN : enUS;
+  const permissions = useRequestPermissions();
+  const { navigateWithSearch } = usePaginationSearch({ defaultPageSize: 20 });
 
   // Helper function to get usage data
   const getUsageData = (row: any) => {
-    const usageLogs = row.original.usageLogs
+    const usageLogs = row.original.usageLogs;
     if (!usageLogs || !usageLogs.edges || usageLogs.edges.length === 0) {
-      return null
+      return null;
     }
-    return usageLogs.edges[0].node
-  }
+    return usageLogs.edges[0].node;
+  };
 
   // Define all columns
   const columns: ColumnDef<Request>[] = [
@@ -43,17 +43,14 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
           navigateWithSearch({
             to: '/project/requests/$requestId',
             params: { requestId: row.original.id },
-          })
-        }, [row.original.id, navigateWithSearch])
-        
+          });
+        }, [row.original.id, navigateWithSearch]);
+
         return (
-          <button
-            onClick={handleClick}
-            className='font-mono text-xs text-primary hover:underline cursor-pointer'
-          >
+          <button onClick={handleClick} className='text-primary cursor-pointer font-mono text-xs hover:underline'>
             #{extractNumberID(row.getValue('id'))}
           </button>
-        )
+        );
       },
       enableSorting: true,
       enableHiding: false,
@@ -63,8 +60,8 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.modelId')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const request = row.original
-        return <div className='font-medium text-sm'>{request.modelID || t('requests.columns.unknown')}</div>
+        const request = row.original;
+        return <div className='text-sm font-medium'>{request.modelID || t('requests.columns.unknown')}</div>;
       },
     },
 
@@ -73,8 +70,8 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.totalTokens')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const usage = getUsageData(row)
-        return <div className='font-mono text-xs'>{usage?.totalTokens ?? '-'}</div>
+        const usage = getUsageData(row);
+        return <div className='font-mono text-xs'>{usage?.totalTokens ?? '-'}</div>;
       },
     },
     {
@@ -82,8 +79,8 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.promptTokens')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const usage = getUsageData(row)
-        return <div className='font-mono text-xs'>{usage?.promptTokens ?? '-'}</div>
+        const usage = getUsageData(row);
+        return <div className='font-mono text-xs'>{usage?.promptTokens ?? '-'}</div>;
       },
     },
     {
@@ -91,8 +88,8 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.completionTokens')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const usage = getUsageData(row)
-        return <div className='font-mono text-xs'>{usage?.completionTokens ?? '-'}</div>
+        const usage = getUsageData(row);
+        return <div className='font-mono text-xs'>{usage?.completionTokens ?? '-'}</div>;
       },
     },
     {
@@ -100,7 +97,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.stream')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const isStream = row.original.stream
+        const isStream = row.original.stream;
         return (
           <Badge
             className={
@@ -111,10 +108,10 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
           >
             {isStream ? t('requests.stream.streaming') : t('requests.stream.nonStreaming')}
           </Badge>
-        )
+        );
       },
       filterFn: (row, _id, value) => {
-        return value.includes(row.original.stream?.toString() || '-')
+        return value.includes(row.original.stream?.toString() || '-');
       },
     },
     {
@@ -122,12 +119,12 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.source')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const source = row.getValue('source') as string
+        const source = row.getValue('source') as string;
         const sourceColors: Record<string, string> = {
           api: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
           playground: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800',
           test: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800',
-        }
+        };
         return (
           <Badge
             className={
@@ -137,10 +134,10 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
           >
             {t(`requests.source.${source}`)}
           </Badge>
-        )
+        );
       },
       filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
+        return value.includes(row.getValue(id));
       },
     },
     // Channel column - only show if user has permission to view channels
@@ -152,22 +149,22 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
             header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.channel')} />,
             enableSorting: false,
             cell: ({ row }) => {
-              const channel = row.original.channel
+              const channel = row.original.channel;
 
               if (!channel) {
-                return <div className='text-muted-foreground font-mono text-xs'>-</div>
+                return <div className='text-muted-foreground font-mono text-xs'>-</div>;
               }
 
-              return <div className='font-mono text-xs'>{channel.name}</div>
+              return <div className='font-mono text-xs'>{channel.name}</div>;
             },
             filterFn: (row, _id, value) => {
               // For client-side filtering, check if any of the selected channels match
-              if (value.length === 0) return true // No filter applied
+              if (value.length === 0) return true; // No filter applied
 
-              const channel = row.original.channel
-              if (!channel) return false
+              const channel = row.original.channel;
+              if (!channel) return false;
 
-              return value.includes(channel.id)
+              return value.includes(channel.id);
             },
           },
         ] as ColumnDef<Request>[])
@@ -180,7 +177,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
             header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.apiKey')} />,
             enableSorting: false,
             cell: ({ row }) => {
-              return <div className='font-mono text-xs'>{row.original.apiKey?.name || '-'}</div>
+              return <div className='font-mono text-xs'>{row.original.apiKey?.name || '-'}</div>;
             },
           },
         ] as ColumnDef<Request>[])
@@ -191,23 +188,23 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.status')} />,
       enableSorting: false,
       cell: ({ row }) => {
-        const status = row.getValue('status') as string
-        return <Badge className={getStatusColor(status)}>{t(`requests.status.${status}`)}</Badge>
+        const status = row.getValue('status') as string;
+        return <Badge className={getStatusColor(status)}>{t(`requests.status.${status}`)}</Badge>;
       },
       filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
+        return value.includes(row.getValue(id));
       },
     },
     {
       id: 'latency',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.latency')} />,
       cell: ({ row }) => {
-        const request = row.original
+        const request = row.original;
         if (request.status !== 'completed' || request.metricsLatencyMs == null) {
-          return <div className='text-muted-foreground text-xs'>-</div>
+          return <div className='text-muted-foreground text-xs'>-</div>;
         }
 
-        return <div className='font-mono text-xs'>{formatDuration(request.metricsLatencyMs)}</div>
+        return <div className='font-mono text-xs'>{formatDuration(request.metricsLatencyMs)}</div>;
       },
       enableSorting: false,
     },
@@ -215,12 +212,12 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
       id: 'firstTokenLatency',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.firstTokenLatency')} />,
       cell: ({ row }) => {
-        const request = row.original
+        const request = row.original;
         if (!request.stream || request.status !== 'completed' || request.metricsFirstTokenLatencyMs == null) {
-          return <div className='text-muted-foreground text-xs'>-</div>
+          return <div className='text-muted-foreground text-xs'>-</div>;
         }
 
-        return <div className='font-mono text-xs'>{formatDuration(request.metricsFirstTokenLatencyMs)}</div>
+        return <div className='font-mono text-xs'>{formatDuration(request.metricsFirstTokenLatencyMs)}</div>;
       },
       enableSorting: false,
     },
@@ -232,25 +229,25 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
           navigateWithSearch({
             to: '/project/requests/$requestId',
             params: { requestId: row.original.id },
-          })
-        }
+          });
+        };
 
         return (
           <Button variant='outline' size='sm' onClick={handleViewDetails}>
             <FileText className='mr-2 h-4 w-4' />
             {t('requests.actions.viewDetails')}
           </Button>
-        )
+        );
       },
     },
     {
       accessorKey: 'createdAt',
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.createdAt')} />,
       cell: ({ row }) => {
-        const date = new Date(row.getValue('createdAt'))
-        return <div className='text-xs'>{format(date, 'yyyy-MM-dd HH:mm:ss', { locale })}</div>
+        const date = new Date(row.getValue('createdAt'));
+        return <div className='text-xs'>{format(date, 'yyyy-MM-dd HH:mm:ss', { locale })}</div>;
       },
     },
-  ]
-  return columns
+  ];
+  return columns;
 }

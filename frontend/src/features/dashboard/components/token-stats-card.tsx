@@ -1,16 +1,16 @@
-import { useState, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { BarChart4, TrendingUp } from 'lucide-react'
+import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { BarChart4, TrendingUp } from 'lucide-react';
 
-import { formatNumber } from '@/utils/format-number'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertTitle } from '@/components/ui/alert'
-import { useTokenStats, useModelTokenStats, useRequestsByModel } from '../data/dashboard'
-import { ModelTokenChart } from './model-token-chart'
-import { ModelTokenTable } from './model-token-table'
-import { ModelTokenStatsCard } from './model-token-stats-card'
+import { formatNumber } from '@/utils/format-number';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { useTokenStats, useModelTokenStats, useRequestsByModel } from '../data/dashboard';
+import { ModelTokenChart } from './model-token-chart';
+import { ModelTokenTable } from './model-token-table';
+import { ModelTokenStatsCard } from './model-token-stats-card';
 import {
   Dialog,
   DialogContent,
@@ -18,24 +18,24 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
 
 export function TokenStatsCard() {
-  const { t } = useTranslation()
-  const { data: stats, isLoading, error } = useTokenStats()
-  const { data: modelStats } = useRequestsByModel()
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
-  const [showModelDetails, setShowModelDetails] = useState(false)
-  const [modelSortOrder, setModelSortOrder] = useState<'asc' | 'desc'>('desc')
+  const { t } = useTranslation();
+  const { data: stats, isLoading, error } = useTokenStats();
+  const { data: modelStats } = useRequestsByModel();
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [showModelDetails, setShowModelDetails] = useState(false);
+  const [modelSortOrder, setModelSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Get available models from model stats
-  const availableModels = modelStats?.map(stat => stat.modelId) || []
+  const availableModels = modelStats?.map((stat) => stat.modelId) || [];
 
   // Get detailed model stats for all available models
   const { data: detailedModelStats, isLoading: isLoadingModelStats } = useModelTokenStats(
     selectedModels.length > 0 ? selectedModels : availableModels,
     'day'
-  )
+  );
 
   // Calculate total consumption across all models
   const totals = useMemo(() => {
@@ -47,11 +47,11 @@ export function TokenStatsCard() {
         totalRequests: acc.totalRequests + curr.count,
         totalPromptTokens: acc.totalPromptTokens + curr.promptTokens,
         totalCompletionTokens: acc.totalCompletionTokens + curr.completionTokens,
-        totalTokens: acc.totalTokens + curr.totalTokens
+        totalTokens: acc.totalTokens + curr.totalTokens,
       }),
       { totalRequests: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0 }
     );
-  }, [detailedModelStats])
+  }, [detailedModelStats]);
 
   if (isLoading) {
     return (
@@ -63,11 +63,11 @@ export function TokenStatsCard() {
         <CardContent>
           <div className='space-y-2'>
             <Skeleton className='h-8 w-[80px]' />
-            <Skeleton className='h-4 w-[140px] mt-1' />
+            <Skeleton className='mt-1 h-4 w-[140px]' />
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (error) {
@@ -75,21 +75,21 @@ export function TokenStatsCard() {
       <Card>
         <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
           <div className='flex items-center gap-2'>
-            <div className='p-1.5 bg-primary/10 text-primary rounded-lg dark:bg-primary/20'>
+            <div className='bg-primary/10 text-primary dark:bg-primary/20 rounded-lg p-1.5'>
               <BarChart4 className='h-4 w-4' />
             </div>
             <CardTitle className='text-sm font-medium'>{t('dashboard.cards.tokenStats')}</CardTitle>
           </div>
           <div className='flex items-center gap-1'>
             {/* <span className='text-xs text-muted-foreground'>{t('dashboard.stats.this')}</span> */}
-            <span className='text-xs bg-primary/10 text-primary px-2 py-1 rounded-md dark:bg-primary/20'>{t('dashboard.stats.month')}</span>
+            <span className='bg-primary/10 text-primary dark:bg-primary/20 rounded-md px-2 py-1 text-xs'>{t('dashboard.stats.month')}</span>
           </div>
         </CardHeader>
         <CardContent>
           <div className='text-sm text-red-500'>{t('common.loadError')}</div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -113,9 +113,7 @@ export function TokenStatsCard() {
             <DialogContent className='sm:max-w-[90vw] max-w-[95vw] max-h-[90vh] overflow-y-auto'>
               <DialogHeader>
                 <DialogTitle>{t('dashboard.stats.modelTokenStats')}</DialogTitle>
-                <DialogDescription>
-                  {t('dashboard.stats.detailedModelTokenConsumption')}
-                </DialogDescription>
+                <DialogDescription>{t('dashboard.stats.detailedModelTokenConsumption')}</DialogDescription>
               </DialogHeader>
 
               {isLoadingModelStats ? null : totals ? (
@@ -145,26 +143,24 @@ export function TokenStatsCard() {
               ) : detailedModelStats ? (
                 <ModelTokenStatsCard defaultModels={availableModels} />
               ) : (
-                <div className='text-center py-8 text-muted-foreground'>
-                  {t('dashboard.stats.noModelData')}
-                </div>
+                <div className='text-center py-8 text-muted-foreground'>{t('dashboard.stats.noModelData')}</div>
               )}
             </DialogContent>
           </Dialog>
         )}
       </CardHeader>
       <CardContent>
-        <div className='flex justify-between items-end'>
+        <div className='flex items-end justify-between'>
           <div className='text-center'>
             <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.input')}</div>
             <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalInputTokensThisMonth || 0)}</div>
           </div>
-          <div className='w-px h-8 bg-border'></div>
+          <div className='bg-border h-8 w-px'></div>
           <div className='text-center'>
             <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.output')}</div>
             <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalOutputTokensThisMonth || 0)}</div>
           </div>
-          <div className='w-px h-8 bg-border'></div>
+          <div className='bg-border h-8 w-px'></div>
           <div className='text-center'>
             <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.cached')}</div>
             <div className='text-lg font-bold font-mono text-muted-foreground'>{formatNumber(stats?.totalCachedTokensThisMonth || 0)}</div>
@@ -172,5 +168,5 @@ export function TokenStatsCard() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
