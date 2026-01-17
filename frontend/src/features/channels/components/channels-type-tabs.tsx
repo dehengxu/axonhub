@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import type { ChannelTypeCount } from '../data/channels';
@@ -45,7 +45,7 @@ function groupTypesByPrefix(typeCounts: ChannelTypeCount[]): GroupedTypeCount[] 
     .sort((a, b) => b.totalCount - a.totalCount || a.prefix.localeCompare(b.prefix));
 }
 
-export function ChannelsTypeTabs({ typeCounts, selectedTab, onTabChange }: ChannelsTypeTabsProps) {
+export const ChannelsTypeTabs = memo(function ChannelsTypeTabs({ typeCounts, selectedTab, onTabChange }: ChannelsTypeTabsProps) {
   const { t } = useTranslation();
 
   // Group types by prefix and get top 8
@@ -71,12 +71,12 @@ export function ChannelsTypeTabs({ typeCounts, selectedTab, onTabChange }: Chann
 
   return (
     <div className='mb-6 w-full'>
-      <div className='hide-scroll flex items-center gap-2 overflow-x-auto pb-1'>
+      <div className='hide-scroll flex items-center gap-2 overflow-x-auto overflow-y-hidden scroll-smooth'>
         {/* All tab */}
         <button
           onClick={() => onTabChange('all')}
           className={cn(
-            'flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-all',
+            'flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-all',
             selectedTab === 'all'
               ? 'bg-primary text-primary-foreground shadow-primary/20 shadow-md'
               : 'bg-card border-border text-foreground hover:border-primary hover:text-primary border'
@@ -101,7 +101,7 @@ export function ChannelsTypeTabs({ typeCounts, selectedTab, onTabChange }: Chann
               key={prefix}
               onClick={() => onTabChange(prefix)}
               className={cn(
-                'flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-all',
+                'flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-all',
                 selectedTab === prefix
                   ? 'bg-primary text-primary-foreground shadow-primary/20 shadow-md'
                   : 'bg-card border-border text-foreground hover:border-primary hover:text-primary border'
@@ -123,4 +123,4 @@ export function ChannelsTypeTabs({ typeCounts, selectedTab, onTabChange }: Chann
       </div>
     </div>
   );
-}
+});

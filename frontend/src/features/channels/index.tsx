@@ -1,21 +1,24 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { SortingState } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
 import { useDebounce } from '@/hooks/use-debounce';
 import { usePaginationSearch } from '@/hooks/use-pagination-search';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Header } from '@/components/layout/header';
 import { Main } from '@/components/layout/main';
 import { createColumns } from './components/channels-columns';
-import { ChannelsDialogs } from './components/channels-dialogs';
 import { ChannelsErrorBanner } from './components/channels-error-banner';
 import { ChannelsPrimaryButtons } from './components/channels-primary-buttons';
 import { ChannelsTable } from './components/channels-table';
 import { ChannelsTypeTabs } from './components/channels-type-tabs';
 import ChannelsProvider from './context/channels-context';
-import { useQueryChannels, useChannelTypes, useErrorChannelsCount } from './data/channels';
+import { useQueryChannels, useChannelTypes, useErrorChannelsCount, useChannelProbeData } from './data/channels';
+
+const ChannelsDialogs = lazy(() => import('./components/channels-dialogs').then((m) => ({ default: m.ChannelsDialogs })));
 
 function ChannelsContent() {
   const { t } = useTranslation();
+  const { channelPermissions } = usePermissions();
   const { pageSize, setCursors, setPageSize, resetCursor, paginationArgs } = usePaginationSearch({
     defaultPageSize: 20,
     pageSizeStorageKey: 'channels-table-page-size',
@@ -37,6 +40,18 @@ function ChannelsContent() {
       }
     }
     return [{ id: 'createdAt', desc: true }];
+  });
+  const [isHealthColumnVisible, setIsHealthColumnVisible] = useState<boolean>(() => {
+    const stored = localStorage.getItem('channels-table-column-visibility');
+    if (stored) {
+      try {
+        const visibility = JSON.parse(stored);
+        return visibility.health !== false;
+      } catch {
+        return true;
+      }
+    }
+    return true;
   });
 
   useEffect(() => {
@@ -61,8 +76,8 @@ function ChannelsContent() {
     return channelTypeCounts.filter(({ type }) => type.startsWith(selectedTypeTab)).map(({ type }) => type);
   }, [selectedTypeTab, channelTypeCounts]);
 
-  // Build where clause with filters
-  const whereClause = (() => {
+  // Build where clause with filters using useMemo
+  const whereClause = useMemo(() => {
     const where: Record<string, string | string[] | boolean> = {};
     if (debouncedNameFilter) {
       where.nameContainsFold = debouncedNameFilter;
@@ -86,9 +101,9 @@ function ChannelsContent() {
       where.errorMessageNotNil = true;
     }
     return Object.keys(where).length > 0 ? where : undefined;
-  })();
+  }, [debouncedNameFilter, tabFilteredTypes, statusFilter, showErrorOnly]);
 
-  const currentOrderBy = (() => {
+  const currentOrderBy = useMemo(() => {
     if (sorting.length === 0) {
       return { field: 'CREATED_AT', direction: 'DESC' } as const;
     }
@@ -100,6 +115,9 @@ function ChannelsContent() {
         return { field: 'NAME', direction: primary.desc ? 'DESC' : 'ASC' } as const;
       case 'status':
         return { field: 'STATUS', direction: primary.desc ? 'DESC' : 'ASC' } as const;
+      case 'provider':
+      case 'type':
+        return { field: 'TYPE', direction: primary.desc ? 'DESC' : 'ASC' } as const;
       case 'createdAt':
         return { field: 'CREATED_AT', direction: primary.desc ? 'DESC' : 'ASC' } as const;
       case 'updatedAt':
@@ -107,11 +125,11 @@ function ChannelsContent() {
       default:
         return { field: 'CREATED_AT', direction: 'DESC' } as const;
     }
-  })();
+  }, [sorting]);
 
   const {
     data,
-    isLoading: _isLoading,
+    isLoading,
     error: _error,
   } = useQueryChannels({
     ...paginationArgs,
@@ -120,6 +138,23 @@ function ChannelsContent() {
     hasTag: tagFilter || undefined,
     model: modelFilter || undefined,
   });
+
+  const channelIDs = useMemo(() => {
+    return data?.edges?.map((edge) => edge.node.id) || [];
+  }, [data?.edges]);
+
+  const { data: probeData } = useChannelProbeData(channelIDs, { enabled: isHealthColumnVisible });
+
+  const channelsWithProbeData = useMemo(() => {
+    if (!data?.edges) return [];
+    
+    const probeMap = new Map(probeData?.map((probe) => [probe.channelID, probe.points]) || []);
+    
+    return data.edges.map((edge) => ({
+      ...edge.node,
+      probePoints: probeMap.get(edge.node.id) || [],
+    }));
+  }, [data?.edges, probeData]);
 
   const handleNextPage = useCallback(() => {
     if (data?.pageInfo?.hasNextPage && data?.pageInfo?.endCursor) {
@@ -145,7 +180,7 @@ function ChannelsContent() {
       setNameFilter(filter);
       resetCursor();
     },
-    [resetCursor, setNameFilter]
+    [resetCursor]
   );
 
   const handleTypeFilterChange = useCallback(
@@ -153,17 +188,16 @@ function ChannelsContent() {
       setTypeFilter(filters);
       resetCursor();
     },
-    [resetCursor, setTypeFilter]
+    [resetCursor]
   );
 
   const handleTabChange = useCallback(
     (tab: string) => {
       setSelectedTypeTab(tab);
-      // Clear manual type filter when switching tabs
       setTypeFilter([]);
       resetCursor();
     },
-    [resetCursor, setSelectedTypeTab]
+    [setSelectedTypeTab, setTypeFilter, resetCursor]
   );
 
   const handleStatusFilterChange = useCallback(
@@ -171,7 +205,7 @@ function ChannelsContent() {
       setStatusFilter(filters);
       resetCursor();
     },
-    [resetCursor, setStatusFilter]
+    [resetCursor]
   );
 
   const handleTagFilterChange = useCallback(
@@ -179,7 +213,7 @@ function ChannelsContent() {
       setTagFilter(filter);
       resetCursor();
     },
-    [resetCursor, setTagFilter]
+    [resetCursor]
   );
 
   const handleModelFilterChange = useCallback(
@@ -187,7 +221,7 @@ function ChannelsContent() {
       setModelFilter(filter);
       resetCursor();
     },
-    [resetCursor, setModelFilter]
+    [resetCursor]
   );
 
   const handleFilterErrorChannels = useCallback(() => {
@@ -200,7 +234,7 @@ function ChannelsContent() {
     resetCursor();
   }, [resetCursor]);
 
-  const columns = useMemo(() => createColumns(t), [t]);
+  const columns = useMemo(() => createColumns(t, channelPermissions.canWrite), [t, channelPermissions.canWrite]);
 
   return (
     <div className='flex flex-1 flex-col overflow-hidden'>
@@ -212,8 +246,8 @@ function ChannelsContent() {
       />
       <ChannelsTypeTabs typeCounts={channelTypeCounts} selectedTab={selectedTypeTab} onTabChange={handleTabChange} />
       <ChannelsTable
-        // loading={isLoading}
-        data={data?.edges?.map((edge) => edge.node) || []}
+        loading={isLoading}
+        data={channelsWithProbeData}
         columns={columns}
         pageInfo={data?.pageInfo}
         pageSize={pageSize}
@@ -237,6 +271,8 @@ function ChannelsContent() {
         onStatusFilterChange={handleStatusFilterChange}
         onTagFilterChange={handleTagFilterChange}
         onModelFilterChange={handleModelFilterChange}
+        onHealthColumnVisibilityChange={setIsHealthColumnVisible}
+        canWrite={channelPermissions.canWrite}
       />
     </div>
   );
@@ -259,7 +295,9 @@ export default function ChannelsManagement() {
         </div>
         <ChannelsContent />
       </Main>
-      <ChannelsDialogs />
+      <Suspense fallback={null}>
+        <ChannelsDialogs />
+      </Suspense>
     </ChannelsProvider>
   );
 }

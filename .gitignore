@@ -118,6 +118,7 @@ test-results
 .trae
 .claude
 .qoder
+.codebuddy
 dumps
 .builds
 .pnpm-store
@@ -145,3 +146,5 @@ scripts/migration-test/
 .roo/
 tools
 
+mise.toml
+locales_backup

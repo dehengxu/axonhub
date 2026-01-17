@@ -13,6 +13,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/datastorage"
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -385,6 +386,45 @@ func init() {
 	projectDescDescription := projectFields[1].Descriptor()
 	// project.DefaultDescription holds the default value on creation for the description field.
 	project.DefaultDescription = projectDescDescription.Default.(string)
+	promptMixin := schema.Prompt{}.Mixin()
+	prompt.Policy = privacy.NewPolicies(schema.Prompt{})
+	prompt.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := prompt.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	promptMixinHooks1 := promptMixin[1].Hooks()
+
+	prompt.Hooks[1] = promptMixinHooks1[0]
+	promptMixinInters1 := promptMixin[1].Interceptors()
+	prompt.Interceptors[0] = promptMixinInters1[0]
+	promptMixinFields0 := promptMixin[0].Fields()
+	_ = promptMixinFields0
+	promptMixinFields1 := promptMixin[1].Fields()
+	_ = promptMixinFields1
+	promptFields := schema.Prompt{}.Fields()
+	_ = promptFields
+	// promptDescCreatedAt is the schema descriptor for created_at field.
+	promptDescCreatedAt := promptMixinFields0[0].Descriptor()
+	// prompt.DefaultCreatedAt holds the default value on creation for the created_at field.
+	prompt.DefaultCreatedAt = promptDescCreatedAt.Default.(func() time.Time)
+	// promptDescUpdatedAt is the schema descriptor for updated_at field.
+	promptDescUpdatedAt := promptMixinFields0[1].Descriptor()
+	// prompt.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	prompt.DefaultUpdatedAt = promptDescUpdatedAt.Default.(func() time.Time)
+	// prompt.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	prompt.UpdateDefaultUpdatedAt = promptDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// promptDescDeletedAt is the schema descriptor for deleted_at field.
+	promptDescDeletedAt := promptMixinFields1[0].Descriptor()
+	// prompt.DefaultDeletedAt holds the default value on creation for the deleted_at field.
+	prompt.DefaultDeletedAt = promptDescDeletedAt.Default.(int)
+	// promptDescDescription is the schema descriptor for description field.
+	promptDescDescription := promptFields[2].Descriptor()
+	// prompt.DefaultDescription holds the default value on creation for the description field.
+	prompt.DefaultDescription = promptDescDescription.Default.(string)
 	requestMixin := schema.Request{}.Mixin()
 	request.Policy = privacy.NewPolicies(schema.Request{})
 	request.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -418,9 +458,13 @@ func init() {
 	// request.DefaultFormat holds the default value on creation for the format field.
 	request.DefaultFormat = requestDescFormat.Default.(string)
 	// requestDescStream is the schema descriptor for stream field.
-	requestDescStream := requestFields[13].Descriptor()
+	requestDescStream := requestFields[14].Descriptor()
 	// request.DefaultStream holds the default value on creation for the stream field.
 	request.DefaultStream = requestDescStream.Default.(bool)
+	// requestDescClientIP is the schema descriptor for client_ip field.
+	requestDescClientIP := requestFields[15].Descriptor()
+	// request.DefaultClientIP holds the default value on creation for the client_ip field.
+	request.DefaultClientIP = requestDescClientIP.Default.(string)
 	requestexecutionMixin := schema.RequestExecution{}.Mixin()
 	requestexecutionMixinFields0 := requestexecutionMixin[0].Fields()
 	_ = requestexecutionMixinFields0
@@ -444,6 +488,10 @@ func init() {
 	requestexecutionDescFormat := requestexecutionFields[6].Descriptor()
 	// requestexecution.DefaultFormat holds the default value on creation for the format field.
 	requestexecution.DefaultFormat = requestexecutionDescFormat.Default.(string)
+	// requestexecutionDescStream is the schema descriptor for stream field.
+	requestexecutionDescStream := requestexecutionFields[12].Descriptor()
+	// requestexecution.DefaultStream holds the default value on creation for the stream field.
+	requestexecution.DefaultStream = requestexecutionDescStream.Default.(bool)
 	roleMixin := schema.Role{}.Mixin()
 	role.Policy = privacy.NewPolicies(schema.Role{})
 	role.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -703,15 +751,8 @@ func init() {
 			return next.Mutate(ctx, m)
 		})
 	}
-	userprojectMixinHooks1 := userprojectMixin[1].Hooks()
-
-	userproject.Hooks[1] = userprojectMixinHooks1[0]
-	userprojectMixinInters1 := userprojectMixin[1].Interceptors()
-	userproject.Interceptors[0] = userprojectMixinInters1[0]
 	userprojectMixinFields0 := userprojectMixin[0].Fields()
 	_ = userprojectMixinFields0
-	userprojectMixinFields1 := userprojectMixin[1].Fields()
-	_ = userprojectMixinFields1
 	userprojectFields := schema.UserProject{}.Fields()
 	_ = userprojectFields
 	// userprojectDescCreatedAt is the schema descriptor for created_at field.
@@ -724,10 +765,6 @@ func init() {
 	userproject.DefaultUpdatedAt = userprojectDescUpdatedAt.Default.(func() time.Time)
 	// userproject.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	userproject.UpdateDefaultUpdatedAt = userprojectDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// userprojectDescDeletedAt is the schema descriptor for deleted_at field.
-	userprojectDescDeletedAt := userprojectMixinFields1[0].Descriptor()
-	// userproject.DefaultDeletedAt holds the default value on creation for the deleted_at field.
-	userproject.DefaultDeletedAt = userprojectDescDeletedAt.Default.(int)
 	// userprojectDescIsOwner is the schema descriptor for is_owner field.
 	userprojectDescIsOwner := userprojectFields[2].Descriptor()
 	// userproject.DefaultIsOwner holds the default value on creation for the is_owner field.
@@ -736,19 +773,8 @@ func init() {
 	userprojectDescScopes := userprojectFields[3].Descriptor()
 	// userproject.DefaultScopes holds the default value on creation for the scopes field.
 	userproject.DefaultScopes = userprojectDescScopes.Default.([]string)
-	userroleMixin := schema.UserRole{}.Mixin()
-	userroleMixinHooks0 := userroleMixin[0].Hooks()
-	userrole.Hooks[0] = userroleMixinHooks0[0]
-	userroleMixinInters0 := userroleMixin[0].Interceptors()
-	userrole.Interceptors[0] = userroleMixinInters0[0]
-	userroleMixinFields0 := userroleMixin[0].Fields()
-	_ = userroleMixinFields0
 	userroleFields := schema.UserRole{}.Fields()
 	_ = userroleFields
-	// userroleDescDeletedAt is the schema descriptor for deleted_at field.
-	userroleDescDeletedAt := userroleMixinFields0[0].Descriptor()
-	// userrole.DefaultDeletedAt holds the default value on creation for the deleted_at field.
-	userrole.DefaultDeletedAt = userroleDescDeletedAt.Default.(int)
 	// userroleDescCreatedAt is the schema descriptor for created_at field.
 	userroleDescCreatedAt := userroleFields[2].Descriptor()
 	// userrole.DefaultCreatedAt holds the default value on creation for the created_at field.

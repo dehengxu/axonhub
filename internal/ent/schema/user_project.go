@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 
-	"github.com/looplj/axonhub/internal/ent/schema/schematype"
 	"github.com/looplj/axonhub/internal/scopes"
 )
 
@@ -18,13 +17,12 @@ type UserProject struct {
 func (UserProject) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		TimeMixin{},
-		schematype.SoftDeleteMixin{},
 	}
 }
 
 func (UserProject) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("user_id", "project_id", "deleted_at").
+		index.Fields("user_id", "project_id").
 			StorageKey("user_projects_by_user_id_project_id").
 			Unique(),
 		index.Fields("project_id").
@@ -41,7 +39,9 @@ func (UserProject) Fields() []ent.Field {
 			Immutable(),
 		field.Bool("is_owner").
 			Default(false).
-			Immutable(),
+			Comment(
+				"Indicates whether the user is the owner of the project. This field is mutable to allow transferring ownership between users. Only users with sufficient permissions (e.g., current owner) can modify this field.",
+			),
 		field.Strings("scopes").
 			Comment("User-specific scopes: write_channels, read_channels, add_users, read_users, etc.").
 			Default([]string{}).

@@ -1,5 +1,4 @@
-import { useState, useMemo } from 'react';
-import { DateRange } from 'react-day-picker';
+import { useState, useEffect } from 'react';
 import {
   ColumnFiltersState,
   RowData,
@@ -14,20 +13,14 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DateRange } from 'react-day-picker';
 import { useTranslation } from 'react-i18next';
 import { useAnimatedList } from '@/hooks/useAnimatedList';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TableSkeleton } from '@/components/ui/table-skeleton';
+import { ServerSidePagination } from '@/components/server-side-pagination';
 import { Request, RequestConnection } from '../data/schema';
 import { DataTableToolbar } from './data-table-toolbar';
-import { ServerSidePagination } from '@/components/server-side-pagination';
 import { useRequestsColumns } from './requests-columns';
 
 const MotionTableRow = motion(TableRow);
@@ -92,8 +85,24 @@ export function RequestsTable({
   const requestsColumns = useRequestsColumns();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const stored = localStorage.getItem('requests-table-column-visibility');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+
   const [rowSelection, setRowSelection] = useState({});
+
+  useEffect(() => {
+    localStorage.setItem('requests-table-column-visibility', JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
 
   const displayedData = useAnimatedList(data, autoRefresh);
 
@@ -172,26 +181,6 @@ export function RequestsTable({
     manualFiltering: true, // Enable manual filtering for server-side filtering
   });
 
-  // Calculate token totals for current page data
-  const tokenTotals = useMemo(() => {
-    const rows = table.getRowModel().rows;
-    let totalTokens = 0;
-    let promptTokens = 0;
-    let completionTokens = 0;
-
-    rows.forEach((row) => {
-      const usageLogs = (row.original as any).usageLogs;
-      if (usageLogs && usageLogs.edges && usageLogs.edges.length > 0) {
-        const usage = usageLogs.edges[0].node;
-        totalTokens += usage.totalTokens || 0;
-        promptTokens += usage.promptTokens || 0;
-        completionTokens += usage.completionTokens || 0;
-      }
-    });
-
-    return { totalTokens, promptTokens, completionTokens };
-  }, [table.getRowModel().rows]);
-
   return (
     <div className='flex flex-1 flex-col overflow-hidden'>
       <DataTableToolbar
@@ -206,7 +195,8 @@ export function RequestsTable({
         onAutoRefreshChange={onAutoRefreshChange}
       />
       <div className='shadow-soft relative mt-4 flex-1 overflow-auto rounded-2xl border border-[var(--table-border)]'>
-        <Table data-testid='requests-table' className='border-separate border-spacing-0 rounded-2xl bg-[var(--table-background)]'>
+        <div className='min-w-max'>
+          <Table data-testid='requests-table' className='border-separate border-spacing-0 rounded-2xl bg-[var(--table-background)]'>
           <TableHeader className='sticky top-0 z-20 bg-[var(--table-header)] shadow-sm'>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className='group/row border-0'>
@@ -226,11 +216,7 @@ export function RequestsTable({
           </TableHeader>
           <TableBody className='space-y-1 !bg-[var(--table-background)] p-2'>
             {loading ? (
-              <TableRow className='border-0 !bg-[var(--table-background)]'>
-                <TableCell colSpan={requestsColumns.length} className='h-24 border-0 !bg-[var(--table-background)] text-center'>
-                  {t('common.loading')}
-                </TableCell>
-              </TableRow>
+              <TableSkeleton rows={pageSize} columns={requestsColumns.length} />
             ) : table.getRowModel().rows?.length ? (
               <AnimatePresence initial={false} mode='popLayout'>
                 {table.getRowModel().rows.map((row) => (
@@ -271,6 +257,7 @@ export function RequestsTable({
           </TableBody>
         </Table>
       </div>
+    </div>
       <div className='mt-4 flex-shrink-0'>
         <ServerSidePagination
           pageInfo={pageInfo}

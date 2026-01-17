@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { DashboardIcon } from '@radix-ui/react-icons';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { zhCN, enUS } from 'date-fns/locale';
-import { Copy, Clock, Key, Database, ArrowLeft, FileText, Layers } from 'lucide-react';
+import { Copy, Clock, Key, Database, ArrowLeft, FileText, Layers, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { extractNumberID } from '@/lib/utils';
@@ -47,6 +47,19 @@ export default function RequestDetailPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success(t('requests.actions.copy'));
+  };
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(t('requests.actions.download'));
   };
 
   const showResponseChunksModal = useCallback(() => {
@@ -164,13 +177,13 @@ export default function RequestDetailPage() {
         <div className='container mx-auto max-w-7xl space-y-8 p-6'>
           {/* Request Overview Card */}
           <Card className='border-0 shadow-sm'>
-            <CardHeader className='pb-4'>
+            <CardHeader className='pb-2'>
               <CardTitle className='flex items-center justify-between'>
-                <div className='flex items-center gap-3'>
-                  <div className='bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg'>
-                    <DashboardIcon className='text-primary h-5 w-5' />
+                <div className='flex items-center gap-2'>
+                  <div className='bg-primary/10 flex h-7 w-7 items-center justify-center rounded-lg'>
+                    <DashboardIcon className='text-primary h-3.5 w-3.5' />
                   </div>
-                  <span className='text-xl'>{t('requests.detail.overview')}</span>
+                  <span className='text-base'>{t('requests.detail.overview')}</span>
                 </div>
                 <Badge className={getStatusColor(request.status)} variant='secondary'>
                   {t(`requests.status.${request.status}`)}
@@ -178,33 +191,33 @@ export default function RequestDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-                <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
+              <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3'>
+                <div className='bg-muted/30 flex items-center justify-between gap-2 rounded-lg border px-3 py-2'>
                   <div className='flex items-center gap-2'>
-                    <Database className='text-primary h-4 w-4' />
-                    <span className='text-sm font-medium'>{t('requests.columns.channel')}</span>
+                    <Database className='text-primary h-3.5 w-3.5' />
+                    <span className='text-xs font-medium'>{t('requests.columns.channel')}</span>
                   </div>
-                  <p className='bg-background rounded border px-3 py-2 font-mono text-sm'>
+                  <p className='bg-background rounded border px-2 py-0.5 font-mono text-xs'>
                     {request.channel?.name || t('requests.columns.unknown')}
                   </p>
                 </div>
 
-                <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
+                <div className='bg-muted/30 flex items-center justify-between gap-2 rounded-lg border px-3 py-2'>
                   <div className='flex items-center gap-2'>
-                    <Database className='text-primary h-4 w-4' />
-                    <span className='text-sm font-medium'>{t('requests.columns.modelId')}</span>
+                    <Database className='text-primary h-3.5 w-3.5' />
+                    <span className='text-xs font-medium'>{t('requests.columns.modelId')}</span>
                   </div>
-                  <p className='bg-background rounded border px-3 py-2 font-mono text-sm'>
+                  <p className='bg-background rounded border px-2 py-0.5 font-mono text-xs'>
                     {request.modelID || t('requests.columns.unknown')}
                   </p>
                 </div>
 
-                <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
+                <div className='bg-muted/30 flex items-center justify-between gap-2 rounded-lg border px-3 py-2'>
                   <div className='flex items-center gap-2'>
-                    <Key className='text-primary h-4 w-4' />
-                    <span className='text-sm font-medium'>{t('requests.dialogs.requestDetail.fields.apiKeyName')}</span>
+                    <Key className='text-primary h-3.5 w-3.5' />
+                    <span className='text-xs font-medium'>{t('requests.dialogs.requestDetail.fields.apiKeyName')}</span>
                   </div>
-                  <p className='text-muted-foreground font-mono text-sm'>{request.apiKey?.name || t('requests.columns.unknown')}</p>
+                  <p className='text-muted-foreground font-mono text-xs'>{request.apiKey?.name || t('requests.columns.unknown')}</p>
                 </div>
               </div>
             </CardContent>
@@ -225,13 +238,13 @@ export default function RequestDetailPage() {
 
               return (
                 <Card className='border-0 shadow-sm'>
-                  <CardHeader className='pb-4'>
+                  <CardHeader className='pb-2'>
                     <CardTitle className='flex items-center justify-between'>
-                      <div className='flex items-center gap-3'>
-                        <div className='bg-primary/10 flex h-10 w-10 items-center justify-center rounded-lg'>
-                          <Database className='text-primary h-5 w-5' />
+                      <div className='flex items-center gap-2'>
+                        <div className='bg-primary/10 flex h-7 w-7 items-center justify-center rounded-lg'>
+                          <Database className='text-primary h-3.5 w-3.5' />
                         </div>
-                        <span className='text-xl'>{t('requests.detail.tabs.usage')}</span>
+                        <span className='text-base'>{t('requests.detail.tabs.usage')}</span>
                       </div>
                       <Badge className='bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' variant='secondary'>
                         {t(`usageLogs.source.${usage.source}`)}
@@ -239,59 +252,34 @@ export default function RequestDetailPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4'>
-                      <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
-                        <span className='text-muted-foreground text-sm font-medium'>{t('usageLogs.columns.inputLabel')}</span>
-                        <p className='text-2xl'>{usage.promptTokens.toLocaleString()}</p>
+                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-4'>
+                      <div className='bg-muted/30 flex flex-col justify-center rounded-lg border px-2.5 py-2'>
+                        <span className='text-muted-foreground text-xs font-medium'>{t('usageLogs.columns.inputLabel')}</span>
+                        <p className='text-base font-semibold'>{usage.promptTokens.toLocaleString()}</p>
                       </div>
-                      <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
-                        <span className='text-muted-foreground text-sm font-medium'>{t('usageLogs.columns.outputLabel')}</span>
-                        <p className='text-2xl'>{usage.completionTokens.toLocaleString()}</p>
+                      <div className='bg-muted/30 flex flex-col justify-center rounded-lg border px-2.5 py-2'>
+                        <span className='text-muted-foreground text-xs font-medium'>{t('usageLogs.columns.outputLabel')}</span>
+                        <p className='text-base font-semibold'>{usage.completionTokens.toLocaleString()}</p>
                       </div>
-                      <div className='bg-muted/30 space-y-3 rounded-lg border p-4'>
-                        <span className='text-muted-foreground text-sm font-medium'>{t('usageLogs.columns.totalTokens')}</span>
-                        <p className='text-2xl'>{usage.totalTokens.toLocaleString()}</p>
+                      <div className='bg-muted/30 flex flex-col justify-center rounded-lg border px-2.5 py-2'>
+                        <span className='text-muted-foreground text-xs font-medium'>{t('usageLogs.columns.totalTokens')}</span>
+                        <p className='text-base font-semibold'>{usage.totalTokens.toLocaleString()}</p>
                       </div>
-                      <div className='bg-muted/30 space-y-4 rounded-lg border p-4'>
-                        <span className='text-muted-foreground text-sm font-medium'>{t('usageLogs.columns.cacheTokens')}</span>
-                        <div className='space-y-3 text-sm'>
-                          <div className='space-y-1'>
-                            <div className='flex items-center justify-between text-xs'>
-                              <span className='text-muted-foreground'>{t('usageLogs.columns.cacheReadLabel')}</span>
-                              <span
-                                className={`font-medium ${hasReadCache ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
-                              >
-                                {hasReadCache ? '✓' : '—'}
-                              </span>
-                            </div>
-                            <div className='flex items-center gap-2'>
-                              <span className='text-2xl'>{cachedTokens.toLocaleString()}</span>
-                              {hasReadCache && (
-                                <span className='text-muted-foreground text-xs'>
-                                  {t('usageLogs.columns.cacheHitRate', { rate: cacheHitRate })}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <Separator />
-                          <div className='space-y-1'>
-                            <div className='flex items-center justify-between text-xs'>
-                              <span className='text-muted-foreground'>{t('usageLogs.columns.cacheWriteLabel')}</span>
-                              <span
-                                className={`font-medium ${hasWriteCache ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
-                              >
-                                {hasWriteCache ? '✓' : '—'}
-                              </span>
-                            </div>
-                            <div className='flex items-center gap-2'>
-                              <span className='text-2xl'>{writeCachedTokens.toLocaleString()}</span>
-                              {hasWriteCache && (
-                                <span className='text-muted-foreground text-xs'>
-                                  {t('usageLogs.columns.writeCacheRate', { rate: writeCacheRate })}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                      <div className='bg-muted/30 flex flex-col justify-center rounded-lg border px-2.5 py-2'>
+                        <span className='text-muted-foreground text-xs font-medium'>{t('usageLogs.columns.cacheTokens')}</span>
+                        <div className='flex items-center gap-1.5 text-xs'>
+                          <span className='text-muted-foreground'>{t('usageLogs.columns.cacheReadLabel')}:</span>
+                          <span className='font-semibold'>{cachedTokens.toLocaleString()}</span>
+                          {hasReadCache && (
+                            <span className='text-muted-foreground'>({cacheHitRate}%)</span>
+                          )}
+                        </div>
+                        <div className='flex items-center gap-1.5 text-xs'>
+                          <span className='text-muted-foreground'>{t('usageLogs.columns.cacheWriteLabel')}:</span>
+                          <span className='font-semibold'>{writeCachedTokens.toLocaleString()}</span>
+                          {hasWriteCache && (
+                            <span className='text-muted-foreground'>({writeCacheRate}%)</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -319,21 +307,65 @@ export default function RequestDetailPage() {
                 </div>
 
                 <TabsContent value='request' className='space-y-6 p-6'>
+                  {request.requestHeaders && (
+                    <div className='space-y-4'>
+                      <div className='flex items-center justify-between'>
+                        <h4 className='flex items-center gap-2 text-base font-semibold'>
+                          <FileText className='text-primary h-4 w-4' />
+                          {t('requests.columns.requestHeaders')}
+                        </h4>
+                        <div className='flex gap-2'>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => copyToClipboard(formatJson(request.requestHeaders))}
+                            className='hover:bg-primary hover:text-primary-foreground'
+                          >
+                            <Copy className='mr-2 h-4 w-4' />
+                            {t('requests.dialogs.jsonViewer.copy')}
+                          </Button>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            onClick={() => downloadFile(formatJson(request.requestHeaders), `request-headers-${request.id}.json`)}
+                            className='hover:bg-primary hover:text-primary-foreground'
+                          >
+                            <Download className='mr-2 h-4 w-4' />
+                            {t('requests.dialogs.jsonViewer.download')}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className='bg-muted/20 h-[300px] w-full overflow-auto rounded-lg border p-4'>
+                        <JsonViewer data={request.requestHeaders} rootName='' defaultExpanded={true} className='text-sm' />
+                      </div>
+                    </div>
+                  )}
                   <div className='space-y-4'>
                     <div className='flex items-center justify-between'>
                       <h4 className='flex items-center gap-2 text-base font-semibold'>
                         <FileText className='text-primary h-4 w-4' />
                         {t('requests.columns.requestBody')}
                       </h4>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={() => copyToClipboard(formatJson(request.requestBody))}
-                        className='hover:bg-primary hover:text-primary-foreground'
-                      >
-                        <Copy className='mr-2 h-4 w-4' />
-                        {t('requests.dialogs.jsonViewer.copy')}
-                      </Button>
+                      <div className='flex gap-2'>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => copyToClipboard(formatJson(request.requestBody))}
+                          className='hover:bg-primary hover:text-primary-foreground'
+                        >
+                          <Copy className='mr-2 h-4 w-4' />
+                          {t('requests.dialogs.jsonViewer.copy')}
+                        </Button>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => downloadFile(formatJson(request.requestBody), `request-body-${request.id}.json`)}
+                          className='hover:bg-primary hover:text-primary-foreground'
+                        >
+                          <Download className='mr-2 h-4 w-4' />
+                          {t('requests.dialogs.jsonViewer.download')}
+                        </Button>
+                      </div>
                     </div>
                     <div className='bg-muted/20 h-[500px] w-full overflow-auto rounded-lg border p-4'>
                       <JsonViewer data={request.requestBody} rootName='' defaultExpanded={true} className='text-sm' />
@@ -368,6 +400,16 @@ export default function RequestDetailPage() {
                         >
                           <Copy className='mr-2 h-4 w-4' />
                           {t('requests.dialogs.jsonViewer.copy')}
+                        </Button>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => downloadFile(formatJson(request.responseBody), `response-body-${request.id}.json`)}
+                          disabled={!request.responseBody}
+                          className='hover:bg-primary hover:text-primary-foreground disabled:opacity-50'
+                        >
+                          <Download className='mr-2 h-4 w-4' />
+                          {t('requests.dialogs.jsonViewer.download')}
                         </Button>
                       </div>
                     </div>
@@ -475,6 +517,40 @@ export default function RequestDetailPage() {
                                 </div>
                               )}
 
+                              {execution.requestHeaders && (
+                                <div className='space-y-3'>
+                                  <div className='flex items-center justify-between'>
+                                    <span className='flex items-center gap-2 text-sm font-semibold'>
+                                      <FileText className='text-primary h-4 w-4' />
+                                      {t('requests.columns.requestHeaders')}
+                                    </span>
+                                    <div className='flex gap-2'>
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={() => copyToClipboard(formatJson(execution.requestHeaders))}
+                                        className='hover:bg-primary hover:text-primary-foreground'
+                                      >
+                                        <Copy className='mr-2 h-4 w-4' />
+                                        {t('requests.dialogs.jsonViewer.copy')}
+                                      </Button>
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={() => downloadFile(formatJson(execution.requestHeaders), `execution-${execution.id}-request-headers.json`)}
+                                        className='hover:bg-primary hover:text-primary-foreground'
+                                      >
+                                        <Download className='mr-2 h-4 w-4' />
+                                        {t('requests.dialogs.jsonViewer.download')}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className='bg-background h-64 w-full overflow-auto rounded-lg border p-3'>
+                                    <JsonViewer data={execution.requestHeaders} rootName='' defaultExpanded={false} className='text-xs' />
+                                  </div>
+                                </div>
+                              )}
+
                               {execution.requestBody && (
                                 <div className='space-y-3'>
                                   <div className='flex items-center justify-between'>
@@ -491,6 +567,15 @@ export default function RequestDetailPage() {
                                       >
                                         <Copy className='mr-2 h-4 w-4' />
                                         {t('requests.dialogs.jsonViewer.copy')}
+                                      </Button>
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={() => downloadFile(formatJson(execution.requestBody), `execution-${execution.id}-request-body.json`)}
+                                        className='hover:bg-primary hover:text-primary-foreground'
+                                      >
+                                        <Download className='mr-2 h-4 w-4' />
+                                        {t('requests.dialogs.jsonViewer.download')}
                                       </Button>
                                     </div>
                                   </div>
@@ -527,6 +612,15 @@ export default function RequestDetailPage() {
                                       >
                                         <Copy className='mr-2 h-4 w-4' />
                                         {t('requests.dialogs.jsonViewer.copy')}
+                                      </Button>
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={() => downloadFile(formatJson(execution.responseBody), `execution-${execution.id}-response-body.json`)}
+                                        className='hover:bg-primary hover:text-primary-foreground'
+                                      >
+                                        <Download className='mr-2 h-4 w-4' />
+                                        {t('requests.dialogs.jsonViewer.download')}
                                       </Button>
                                     </div>
                                   </div>

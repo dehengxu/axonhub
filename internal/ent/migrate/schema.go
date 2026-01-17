@@ -66,7 +66,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "deepinfra", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian", "jina"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "deepinfra", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian", "jina", "github", "claudecode"}},
 		{Name: "base_url", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled", "archived"}, Default: "disabled"},
@@ -174,6 +174,35 @@ var (
 			},
 		},
 	}
+	// ChannelProbesColumns holds the columns for the "channel_probes" table.
+	ChannelProbesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "total_request_count", Type: field.TypeInt},
+		{Name: "success_request_count", Type: field.TypeInt},
+		{Name: "timestamp", Type: field.TypeInt64},
+		{Name: "channel_id", Type: field.TypeInt},
+	}
+	// ChannelProbesTable holds the schema information for the "channel_probes" table.
+	ChannelProbesTable = &schema.Table{
+		Name:       "channel_probes",
+		Columns:    ChannelProbesColumns,
+		PrimaryKey: []*schema.Column{ChannelProbesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "channel_probes_channels_channel_probes",
+				Columns:    []*schema.Column{ChannelProbesColumns[4]},
+				RefColumns: []*schema.Column{ChannelsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channel_probes_by_channel_id_timestamp",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelProbesColumns[4], ChannelProbesColumns[3]},
+			},
+		},
+	}
 	// DataStoragesColumns holds the columns for the "data_storages" table.
 	DataStoragesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -224,9 +253,14 @@ var (
 		PrimaryKey: []*schema.Column{ModelsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "Models_by_name",
+				Name:    "models_by_name",
 				Unique:  true,
 				Columns: []*schema.Column{ModelsColumns[7], ModelsColumns[3]},
+			},
+			{
+				Name:    "models_by_model_id",
+				Unique:  true,
+				Columns: []*schema.Column{ModelsColumns[5], ModelsColumns[3]},
 			},
 		},
 	}
@@ -253,6 +287,38 @@ var (
 			},
 		},
 	}
+	// PromptsColumns holds the columns for the "prompts" table.
+	PromptsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
+		{Name: "project_id", Type: field.TypeInt},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "role", Type: field.TypeString},
+		{Name: "content", Type: field.TypeString},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled"}, Default: "disabled"},
+		{Name: "settings", Type: field.TypeJSON},
+	}
+	// PromptsTable holds the schema information for the "prompts" table.
+	PromptsTable = &schema.Table{
+		Name:       "prompts",
+		Columns:    PromptsColumns,
+		PrimaryKey: []*schema.Column{PromptsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "prompts_by_project_id",
+				Unique:  false,
+				Columns: []*schema.Column{PromptsColumns[4]},
+			},
+			{
+				Name:    "prompts_by_project_id_name",
+				Unique:  true,
+				Columns: []*schema.Column{PromptsColumns[4], PromptsColumns[5], PromptsColumns[3]},
+			},
+		},
+	}
 	// RequestsColumns holds the columns for the "requests" table.
 	RequestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -261,12 +327,14 @@ var (
 		{Name: "source", Type: field.TypeEnum, Enums: []string{"api", "playground", "test"}, Default: "api"},
 		{Name: "model_id", Type: field.TypeString},
 		{Name: "format", Type: field.TypeString, Default: "openai/chat_completions"},
+		{Name: "request_headers", Type: field.TypeJSON, Nullable: true},
 		{Name: "request_body", Type: field.TypeJSON},
 		{Name: "response_body", Type: field.TypeJSON, Nullable: true},
 		{Name: "response_chunks", Type: field.TypeJSON, Nullable: true},
 		{Name: "external_id", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "processing", "completed", "failed", "canceled"}},
 		{Name: "stream", Type: field.TypeBool, Default: false},
+		{Name: "client_ip", Type: field.TypeString, Default: ""},
 		{Name: "metrics_latency_ms", Type: field.TypeInt64, Nullable: true},
 		{Name: "metrics_first_token_latency_ms", Type: field.TypeInt64, Nullable: true},
 		{Name: "api_key_id", Type: field.TypeInt, Nullable: true},
@@ -283,31 +351,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "requests_api_keys_requests",
-				Columns:    []*schema.Column{RequestsColumns[14]},
+				Columns:    []*schema.Column{RequestsColumns[16]},
 				RefColumns: []*schema.Column{APIKeysColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "requests_channels_requests",
-				Columns:    []*schema.Column{RequestsColumns[15]},
+				Columns:    []*schema.Column{RequestsColumns[17]},
 				RefColumns: []*schema.Column{ChannelsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "requests_data_storages_requests",
-				Columns:    []*schema.Column{RequestsColumns[16]},
+				Columns:    []*schema.Column{RequestsColumns[18]},
 				RefColumns: []*schema.Column{DataStoragesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "requests_projects_requests",
-				Columns:    []*schema.Column{RequestsColumns[17]},
+				Columns:    []*schema.Column{RequestsColumns[19]},
 				RefColumns: []*schema.Column{ProjectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "requests_traces_requests",
-				Columns:    []*schema.Column{RequestsColumns[18]},
+				Columns:    []*schema.Column{RequestsColumns[20]},
 				RefColumns: []*schema.Column{TracesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -316,22 +384,22 @@ var (
 			{
 				Name:    "requests_by_api_key_id",
 				Unique:  false,
-				Columns: []*schema.Column{RequestsColumns[14]},
+				Columns: []*schema.Column{RequestsColumns[16]},
 			},
 			{
 				Name:    "requests_by_project_id",
 				Unique:  false,
-				Columns: []*schema.Column{RequestsColumns[17]},
+				Columns: []*schema.Column{RequestsColumns[19]},
 			},
 			{
 				Name:    "requests_by_channel_id",
 				Unique:  false,
-				Columns: []*schema.Column{RequestsColumns[15]},
+				Columns: []*schema.Column{RequestsColumns[17]},
 			},
 			{
 				Name:    "requests_by_trace_id",
 				Unique:  false,
-				Columns: []*schema.Column{RequestsColumns[18]},
+				Columns: []*schema.Column{RequestsColumns[20]},
 			},
 			{
 				Name:    "requests_by_created_at",
@@ -341,7 +409,7 @@ var (
 			{
 				Name:    "requests_by_status",
 				Unique:  false,
-				Columns: []*schema.Column{RequestsColumns[10]},
+				Columns: []*schema.Column{RequestsColumns[11]},
 			},
 		},
 	}
@@ -359,8 +427,10 @@ var (
 		{Name: "response_chunks", Type: field.TypeJSON, Nullable: true},
 		{Name: "error_message", Type: field.TypeString, Nullable: true},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"pending", "processing", "completed", "failed", "canceled"}},
+		{Name: "stream", Type: field.TypeBool, Default: false},
 		{Name: "metrics_latency_ms", Type: field.TypeInt64, Nullable: true},
 		{Name: "metrics_first_token_latency_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "request_headers", Type: field.TypeJSON, Nullable: true},
 		{Name: "channel_id", Type: field.TypeInt, Nullable: true},
 		{Name: "data_storage_id", Type: field.TypeInt, Nullable: true},
 		{Name: "request_id", Type: field.TypeInt},
@@ -373,19 +443,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "request_executions_channels_executions",
-				Columns:    []*schema.Column{RequestExecutionsColumns[14]},
+				Columns:    []*schema.Column{RequestExecutionsColumns[16]},
 				RefColumns: []*schema.Column{ChannelsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "request_executions_data_storages_executions",
-				Columns:    []*schema.Column{RequestExecutionsColumns[15]},
+				Columns:    []*schema.Column{RequestExecutionsColumns[17]},
 				RefColumns: []*schema.Column{DataStoragesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "request_executions_requests_executions",
-				Columns:    []*schema.Column{RequestExecutionsColumns[16]},
+				Columns:    []*schema.Column{RequestExecutionsColumns[18]},
 				RefColumns: []*schema.Column{RequestsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -394,12 +464,12 @@ var (
 			{
 				Name:    "request_executions_by_request_id",
 				Unique:  false,
-				Columns: []*schema.Column{RequestExecutionsColumns[16]},
+				Columns: []*schema.Column{RequestExecutionsColumns[18]},
 			},
 			{
 				Name:    "request_executions_by_channel_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{RequestExecutionsColumns[14]},
+				Columns: []*schema.Column{RequestExecutionsColumns[16]},
 			},
 		},
 	}
@@ -647,7 +717,6 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
 		{Name: "is_owner", Type: field.TypeBool, Default: false},
 		{Name: "scopes", Type: field.TypeJSON, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt},
@@ -661,13 +730,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_projects_users_user",
-				Columns:    []*schema.Column{UserProjectsColumns[6]},
+				Columns:    []*schema.Column{UserProjectsColumns[5]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_projects_projects_project",
-				Columns:    []*schema.Column{UserProjectsColumns[7]},
+				Columns:    []*schema.Column{UserProjectsColumns[6]},
 				RefColumns: []*schema.Column{ProjectsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -676,24 +745,18 @@ var (
 			{
 				Name:    "user_projects_by_user_id_project_id",
 				Unique:  true,
-				Columns: []*schema.Column{UserProjectsColumns[6], UserProjectsColumns[7], UserProjectsColumns[3]},
+				Columns: []*schema.Column{UserProjectsColumns[5], UserProjectsColumns[6]},
 			},
 			{
 				Name:    "user_projects_by_project_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserProjectsColumns[7]},
-			},
-			{
-				Name:    "userproject_project_id_user_id",
-				Unique:  true,
-				Columns: []*schema.Column{UserProjectsColumns[7], UserProjectsColumns[6]},
+				Columns: []*schema.Column{UserProjectsColumns[6]},
 			},
 		},
 	}
 	// UserRolesColumns holds the columns for the "user_roles" table.
 	UserRolesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime, Nullable: true},
 		{Name: "updated_at", Type: field.TypeTime, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt},
@@ -707,13 +770,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_roles_users_user",
-				Columns:    []*schema.Column{UserRolesColumns[4]},
+				Columns:    []*schema.Column{UserRolesColumns[3]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_roles_roles_role",
-				Columns:    []*schema.Column{UserRolesColumns[5]},
+				Columns:    []*schema.Column{UserRolesColumns[4]},
 				RefColumns: []*schema.Column{RolesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -722,17 +785,37 @@ var (
 			{
 				Name:    "user_roles_by_user_id_role_id",
 				Unique:  true,
-				Columns: []*schema.Column{UserRolesColumns[4], UserRolesColumns[5], UserRolesColumns[1]},
+				Columns: []*schema.Column{UserRolesColumns[3], UserRolesColumns[4]},
 			},
 			{
 				Name:    "user_roles_by_role_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserRolesColumns[5]},
+				Columns: []*schema.Column{UserRolesColumns[4]},
+			},
+		},
+	}
+	// ProjectPromptsColumns holds the columns for the "project_prompts" table.
+	ProjectPromptsColumns = []*schema.Column{
+		{Name: "project_id", Type: field.TypeInt},
+		{Name: "prompt_id", Type: field.TypeInt},
+	}
+	// ProjectPromptsTable holds the schema information for the "project_prompts" table.
+	ProjectPromptsTable = &schema.Table{
+		Name:       "project_prompts",
+		Columns:    ProjectPromptsColumns,
+		PrimaryKey: []*schema.Column{ProjectPromptsColumns[0], ProjectPromptsColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "project_prompts_project_id",
+				Columns:    []*schema.Column{ProjectPromptsColumns[0]},
+				RefColumns: []*schema.Column{ProjectsColumns[0]},
+				OnDelete:   schema.Cascade,
 			},
 			{
-				Name:    "userrole_user_id_role_id",
-				Unique:  true,
-				Columns: []*schema.Column{UserRolesColumns[4], UserRolesColumns[5]},
+				Symbol:     "project_prompts_prompt_id",
+				Columns:    []*schema.Column{ProjectPromptsColumns[1]},
+				RefColumns: []*schema.Column{PromptsColumns[0]},
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -742,9 +825,11 @@ var (
 		ChannelsTable,
 		ChannelOverrideTemplatesTable,
 		ChannelPerformancesTable,
+		ChannelProbesTable,
 		DataStoragesTable,
 		ModelsTable,
 		ProjectsTable,
+		PromptsTable,
 		RequestsTable,
 		RequestExecutionsTable,
 		RolesTable,
@@ -755,6 +840,7 @@ var (
 		UsersTable,
 		UserProjectsTable,
 		UserRolesTable,
+		ProjectPromptsTable,
 	}
 )
 
@@ -763,6 +849,7 @@ func init() {
 	APIKeysTable.ForeignKeys[1].RefTable = UsersTable
 	ChannelOverrideTemplatesTable.ForeignKeys[0].RefTable = UsersTable
 	ChannelPerformancesTable.ForeignKeys[0].RefTable = ChannelsTable
+	ChannelProbesTable.ForeignKeys[0].RefTable = ChannelsTable
 	RequestsTable.ForeignKeys[0].RefTable = APIKeysTable
 	RequestsTable.ForeignKeys[1].RefTable = ChannelsTable
 	RequestsTable.ForeignKeys[2].RefTable = DataStoragesTable
@@ -782,4 +869,6 @@ func init() {
 	UserProjectsTable.ForeignKeys[1].RefTable = ProjectsTable
 	UserRolesTable.ForeignKeys[0].RefTable = UsersTable
 	UserRolesTable.ForeignKeys[1].RefTable = RolesTable
+	ProjectPromptsTable.ForeignKeys[0].RefTable = ProjectsTable
+	ProjectPromptsTable.ForeignKeys[1].RefTable = PromptsTable
 }

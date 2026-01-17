@@ -46,9 +46,8 @@ export function UsersChangePasswordDialog({ currentRow, open, onOpenChange }: Pr
       form.reset();
       onOpenChange(false);
     } catch (error) {
-      console.error('Failed to change password:', error);
-      toast.error(t('users.messages.passwordChangeError'));
-    }
+          toast.error(t('users.messages.passwordChangeError'));
+        }
   };
 
   return (
@@ -83,7 +82,7 @@ export function UsersChangePasswordDialog({ currentRow, open, onOpenChange }: Pr
                 <FormItem>
                   <FormLabel>{t('users.form.newPassword')}</FormLabel>
                   <FormControl>
-                    <Input type='password' placeholder={t('users.form.placeholders.newPasswordPlaceholder')} {...field} />
+                    <Input type='password' placeholder={t('users.form.placeholders.newPassword')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -97,7 +96,7 @@ export function UsersChangePasswordDialog({ currentRow, open, onOpenChange }: Pr
                 <FormItem>
                   <FormLabel>{t('users.form.confirmNewPassword')}</FormLabel>
                   <FormControl>
-                    <Input type='password' placeholder={t('users.form.placeholders.confirmNewPasswordPlaceholder')} {...field} />
+                    <Input type='password' placeholder={t('users.form.placeholders.confirmNewPassword')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

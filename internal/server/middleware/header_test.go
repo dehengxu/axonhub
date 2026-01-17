@@ -212,7 +212,7 @@ func TestExtractAPIKeyFromRequest(t *testing.T) {
 			},
 			config:      nil,
 			expectedKey: "",
-			expectedErr: "API key not found in any of the supported headers",
+			expectedErr: "API key is required",
 		},
 		{
 			name: "Whitespace only API key",
@@ -237,7 +237,7 @@ func TestExtractAPIKeyFromRequest(t *testing.T) {
 			headers:     map[string]string{},
 			config:      nil,
 			expectedKey: "",
-			expectedErr: "API key not found in any of the supported headers",
+			expectedErr: "API key is required",
 		},
 	}
 
@@ -328,9 +328,7 @@ func TestDefaultAPIKeyConfig(t *testing.T) {
 func BenchmarkExtractAPIKeyFromHeader(b *testing.B) {
 	authHeader := "Bearer sk-1234567890abcdef"
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = ExtractAPIKeyFromHeader(authHeader)
 	}
 }
@@ -342,9 +340,7 @@ func BenchmarkExtractAPIKeyFromRequest(b *testing.B) {
 
 	config := defaultAPIKeyConfig()
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = ExtractAPIKeyFromRequest(req, config)
 	}
 }

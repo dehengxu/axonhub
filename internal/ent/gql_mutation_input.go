@@ -8,6 +8,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/datastorage"
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/role"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -531,17 +532,109 @@ func (c *ProjectUpdateOne) SetInput(i UpdateProjectInput) *ProjectUpdateOne {
 	return c
 }
 
+// CreatePromptInput represents a mutation input for creating prompts.
+type CreatePromptInput struct {
+	Name        string
+	Description *string
+	Role        string
+	Content     string
+	Status      *prompt.Status
+	Settings    objects.PromptSettings
+	ProjectIDs  []int
+}
+
+// Mutate applies the CreatePromptInput on the PromptMutation builder.
+func (i *CreatePromptInput) Mutate(m *PromptMutation) {
+	m.SetName(i.Name)
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	m.SetRole(i.Role)
+	m.SetContent(i.Content)
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	m.SetSettings(i.Settings)
+	if v := i.ProjectIDs; len(v) > 0 {
+		m.AddProjectIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the CreatePromptInput on the PromptCreate builder.
+func (c *PromptCreate) SetInput(i CreatePromptInput) *PromptCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdatePromptInput represents a mutation input for updating prompts.
+type UpdatePromptInput struct {
+	Name             *string
+	Description      *string
+	Role             *string
+	Content          *string
+	Status           *prompt.Status
+	Settings         *objects.PromptSettings
+	ClearProjects    bool
+	AddProjectIDs    []int
+	RemoveProjectIDs []int
+}
+
+// Mutate applies the UpdatePromptInput on the PromptMutation builder.
+func (i *UpdatePromptInput) Mutate(m *PromptMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	if v := i.Role; v != nil {
+		m.SetRole(*v)
+	}
+	if v := i.Content; v != nil {
+		m.SetContent(*v)
+	}
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	if v := i.Settings; v != nil {
+		m.SetSettings(*v)
+	}
+	if i.ClearProjects {
+		m.ClearProjects()
+	}
+	if v := i.AddProjectIDs; len(v) > 0 {
+		m.AddProjectIDs(v...)
+	}
+	if v := i.RemoveProjectIDs; len(v) > 0 {
+		m.RemoveProjectIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the UpdatePromptInput on the PromptUpdate builder.
+func (c *PromptUpdate) SetInput(i UpdatePromptInput) *PromptUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdatePromptInput on the PromptUpdateOne builder.
+func (c *PromptUpdateOne) SetInput(i UpdatePromptInput) *PromptUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
 // CreateRequestInput represents a mutation input for creating requests.
 type CreateRequestInput struct {
 	Source                     *request.Source
 	ModelID                    string
 	Format                     *string
+	RequestHeaders             objects.JSONRawMessage
 	RequestBody                objects.JSONRawMessage
 	ResponseBody               objects.JSONRawMessage
 	ResponseChunks             []objects.JSONRawMessage
 	ExternalID                 *string
 	Status                     request.Status
 	Stream                     *bool
+	ClientIP                   *string
 	MetricsLatencyMs           *int64
 	MetricsFirstTokenLatencyMs *int64
 	APIKeyID                   *int
@@ -560,6 +653,9 @@ func (i *CreateRequestInput) Mutate(m *RequestMutation) {
 	if v := i.Format; v != nil {
 		m.SetFormat(*v)
 	}
+	if v := i.RequestHeaders; v != nil {
+		m.SetRequestHeaders(v)
+	}
 	if v := i.RequestBody; v != nil {
 		m.SetRequestBody(v)
 	}
@@ -575,6 +671,9 @@ func (i *CreateRequestInput) Mutate(m *RequestMutation) {
 	m.SetStatus(i.Status)
 	if v := i.Stream; v != nil {
 		m.SetStream(*v)
+	}
+	if v := i.ClientIP; v != nil {
+		m.SetClientIP(*v)
 	}
 	if v := i.MetricsLatencyMs; v != nil {
 		m.SetMetricsLatencyMs(*v)
@@ -605,6 +704,9 @@ func (c *RequestCreate) SetInput(i CreateRequestInput) *RequestCreate {
 
 // UpdateRequestInput represents a mutation input for updating requests.
 type UpdateRequestInput struct {
+	ClearRequestHeaders             bool
+	RequestHeaders                  objects.JSONRawMessage
+	AppendRequestHeaders            objects.JSONRawMessage
 	ClearResponseBody               bool
 	ResponseBody                    objects.JSONRawMessage
 	AppendResponseBody              objects.JSONRawMessage
@@ -624,6 +726,15 @@ type UpdateRequestInput struct {
 
 // Mutate applies the UpdateRequestInput on the RequestMutation builder.
 func (i *UpdateRequestInput) Mutate(m *RequestMutation) {
+	if i.ClearRequestHeaders {
+		m.ClearRequestHeaders()
+	}
+	if v := i.RequestHeaders; v != nil {
+		m.SetRequestHeaders(v)
+	}
+	if i.AppendRequestHeaders != nil {
+		m.AppendRequestHeaders(i.RequestHeaders)
+	}
 	if i.ClearResponseBody {
 		m.ClearResponseBody()
 	}

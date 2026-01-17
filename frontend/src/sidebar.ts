@@ -5,15 +5,13 @@ import {
   IconUsers,
   IconRobot,
   IconShield,
-  IconSettings,
   IconKey,
   IconActivity,
-  IconActivityHeartbeat,
   IconDatabase,
   IconAB2,
   IconBaselineDensityMedium,
   IconAi,
-  IconChartBar,
+  IconNote,
 } from '@tabler/icons-react';
 import { Command } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -86,11 +84,6 @@ export function useSidebarData(): SidebarData {
           icon: IconRobot,
         } as NavLink,
         {
-          title: t('sidebar.items.modelStats'),
-          url: '/model-stats',
-          icon: IconChartBar,
-        } as NavLink,
-        {
           title: t('sidebar.items.dataStorages'),
           url: '/data-storages',
           icon: IconDatabase,
@@ -116,10 +109,25 @@ export function useSidebarData(): SidebarData {
       title: t('sidebar.groups.project'),
       items: [
         {
+          title: t('sidebar.items.apiKeys'),
+          url: '/project/api-keys',
+          icon: IconKey,
+        } as NavLink,
+        {
+          title: t('sidebar.items.prompts'),
+          url: '/project/prompts',
+          icon: IconNote,
+        } as NavLink,
+        {
           title: t('sidebar.items.requests'),
           url: '/project/requests',
           icon: IconActivity,
         } as NavLink,
+        // {
+        //   title: t('sidebar.items.usageLogs'),
+        //   url: '/project/usage-logs',
+        //   icon: IconActivityHeartbeat,
+        // } as NavLink,
         {
           title: t('sidebar.items.traces'),
           url: '/project/traces',
@@ -130,16 +138,7 @@ export function useSidebarData(): SidebarData {
           url: '/project/threads',
           icon: IconBaselineDensityMedium,
         } as NavLink,
-        {
-          title: t('sidebar.items.usageLogs'),
-          url: '/project/usage-logs',
-          icon: IconActivityHeartbeat,
-        } as NavLink,
-        {
-          title: t('sidebar.items.apiKeys'),
-          url: '/project/api-keys',
-          icon: IconKey,
-        } as NavLink,
+
         {
           title: t('sidebar.items.users'),
           url: '/project/users',
