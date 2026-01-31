@@ -1,5 +1,7 @@
 scalar JSONRawMessage
 scalar JSONRawMessageInput
+scalar Decimal
+scalar DecimalInput
 
 type ModelMapping {
   from: String!
@@ -19,11 +21,13 @@ input HeaderEntryInput {
 type TransformOptions {
   forceArrayInstructions: Boolean!
   forceArrayInputs: Boolean!
+  replaceDeveloperRoleWithSystem: Boolean!
 }
 
 input TransformOptionsInput {
   forceArrayInstructions: Boolean
   forceArrayInputs: Boolean
+  replaceDeveloperRoleWithSystem: Boolean
 }
 
 enum ProxyType {
@@ -58,6 +62,20 @@ type ChannelSettings {
   transformOptions: TransformOptions
 }
 
+enum CapabilityPolicy {
+  unlimited
+  require
+  forbid
+}
+
+type ChannelPolicies {
+  stream: CapabilityPolicy
+}
+
+input ChannelPoliciesInput {
+  stream: CapabilityPolicy
+}
+
 input ModelMappingInput {
   from: String!
   to: String!
@@ -79,6 +97,16 @@ type ChannelCredentials {
   apiKey: String
   aws: AWSCredential
   gcp: GCPCredential
+  oauth: OAuthCredentials
+}
+
+type OAuthCredentials {
+  accessToken: String
+  refreshToken: String
+  clientID: String
+  expiresAt: Time
+  tokenType: String
+  scopes: [String!]
 }
 
 type GCPCredential {
@@ -97,6 +125,16 @@ input ChannelCredentialsInput {
   apiKey: String
   aws: AWSCredentialInput
   gcp: GCPCredentialInput
+  oauth: OAuthCredentialsInput
+}
+
+input OAuthCredentialsInput {
+  accessToken: String
+  refreshToken: String
+  clientID: String
+  expiresAt: Time
+  tokenType: String
+  scopes: [String!]
 }
 
 input AWSCredentialInput {
@@ -156,14 +194,18 @@ type BulkImportChannelsResult {
 }
 
 input BulkCreateChannelsInput {
-  type: String!
+  type: ChannelType!
   name: String!
   tags: [String!]
   baseURL: String
   apiKeys: [String!]!
   supportedModels: [String!]!
+  autoSyncSupportedModels: Boolean
   defaultTestModel: String!
   settings: ChannelSettingsInput
+  policies: ChannelPoliciesInput
+  orderingWeight: Int
+  remark: String
 }
 
 input ChannelOrderingItem {
@@ -192,6 +234,8 @@ input APIKeyProfileInput {
   channelIDs: [Int!]
   channelTags: [String!]
   modelIDs: [String!]
+  quota: APIKeyQuotaInput
+  loadBalanceStrategy: String
 }
 
 input UpdateAPIKeyScopesInput {
@@ -209,6 +253,68 @@ type APIKeyProfile {
   channelIDs: [Int!]
   channelTags: [String!]
   modelIDs: [String!]
+  quota: APIKeyQuota
+  loadBalanceStrategy: String
+}
+
+input APIKeyQuotaInput {
+  requests: Int
+  totalTokens: Int
+  cost: DecimalInput
+  period: APIKeyQuotaPeriodInput!
+}
+
+input APIKeyQuotaPeriodInput {
+  type: APIKeyQuotaPeriodType!
+  pastDuration: APIKeyQuotaPastDurationInput
+  calendarDuration: APIKeyQuotaCalendarDurationInput
+}
+
+enum APIKeyQuotaPeriodType {
+  all_time
+  past_duration
+  calendar_duration
+}
+
+input APIKeyQuotaPastDurationInput {
+  value: Int!
+  unit: APIKeyQuotaPastDurationUnit!
+}
+
+enum APIKeyQuotaPastDurationUnit {
+  hour
+  day
+}
+
+input APIKeyQuotaCalendarDurationInput {
+  unit: APIKeyQuotaCalendarDurationUnit!
+}
+
+enum APIKeyQuotaCalendarDurationUnit {
+  day
+  month
+}
+
+type APIKeyQuota {
+  requests: Int
+  totalTokens: Int
+  cost: Decimal
+  period: APIKeyQuotaPeriod!
+}
+
+type APIKeyQuotaPeriod {
+  type: APIKeyQuotaPeriodType!
+  pastDuration: APIKeyQuotaPastDuration
+  calendarDuration: APIKeyQuotaCalendarDuration
+}
+
+type APIKeyQuotaPastDuration {
+  value: Int!
+  unit: APIKeyQuotaPastDurationUnit!
+}
+
+type APIKeyQuotaCalendarDuration {
+  unit: APIKeyQuotaCalendarDurationUnit!
 }
 
 input FetchModelsInput {
@@ -302,15 +408,26 @@ type GCS {
   bucketName: String!
 }
 
+type UsageMetadata {
+  totalInputTokens: Int! 
+  totalOutputTokens: Int! 
+  totalTokens: Int! 
+  totalCachedTokens: Int! 
+  totalCachedWriteTokens: Int! 
+  totalCost: Decimal! 
+}
+
 extend type Trace {
   rootSegment: Segment
   rawRootSegment: JSONRawMessage
   firstUserQuery: String @goField(forceResolver: true)
   firstText: String @goField(forceResolver: true)
+  usageMetadata: UsageMetadata @goField(forceResolver: true)
 }
 
 extend type Thread {
   firstUserQuery: String @goField(forceResolver: true)
+  usageMetadata: UsageMetadata @goField(forceResolver: true)
 }
 
 extend type Channel {

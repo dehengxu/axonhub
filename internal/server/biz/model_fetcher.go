@@ -13,6 +13,8 @@ import (
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/transformer/anthropic/claudecode"
+	"github.com/looplj/axonhub/llm/transformer/openai/codex"
 )
 
 // ModelFetcher handles fetching models from provider APIs.
@@ -85,6 +87,24 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 		return &FetchModelsResult{
 			Models: []ModelIdentify{},
 			Error:  lo.ToPtr("API key is required"),
+		}, nil
+	}
+
+	if channel.Type(input.ChannelType) == channel.TypeCodex {
+		return &FetchModelsResult{
+			Models: lo.Map(codex.DefaultModels(), func(id string, _ int) ModelIdentify {
+				return ModelIdentify{ID: id}
+			}),
+			Error: nil,
+		}, nil
+	}
+
+	if channel.Type(input.ChannelType) == channel.TypeClaudecode {
+		return &FetchModelsResult{
+			Models: lo.Map(claudecode.DefaultModels(), func(id string, _ int) ModelIdentify {
+				return ModelIdentify{ID: id}
+			}),
+			Error: nil,
 		}, nil
 	}
 

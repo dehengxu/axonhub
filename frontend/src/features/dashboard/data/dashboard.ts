@@ -11,7 +11,6 @@ export const requestStatsSchema = z.object({
 });
 
 export const dashboardStatsSchema = z.object({
-  totalUsers: z.number(),
   totalRequests: z.number(),
   requestStats: requestStatsSchema,
   failedRequests: z.number(),
@@ -20,7 +19,6 @@ export const dashboardStatsSchema = z.object({
 
 export const requestsByChannelSchema = z.object({
   channelName: z.string(),
-  channelType: z.string(),
   count: z.number(),
 });
 
@@ -48,6 +46,8 @@ export const tokensByAPIKeySchema = z.object({
 export const dailyRequestStatsSchema = z.object({
   date: z.string(),
   count: z.number(),
+  tokens: z.number(),
+  cost: z.number(),
 });
 
 export const hourlyRequestStatsSchema = z.object({
@@ -137,7 +137,6 @@ export type ModelTokenStatsSummary = z.infer<typeof modelTokenStatsSummarySchema
 const DASHBOARD_STATS_QUERY = `
   query GetDashboardStats {
     dashboardOverview {
-      totalUsers
       totalRequests
       requestStats {
         requestsToday
@@ -155,7 +154,6 @@ const REQUESTS_BY_CHANNEL_QUERY = `
   query GetRequestsByChannel {
     requestStatsByChannel {
       channelName
-      channelType
       count
     }
   }
@@ -199,6 +197,8 @@ const DAILY_REQUEST_STATS_QUERY = `
     dailyRequestStats {
       date
       count
+      tokens
+      cost
     }
   }
 `;

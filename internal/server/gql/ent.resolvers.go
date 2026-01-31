@@ -47,6 +47,59 @@ func (r *channelResolver) ID(ctx context.Context, obj *ent.Channel) (*objects.GU
 	}, nil
 }
 
+// Policies is the resolver for the policies field.
+// It is used to return the default value if the field is not set.
+func (r *channelResolver) Policies(ctx context.Context, obj *ent.Channel) (*objects.ChannelPolicies, error) {
+	if obj.Policies.Stream == "" {
+		obj.Policies.Stream = objects.CapabilityPolicyUnlimited
+	}
+
+	return &obj.Policies, nil
+}
+
+// ProviderQuotaStatus is the resolver for the providerQuotaStatus field.
+// It returns null (not an error) when no quota status exists for the channel.
+func (r *channelResolver) ProviderQuotaStatus(ctx context.Context, obj *ent.Channel) (*ent.ProviderQuotaStatus, error) {
+	pqs, err := obj.ProviderQuotaStatus(ctx)
+	if ent.IsNotFound(err) {
+		return nil, nil
+	}
+
+	return pqs, err
+}
+
+// ID is the resolver for the id field.
+func (r *channelModelPriceResolver) ID(ctx context.Context, obj *ent.ChannelModelPrice) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeChannelModelPrice,
+		ID:   obj.ID,
+	}, nil
+}
+
+// ChannelID is the resolver for the channelID field.
+func (r *channelModelPriceResolver) ChannelID(ctx context.Context, obj *ent.ChannelModelPrice) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeChannel,
+		ID:   obj.ChannelID,
+	}, nil
+}
+
+// ID is the resolver for the id field.
+func (r *channelModelPriceVersionResolver) ID(ctx context.Context, obj *ent.ChannelModelPriceVersion) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeChannelModelPriceVersion,
+		ID:   obj.ID,
+	}, nil
+}
+
+// ChannelModelPriceID is the resolver for the channelModelPriceID field.
+func (r *channelModelPriceVersionResolver) ChannelModelPriceID(ctx context.Context, obj *ent.ChannelModelPriceVersion) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeChannelModelPrice,
+		ID:   obj.ChannelModelPriceID,
+	}, nil
+}
+
 // ID is the resolver for the id field.
 func (r *channelOverrideTemplateResolver) ID(ctx context.Context, obj *ent.ChannelOverrideTemplate) (*objects.GUID, error) {
 	return &objects.GUID{
@@ -132,6 +185,22 @@ func (r *promptResolver) ID(ctx context.Context, obj *ent.Prompt) (*objects.GUID
 	}, nil
 }
 
+// ID is the resolver for the id field.
+func (r *providerQuotaStatusResolver) ID(ctx context.Context, obj *ent.ProviderQuotaStatus) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeProviderQuotaStatus,
+		ID:   obj.ID,
+	}, nil
+}
+
+// ChannelID is the resolver for the channelID field.
+func (r *providerQuotaStatusResolver) ChannelID(ctx context.Context, obj *ent.ProviderQuotaStatus) (*objects.GUID, error) {
+	return &objects.GUID{
+		Type: ent.TypeChannel,
+		ID:   obj.ChannelID,
+	}, nil
+}
+
 // Node is the resolver for the node field.
 func (r *queryResolver) Node(ctx context.Context, id objects.GUID) (ent.Noder, error) {
 	typ, ok := guidTypeToNodeType[id.Type]
@@ -153,6 +222,10 @@ func (r *queryResolver) APIKeys(ctx context.Context, after *entgql.Cursor[int], 
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultAPIKeyOrder.Field
+	}
+
 	return r.client.APIKey.Query().Paginate(ctx, after, first, before, last,
 		ent.WithAPIKeyOrder(orderBy),
 		ent.WithAPIKeyFilter(where.Filter),
@@ -161,6 +234,10 @@ func (r *queryResolver) APIKeys(ctx context.Context, after *entgql.Cursor[int], 
 
 // Channels is the resolver for the channels field.
 func (r *queryResolver) Channels(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.ChannelOrder, where *ent.ChannelWhereInput) (*ent.ChannelConnection, error) {
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultChannelOrder.Field
+	}
+
 	return r.client.Channel.Query().Paginate(ctx, after, first, before, last,
 		ent.WithChannelOrder(orderBy),
 		ent.WithChannelFilter(where.Filter),
@@ -178,6 +255,10 @@ func (r *queryResolver) DataStorages(ctx context.Context, after *entgql.Cursor[i
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultDataStorageOrder.Field
+	}
+
 	return r.client.DataStorage.Query().Paginate(ctx, after, first, before, last,
 		ent.WithDataStorageOrder(orderBy),
 		ent.WithDataStorageFilter(where.Filter),
@@ -186,6 +267,9 @@ func (r *queryResolver) DataStorages(ctx context.Context, after *entgql.Cursor[i
 
 // Models is the resolver for the models field.
 func (r *queryResolver) Models(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.ModelOrder, where *ent.ModelWhereInput) (*ent.ModelConnection, error) {
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultModelOrder.Field
+	}
 	return r.client.Model.Query().Paginate(ctx, after, first, before, last,
 		ent.WithModelOrder(orderBy),
 		ent.WithModelFilter(where.Filter),
@@ -196,6 +280,10 @@ func (r *queryResolver) Models(ctx context.Context, after *entgql.Cursor[int], f
 func (r *queryResolver) Projects(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.ProjectOrder, where *ent.ProjectWhereInput) (*ent.ProjectConnection, error) {
 	if err := validatePaginationArgs(first, last); err != nil {
 		return nil, err
+	}
+
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultProjectOrder.Field
 	}
 
 	return r.client.Project.Query().Paginate(ctx, after, first, before, last,
@@ -210,6 +298,10 @@ func (r *queryResolver) Prompts(ctx context.Context, after *entgql.Cursor[int], 
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultPromptOrder.Field
+	}
+
 	return r.client.Prompt.Query().Paginate(ctx, after, first, before, last,
 		ent.WithPromptOrder(orderBy),
 		ent.WithPromptFilter(where.Filter),
@@ -222,6 +314,10 @@ func (r *queryResolver) Requests(ctx context.Context, after *entgql.Cursor[int],
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultRequestOrder.Field
+	}
+
 	return r.client.Request.Query().Paginate(ctx, after, first, before, last,
 		ent.WithRequestOrder(orderBy),
 		ent.WithRequestFilter(where.Filter),
@@ -232,6 +328,10 @@ func (r *queryResolver) Requests(ctx context.Context, after *entgql.Cursor[int],
 func (r *queryResolver) Roles(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.RoleOrder, where *ent.RoleWhereInput) (*ent.RoleConnection, error) {
 	if err := validatePaginationArgs(first, last); err != nil {
 		return nil, err
+	}
+
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultRoleOrder.Field
 	}
 
 	return r.client.Role.Query().Paginate(ctx, after, first, before, last,
@@ -258,6 +358,10 @@ func (r *queryResolver) Threads(ctx context.Context, after *entgql.Cursor[int], 
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultThreadOrder.Field
+	}
+
 	return r.client.Thread.Query().Paginate(ctx, after, first, before, last,
 		ent.WithThreadOrder(orderBy),
 		ent.WithThreadFilter(where.Filter),
@@ -268,6 +372,10 @@ func (r *queryResolver) Threads(ctx context.Context, after *entgql.Cursor[int], 
 func (r *queryResolver) Traces(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.TraceOrder, where *ent.TraceWhereInput) (*ent.TraceConnection, error) {
 	if err := validatePaginationArgs(first, last); err != nil {
 		return nil, err
+	}
+
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultTraceOrder.Field
 	}
 
 	return r.client.Trace.Query().Paginate(ctx, after, first, before, last,
@@ -282,6 +390,10 @@ func (r *queryResolver) UsageLogs(ctx context.Context, after *entgql.Cursor[int]
 		return nil, err
 	}
 
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultUsageLogOrder.Field
+	}
+
 	return r.client.UsageLog.Query().Paginate(ctx, after, first, before, last,
 		ent.WithUsageLogOrder(orderBy),
 		ent.WithUsageLogFilter(where.Filter),
@@ -292,6 +404,10 @@ func (r *queryResolver) UsageLogs(ctx context.Context, after *entgql.Cursor[int]
 func (r *queryResolver) Users(ctx context.Context, after *entgql.Cursor[int], first *int, before *entgql.Cursor[int], last *int, orderBy *ent.UserOrder, where *ent.UserWhereInput) (*ent.UserConnection, error) {
 	if err := validatePaginationArgs(first, last); err != nil {
 		return nil, err
+	}
+
+	if orderBy != nil && orderBy.Field.String() == "CREATED_AT" {
+		orderBy.Field = ent.DefaultUserOrder.Field
 	}
 
 	return r.client.User.Query().Paginate(ctx, after, first, before, last,
@@ -664,6 +780,16 @@ func (r *Resolver) APIKey() APIKeyResolver { return &aPIKeyResolver{r} }
 // Channel returns ChannelResolver implementation.
 func (r *Resolver) Channel() ChannelResolver { return &channelResolver{r} }
 
+// ChannelModelPrice returns ChannelModelPriceResolver implementation.
+func (r *Resolver) ChannelModelPrice() ChannelModelPriceResolver {
+	return &channelModelPriceResolver{r}
+}
+
+// ChannelModelPriceVersion returns ChannelModelPriceVersionResolver implementation.
+func (r *Resolver) ChannelModelPriceVersion() ChannelModelPriceVersionResolver {
+	return &channelModelPriceVersionResolver{r}
+}
+
 // ChannelOverrideTemplate returns ChannelOverrideTemplateResolver implementation.
 func (r *Resolver) ChannelOverrideTemplate() ChannelOverrideTemplateResolver {
 	return &channelOverrideTemplateResolver{r}
@@ -688,6 +814,11 @@ func (r *Resolver) Project() ProjectResolver { return &projectResolver{r} }
 
 // Prompt returns PromptResolver implementation.
 func (r *Resolver) Prompt() PromptResolver { return &promptResolver{r} }
+
+// ProviderQuotaStatus returns ProviderQuotaStatusResolver implementation.
+func (r *Resolver) ProviderQuotaStatus() ProviderQuotaStatusResolver {
+	return &providerQuotaStatusResolver{r}
+}
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
@@ -724,6 +855,8 @@ func (r *Resolver) UserRole() UserRoleResolver { return &userRoleResolver{r} }
 
 type aPIKeyResolver struct{ *Resolver }
 type channelResolver struct{ *Resolver }
+type channelModelPriceResolver struct{ *Resolver }
+type channelModelPriceVersionResolver struct{ *Resolver }
 type channelOverrideTemplateResolver struct{ *Resolver }
 type channelPerformanceResolver struct{ *Resolver }
 type channelProbeResolver struct{ *Resolver }
@@ -731,6 +864,7 @@ type dataStorageResolver struct{ *Resolver }
 type modelResolver struct{ *Resolver }
 type projectResolver struct{ *Resolver }
 type promptResolver struct{ *Resolver }
+type providerQuotaStatusResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type requestResolver struct{ *Resolver }
 type requestExecutionResolver struct{ *Resolver }

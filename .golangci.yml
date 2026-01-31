@@ -233,6 +233,7 @@ linters:
           - errname
           - noinlineerr
           - nilnil
+          - exhaustive
 
       - path: _mock\.go$
         linters:
@@ -288,7 +289,7 @@ formatters:
     - gofmt
     - gofumpt
     - goimports
-    - golines
+    # - golines
   settings:
     gci:
       # Section configuration to compare against.
@@ -357,6 +358,7 @@ formatters:
     paths:
       - ".resolvers.go"
       - "axonhub.resolvers.go"
+      - "ent.resolvers.go"
   
 
 issues:
@@ -374,7 +376,7 @@ issues:
   # large codebase. It's not practical to fix all existing issues at the moment
   # of integration: much better don't allow issues in new code.
   # Default is false.
-  new: false
+  new: true
 
   # Auto-fix enabled issues. Default is false.
   fix: true

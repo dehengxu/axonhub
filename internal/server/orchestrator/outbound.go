@@ -4,11 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
-
-	"github.com/tidwall/sjson"
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/log"
@@ -186,6 +182,8 @@ type PersistentOutboundTransformer struct {
 	state   *PersistenceState
 }
 
+var errSkipCandidateByCircuitBreaker = errors.New("skip candidate by circuit breaker")
+
 // APIFormat returns the API format of the transformer.
 func (p *PersistentOutboundTransformer) APIFormat() llm.APIFormat {
 	return p.wrapped.APIFormat()
@@ -195,160 +193,33 @@ func (p *PersistentOutboundTransformer) TransformError(ctx context.Context, rawE
 	return p.wrapped.TransformError(ctx, rawErr)
 }
 
-// applyOverrideRequestBody creates a middleware that applies channel override parameters.
-func applyOverrideRequestBody(outbound *PersistentOutboundTransformer) pipeline.Middleware {
-	return pipeline.OnRawRequest("override-request-body", func(ctx context.Context, request *httpclient.Request) (*httpclient.Request, error) {
-		channel := outbound.GetCurrentChannel()
-		if channel == nil {
-			return request, nil
-		}
-
-		overrideParams := channel.GetOverrideParameters()
-		if len(overrideParams) == 0 {
-			return request, nil
-		}
-
-		// Apply each override parameter using sjson
-		body := request.Body
-
-		for key, value := range overrideParams {
-			if strings.EqualFold(key, "stream") {
-				log.Warn(ctx, "stream override parameter ignored",
-					log.String("channel", channel.Name),
-					log.Int("channel_id", channel.ID),
-				)
-
-				continue
-			}
-
-			var (
-				overridedBody []byte
-				err           error
-			)
-
-			if value == "__AXONHUB_CLEAR__" {
-				overridedBody, err = sjson.DeleteBytes(body, key)
-			} else {
-				overridedBody, err = sjson.SetBytes(body, key, value)
-			}
-
-			if err != nil {
-				log.Warn(ctx, "failed to apply override parameter",
-					log.String("channel", channel.Name),
-					log.String("key", key),
-					log.Cause(err),
-				)
-
-				continue
-			}
-
-			body = overridedBody
-		}
-
-		if log.DebugEnabled(ctx) {
-			log.Debug(ctx, "applied override parameters",
-				log.String("channel", channel.Name),
-				log.Int("channel_id", channel.ID),
-				log.Any("override_params", overrideParams),
-				log.String("old_body", string(request.Body)),
-				log.String("new_body", string(body)),
-			)
-		}
-
-		request.Body = body
-
-		return request, nil
-	})
-}
-
-// applyOverrideRequestHeaders creates a middleware that applies channel override headers.
-func applyOverrideRequestHeaders(outbound *PersistentOutboundTransformer) pipeline.Middleware {
-	return pipeline.OnRawRequest("override-request-headers", func(ctx context.Context, request *httpclient.Request) (*httpclient.Request, error) {
-		channel := outbound.GetCurrentChannel()
-		if channel == nil {
-			return request, nil
-		}
-
-		overrideHeaders := channel.GetOverrideHeaders()
-		if len(overrideHeaders) == 0 {
-			return request, nil
-		}
-
-		// Apply each override header
-		if request.Headers == nil {
-			request.Headers = make(http.Header)
-		}
-
-		for _, entry := range overrideHeaders {
-			if entry.Key == "" {
-				log.Warn(ctx, "empty header key ignored",
-					log.String("channel", channel.Name),
-					log.Int("channel_id", channel.ID),
-				)
-
-				continue
-			}
-
-			// If value is __AXONHUB_CLEAR__, remove header.
-			if entry.Value == "__AXONHUB_CLEAR__" {
-				log.Debug(ctx, "cleared header",
-					log.String("channel", channel.Name),
-					log.Int("channel_id", channel.ID),
-					log.String("key", entry.Key),
-				)
-
-				request.Headers.Del(entry.Key)
-
-				continue
-			}
-
-			request.Headers.Set(entry.Key, entry.Value)
-
-			if log.DebugEnabled(ctx) {
-				log.Debug(ctx, "overrided header",
-					log.String("channel", channel.Name),
-					log.String("key", entry.Key),
-					log.String("value", entry.Value),
-				)
-			}
-		}
-
-		return request, nil
-	})
-}
-
 func (p *PersistentOutboundTransformer) TransformRequest(ctx context.Context, llmRequest *llm.Request) (*httpclient.Request, error) {
 	// Candidates should already be selected by inbound transformer
-	if len(p.state.ChannelModelCandidates) == 0 {
+	if len(p.state.ChannelModelsCandidates) == 0 {
 		return nil, errors.New("no candidates available: candidates should be selected by inbound transformer")
 	}
 
 	// Select current candidate for this attempt
-	if p.state.CandidateIndex >= len(p.state.ChannelModelCandidates) {
+	if p.state.CurrentCandidateIndex >= len(p.state.ChannelModelsCandidates) {
 		return nil, fmt.Errorf("%w: all candidates exhausted", biz.ErrInternal)
 	}
 
-	candidate := p.state.ChannelModelCandidates[p.state.CandidateIndex]
-	p.state.CurrentCandidate = candidate
-	p.state.CurrentChannel = candidate.Channel
-	p.wrapped = p.state.CurrentChannel.Outbound
+	candidate := p.state.ChannelModelsCandidates[p.state.CurrentCandidateIndex]
+	entry := candidate.Models[p.state.CurrentModelIndex]
 
-	// Restore original model if it was mapped.
-	if p.state.OriginalModel != "" {
-		llmRequest.Model = p.state.OriginalModel
-	}
+	p.state.CurrentCandidate = candidate
+	p.wrapped = candidate.Channel.Outbound
 
 	log.Debug(ctx, "using candidate",
-		log.String("channel", p.state.CurrentChannel.Name),
-		log.String("model", llmRequest.Model),
-		log.String("actual_model", candidate.ActualModel),
+		log.String("channel", candidate.Channel.Name),
+		log.String("request_model", p.state.OriginalModel),
+		log.String("actual_model", entry.ActualModel),
 	)
 
-	// Use the pre-resolved ActualModel from the candidate
-	llmRequest.Model = candidate.ActualModel
+	llmRequest.Model = entry.ActualModel
 
 	// Apply channel transform options to create a new request
-	llmRequest = applyTransformOptions(llmRequest, p.state.CurrentChannel.Settings)
+	llmRequest = applyTransformOptions(llmRequest, candidate.Channel.Settings)
 
 	return p.wrapped.TransformRequest(ctx, llmRequest)
 }
@@ -391,54 +262,113 @@ func (p *PersistentOutboundTransformer) GetRequest() *ent.Request {
 
 // GetCurrentChannel returns the current channel.
 func (p *PersistentOutboundTransformer) GetCurrentChannel() *biz.Channel {
-	return p.state.CurrentChannel
+	if p.state.CurrentCandidate == nil {
+		return nil
+	}
+
+	return p.state.CurrentCandidate.Channel
+}
+
+// GetRequestedModel returns the originally requested model ID.
+func (p *PersistentOutboundTransformer) GetRequestedModel() string {
+	return p.state.OriginalModel
 }
 
 // HasMoreChannels returns true if there are more candidates available for retry.
+// It implements the pipeline.Retryable interface.
 func (p *PersistentOutboundTransformer) HasMoreChannels() bool {
-	return p.state.CandidateIndex+1 < len(p.state.ChannelModelCandidates)
+	return p.state.CurrentCandidateIndex+1 < len(p.state.ChannelModelsCandidates)
 }
 
 // NextChannel moves to the next available candidate for retry.
+// It implements the pipeline.Retryable interface.
 func (p *PersistentOutboundTransformer) NextChannel(ctx context.Context) error {
-	p.state.CandidateIndex++
-	if p.state.CandidateIndex >= len(p.state.ChannelModelCandidates) {
+	p.state.CurrentCandidateIndex++
+
+	p.state.CurrentModelIndex = 0
+	if p.state.CurrentCandidateIndex >= len(p.state.ChannelModelsCandidates) {
 		return errors.New("no more candidates available for retry")
 	}
 
 	// Reset request execution for the new candidate
 	p.state.RequestExec = nil
 
-	candidate := p.state.ChannelModelCandidates[p.state.CandidateIndex]
+	candidate := p.state.ChannelModelsCandidates[p.state.CurrentCandidateIndex]
 	p.state.CurrentCandidate = candidate
-	p.state.CurrentChannel = candidate.Channel
-	p.wrapped = p.state.CurrentChannel.Outbound
+	p.wrapped = candidate.Channel.Outbound
 
-	log.Debug(ctx, "switching to next candidate for retry",
-		log.String("channel", p.state.CurrentChannel.Name),
-		log.String("model", candidate.ActualModel),
-		log.Int("index", p.state.CandidateIndex))
+	if log.DebugEnabled(ctx) {
+		model := candidate.Models[0].ActualModel
+		log.Debug(ctx, "switching to next channel for retry",
+			log.String("channel", candidate.Channel.Name),
+			log.String("model", model),
+			log.Int("index", p.state.CurrentCandidateIndex),
+		)
+	}
 
 	return nil
 }
 
 // CanRetry returns true if the current channel can be retried.
+// It implements the pipeline.ChannelRetryable interface, it just check the error is retryable, the
+// pipeline will ensure the maxSameChannelRetries is not exceeded.
 func (p *PersistentOutboundTransformer) CanRetry(err error) bool {
-	return p.state.CurrentChannel != nil && isRetryableError(err)
-}
-
-// PrepareForRetry prepares for retrying the same channel.
-// This creates a new request execution for the same channel without switching channels.
-func (p *PersistentOutboundTransformer) PrepareForRetry(ctx context.Context) error {
-	if p.state.CurrentChannel == nil {
-		return errors.New("no current channel available for same-channel retry")
+	if p.state.CurrentCandidate == nil {
+		return false
 	}
 
-	// Reset request execution for the same channel retry
+	if errors.Is(err, errSkipCandidateByCircuitBreaker) {
+		return false
+	}
+
+	// if there are more models available in the current candidate, try the next model.
+	if p.state.CurrentModelIndex+1 < len(p.state.CurrentCandidate.Models) {
+		return true
+	}
+
+	// otherwise check if the error is retryable.
+	return isRetryableError(err)
+}
+
+// PrepareForRetry implements the pipeline.ChannelRetryable interface.
+// This will reset the request execution for the same channel, so that the same request can be retried.
+// It will try the next model in the same channel if available.
+func (p *PersistentOutboundTransformer) PrepareForRetry(ctx context.Context) error {
+	candidate := p.state.CurrentCandidate
+
+	// Reset request execution for the same channel.
 	p.state.RequestExec = nil
 
-	log.Debug(ctx, "prepared same channel retry",
-		log.Any("channel", p.state.CurrentChannel.Name))
+	// If there's another model in the list, advance to it.
+	if p.state.CurrentModelIndex+1 < len(candidate.Models) {
+		// Increase the model index to the next model.
+		p.state.CurrentModelIndex++
+		p.wrapped = candidate.Channel.Outbound
+
+		if log.DebugEnabled(ctx) {
+			model := candidate.Models[p.state.CurrentModelIndex].ActualModel
+			log.Debug(ctx, "prepared same channel retry for next model",
+				log.Any("channel", candidate.Channel.Name),
+				log.Any("model", model),
+				log.Int("current_candidate_index", p.state.CurrentCandidateIndex),
+				log.Int("current_entry_index", p.state.CurrentModelIndex),
+			)
+		}
+
+		return nil
+	}
+
+	// Otherwise, we're retrying the current (last) model.
+	// It handle the models count less than retry policy.
+	if log.DebugEnabled(ctx) {
+		model := candidate.Models[p.state.CurrentModelIndex].ActualModel
+		log.Debug(ctx, "prepared same channel retry for same model",
+			log.Any("channel", candidate.Channel.Name),
+			log.Any("model", model),
+			log.Int("current_candidate_index", p.state.CurrentCandidateIndex),
+			log.Int("current_entry_index", p.state.CurrentModelIndex),
+		)
+	}
 
 	return nil
 }
@@ -449,18 +379,25 @@ func (p *PersistentOutboundTransformer) PrepareForRetry(ctx context.Context) err
 //
 // The customized executor will be used to execute the request.
 // e.g. the aws bedrock process need a custom executor to handle the request.
+// It implements the pipeline.ChannelCustomizedExecutor interface.
 func (p *PersistentOutboundTransformer) CustomizeExecutor(executor pipeline.Executor) pipeline.Executor {
 	// Start with the default executor, then layer customizations.
 	customizedExecutor := executor
+
+	channel := p.GetCurrentChannel()
+	if channel == nil {
+		return customizedExecutor
+	}
+
 	// 1. Apply proxy settings. Test proxy override takes precedence over channel settings.
 	if p.state.Proxy != nil {
 		customizedExecutor = httpclient.NewHttpClientWithProxy(p.state.Proxy)
-	} else if p.state.CurrentChannel.HTTPClient != nil {
+	} else if channel.HTTPClient != nil {
 		// Use the channel's own HTTP client, which is pre-configured with its proxy settings.
-		customizedExecutor = p.state.CurrentChannel.HTTPClient
+		customizedExecutor = channel.HTTPClient
 	}
 	// 2. Allow the specific outbound transformer (e.g., for AWS signing) to further customize the client.
-	if custom, ok := p.state.CurrentChannel.Outbound.(pipeline.ChannelCustomizedExecutor); ok {
+	if custom, ok := channel.Outbound.(pipeline.ChannelCustomizedExecutor); ok {
 		return custom.CustomizeExecutor(customizedExecutor)
 	}
 

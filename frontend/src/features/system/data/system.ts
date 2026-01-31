@@ -135,6 +135,16 @@ export interface BrandSettings {
   brandLogo?: string;
 }
 
+export interface SystemGeneralSettings {
+  currencyCode: string;
+  timezone: string;
+}
+
+export interface UpdateSystemGeneralSettingsInput {
+  currencyCode?: string;
+  timezone?: string;
+}
+
 export interface StoragePolicy {
   storeChunks: boolean;
   storeRequestBody: boolean;
@@ -495,6 +505,21 @@ const UPDATE_CHANNEL_SETTINGS_MUTATION = `
   }
 `;
 
+const SYSTEM_GENERAL_SETTINGS_QUERY = `
+  query SystemGeneralSettings {
+    systemGeneralSettings {
+      currencyCode
+      timezone
+    }
+  }
+`;
+
+const UPDATE_SYSTEM_GENERAL_SETTINGS_MUTATION = `
+  mutation UpdateSystemGeneralSettings($input: UpdateSystemGeneralSettingsInput!) {
+    updateSystemGeneralSettings(input: $input)
+  }
+`;
+
 export interface ModelSettings {
   fallbackToChannelsOnModelNotFound: boolean;
   queryAllChannelModels: boolean;
@@ -596,6 +621,41 @@ export function useUpdateChannelSetting() {
   });
 }
 
+export function useGeneralSettings() {
+  const { handleError } = useErrorHandler();
+
+  return useQuery({
+    queryKey: ['generalSettings'],
+    queryFn: async () => {
+      try {
+        const data = await graphqlRequest<{ systemGeneralSettings: SystemGeneralSettings }>(SYSTEM_GENERAL_SETTINGS_QUERY);
+        return data.systemGeneralSettings;
+      } catch (error) {
+        handleError(error, i18n.t('common.errors.internalServerError'));
+        throw error;
+      }
+    },
+  });
+}
+
+export function useUpdateGeneralSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateSystemGeneralSettingsInput) => {
+      const data = await graphqlRequest<{ updateSystemGeneralSettings: boolean }>(UPDATE_SYSTEM_GENERAL_SETTINGS_MUTATION, { input });
+      return data.updateSystemGeneralSettings;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generalSettings'] });
+      toast.success(i18n.t('common.success.systemUpdated'));
+    },
+    onError: () => {
+      toast.error(i18n.t('common.errors.systemUpdateFailed'));
+    },
+  });
+}
+
 // Backup and Restore
 const BACKUP_MUTATION = `
   mutation Backup($input: BackupOptionsInput!) {
@@ -618,6 +678,7 @@ const RESTORE_MUTATION = `
 
 export interface BackupOptionsInput {
   includeChannels: boolean;
+  includeModelPrices: boolean;
   includeModels: boolean;
   includeAPIKeys: boolean;
 }
@@ -630,11 +691,12 @@ export interface BackupPayload {
 
 export interface RestoreOptionsInput {
   includeChannels: boolean;
+  includeModelPrices: boolean;
   includeModels: boolean;
   includeAPIKeys: boolean;
-  channelConflictStrategy: 'SKIP' | 'OVERWRITE' | 'ERROR';
-  modelConflictStrategy: 'SKIP' | 'OVERWRITE' | 'ERROR';
-  apiKeyConflictStrategy: 'SKIP' | 'OVERWRITE' | 'ERROR';
+  channelConflictStrategy: 'skip' | 'overwrite' | 'error';
+  modelConflictStrategy: 'skip' | 'overwrite' | 'error';
+  apiKeyConflictStrategy: 'skip' | 'overwrite' | 'error';
 }
 
 export interface RestorePayload {

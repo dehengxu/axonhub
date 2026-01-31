@@ -38,6 +38,7 @@ func (Channel) Fields() []ent.Field {
 			Values(
 				"openai",
 				"openai_responses",
+				"codex",
 				"vercel",
 				"anthropic",
 				"anthropic_aws",
@@ -74,6 +75,7 @@ func (Channel) Fields() []ent.Field {
 				"jina",
 				"github",
 				"claudecode",
+				"cerebras",
 			).
 			Immutable().
 			Annotations(
@@ -89,11 +91,21 @@ func (Channel) Fields() []ent.Field {
 				entgql.Skip(entgql.SkipMutationCreateInput),
 				entgql.OrderField("STATUS"),
 			),
-		field.JSON("credentials", &objects.ChannelCredentials{}).Sensitive().Default(&objects.ChannelCredentials{}),
+		field.JSON("credentials", &objects.ChannelCredentials{}).
+			Sensitive().
+			Default(&objects.ChannelCredentials{}),
 		field.Strings("supported_models"),
 		field.Bool("auto_sync_supported_models").Default(false),
 		field.Strings("tags").Optional().Default([]string{}),
 		field.String("default_test_model"),
+		field.JSON("policies", objects.ChannelPolicies{}).
+			Default(objects.ChannelPolicies{
+				Stream: objects.CapabilityPolicyUnlimited,
+			}).
+			Annotations(
+				entgql.Directives(forceResolver()),
+			).
+			Optional(),
 		field.JSON("settings", &objects.ChannelSettings{}).
 			Default(&objects.ChannelSettings{
 				ModelMappings: []objects.ModelMapping{},
@@ -137,6 +149,16 @@ func (Channel) Edges() []ent.Edge {
 			),
 		edge.To("channel_probes", ChannelProbe.Type).
 			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
+		edge.To("channel_model_prices", ChannelModelPrice.Type).
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
+		edge.To("provider_quota_status", ProviderQuotaStatus.Type).
+			Unique().
+			Annotations(
+				entgql.Directives(forceResolver()),
 				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 			),
 	}

@@ -39,6 +39,12 @@ function buildUsageLogsQuery(permissions: { canViewChannels: boolean }) {
             completionRejectedPredictionTokens
             source
             format
+            totalCost
+            costItems {
+              itemCode
+              quantity
+              subtotal
+            }
           }
           cursor
         }
@@ -85,6 +91,12 @@ function buildUsageLogDetailQuery(permissions: { canViewChannels: boolean }) {
           completionRejectedPredictionTokens
           source
           format
+          totalCost
+          costItems {
+            itemCode
+            quantity
+            subtotal
+          }
         }
       }
     }

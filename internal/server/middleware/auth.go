@@ -8,6 +8,7 @@ import (
 
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
+	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
@@ -74,6 +75,46 @@ func WithJWTAuth(auth *biz.AuthService) gin.HandlerFunc {
 		ctx := contexts.WithUser(c.Request.Context(), user)
 		c.Request = c.Request.WithContext(ctx)
 
+		c.Next()
+	}
+}
+
+var apiKeyAuthConfig = &APIKeyConfig{
+	Headers:       []string{"Authorization"},
+	RequireBearer: true,
+}
+
+// WithOpenAPIAuth allows API key auth for createLLMAPIKey only.
+func WithOpenAPIAuth(auth *biz.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key, err := ExtractAPIKeyFromRequest(c.Request, apiKeyAuthConfig)
+		if err != nil {
+			AbortWithError(c, http.StatusUnauthorized, err)
+			return
+		}
+
+		apiKey, err := auth.AnthenticateAPIKey(c.Request.Context(), key)
+		if err != nil {
+			if ent.IsNotFound(err) || errors.Is(err, biz.ErrInvalidAPIKey) {
+				AbortWithError(c, http.StatusUnauthorized, errors.New("Invalid API key"))
+			} else {
+				AbortWithError(c, http.StatusInternalServerError, errors.New("Failed to validate API key"))
+			}
+
+			return
+		}
+
+		if apiKey.Type != apikey.TypeServiceAccount {
+			AbortWithError(c, http.StatusUnauthorized, errors.New("Invalid API key"))
+			return
+		}
+
+		ctx := contexts.WithAPIKey(c.Request.Context(), apiKey)
+		if apiKey.Edges.Project != nil {
+			ctx = contexts.WithProjectID(ctx, apiKey.Edges.Project.ID)
+		}
+
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }

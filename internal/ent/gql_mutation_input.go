@@ -88,6 +88,7 @@ type CreateChannelInput struct {
 	AutoSyncSupportedModels *bool
 	Tags                    []string
 	DefaultTestModel        string
+	Policies                *objects.ChannelPolicies
 	Settings                *objects.ChannelSettings
 	OrderingWeight          *int
 	Remark                  *string
@@ -113,6 +114,9 @@ func (i *CreateChannelInput) Mutate(m *ChannelMutation) {
 		m.SetTags(v)
 	}
 	m.SetDefaultTestModel(i.DefaultTestModel)
+	if v := i.Policies; v != nil {
+		m.SetPolicies(*v)
+	}
 	if v := i.Settings; v != nil {
 		m.SetSettings(v)
 	}
@@ -144,6 +148,8 @@ type UpdateChannelInput struct {
 	Tags                    []string
 	AppendTags              []string
 	DefaultTestModel        *string
+	ClearPolicies           bool
+	Policies                *objects.ChannelPolicies
 	ClearSettings           bool
 	Settings                *objects.ChannelSettings
 	OrderingWeight          *int
@@ -190,6 +196,12 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 	}
 	if v := i.DefaultTestModel; v != nil {
 		m.SetDefaultTestModel(*v)
+	}
+	if i.ClearPolicies {
+		m.ClearPolicies()
+	}
+	if v := i.Policies; v != nil {
+		m.SetPolicies(*v)
 	}
 	if i.ClearSettings {
 		m.ClearSettings()
@@ -1018,6 +1030,7 @@ func (c *TraceUpdateOne) SetInput(i UpdateTraceInput) *TraceUpdateOne {
 
 // CreateUsageLogInput represents a mutation input for creating usagelogs.
 type CreateUsageLogInput struct {
+	APIKeyID                           *int
 	ModelID                            string
 	PromptTokens                       *int64
 	CompletionTokens                   *int64
@@ -1025,12 +1038,17 @@ type CreateUsageLogInput struct {
 	PromptAudioTokens                  *int64
 	PromptCachedTokens                 *int64
 	PromptWriteCachedTokens            *int64
+	PromptWriteCachedTokens5m          *int64
+	PromptWriteCachedTokens1h          *int64
 	CompletionAudioTokens              *int64
 	CompletionReasoningTokens          *int64
 	CompletionAcceptedPredictionTokens *int64
 	CompletionRejectedPredictionTokens *int64
 	Source                             *usagelog.Source
 	Format                             *string
+	TotalCost                          *float64
+	CostItems                          []objects.CostItem
+	CostPriceReferenceID               *string
 	RequestID                          int
 	ProjectID                          int
 	ChannelID                          *int
@@ -1038,6 +1056,9 @@ type CreateUsageLogInput struct {
 
 // Mutate applies the CreateUsageLogInput on the UsageLogMutation builder.
 func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
+	if v := i.APIKeyID; v != nil {
+		m.SetAPIKeyID(*v)
+	}
 	m.SetModelID(i.ModelID)
 	if v := i.PromptTokens; v != nil {
 		m.SetPromptTokens(*v)
@@ -1057,6 +1078,12 @@ func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.PromptWriteCachedTokens; v != nil {
 		m.SetPromptWriteCachedTokens(*v)
 	}
+	if v := i.PromptWriteCachedTokens5m; v != nil {
+		m.SetPromptWriteCachedTokens5m(*v)
+	}
+	if v := i.PromptWriteCachedTokens1h; v != nil {
+		m.SetPromptWriteCachedTokens1h(*v)
+	}
 	if v := i.CompletionAudioTokens; v != nil {
 		m.SetCompletionAudioTokens(*v)
 	}
@@ -1074,6 +1101,15 @@ func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
 	}
 	if v := i.Format; v != nil {
 		m.SetFormat(*v)
+	}
+	if v := i.TotalCost; v != nil {
+		m.SetTotalCost(*v)
+	}
+	if v := i.CostItems; v != nil {
+		m.SetCostItems(v)
+	}
+	if v := i.CostPriceReferenceID; v != nil {
+		m.SetCostPriceReferenceID(*v)
 	}
 	m.SetRequestID(i.RequestID)
 	m.SetProjectID(i.ProjectID)
@@ -1099,6 +1135,10 @@ type UpdateUsageLogInput struct {
 	PromptCachedTokens                      *int64
 	ClearPromptWriteCachedTokens            bool
 	PromptWriteCachedTokens                 *int64
+	ClearPromptWriteCachedTokens5m          bool
+	PromptWriteCachedTokens5m               *int64
+	ClearPromptWriteCachedTokens1h          bool
+	PromptWriteCachedTokens1h               *int64
 	ClearCompletionAudioTokens              bool
 	CompletionAudioTokens                   *int64
 	ClearCompletionReasoningTokens          bool
@@ -1107,8 +1147,13 @@ type UpdateUsageLogInput struct {
 	CompletionAcceptedPredictionTokens      *int64
 	ClearCompletionRejectedPredictionTokens bool
 	CompletionRejectedPredictionTokens      *int64
-	ClearChannel                            bool
-	ChannelID                               *int
+	ClearTotalCost                          bool
+	TotalCost                               *float64
+	ClearCostItems                          bool
+	CostItems                               []objects.CostItem
+	AppendCostItems                         []objects.CostItem
+	ClearCostPriceReferenceID               bool
+	CostPriceReferenceID                    *string
 }
 
 // Mutate applies the UpdateUsageLogInput on the UsageLogMutation builder.
@@ -1140,6 +1185,18 @@ func (i *UpdateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.PromptWriteCachedTokens; v != nil {
 		m.SetPromptWriteCachedTokens(*v)
 	}
+	if i.ClearPromptWriteCachedTokens5m {
+		m.ClearPromptWriteCachedTokens5m()
+	}
+	if v := i.PromptWriteCachedTokens5m; v != nil {
+		m.SetPromptWriteCachedTokens5m(*v)
+	}
+	if i.ClearPromptWriteCachedTokens1h {
+		m.ClearPromptWriteCachedTokens1h()
+	}
+	if v := i.PromptWriteCachedTokens1h; v != nil {
+		m.SetPromptWriteCachedTokens1h(*v)
+	}
 	if i.ClearCompletionAudioTokens {
 		m.ClearCompletionAudioTokens()
 	}
@@ -1164,11 +1221,26 @@ func (i *UpdateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.CompletionRejectedPredictionTokens; v != nil {
 		m.SetCompletionRejectedPredictionTokens(*v)
 	}
-	if i.ClearChannel {
-		m.ClearChannel()
+	if i.ClearTotalCost {
+		m.ClearTotalCost()
 	}
-	if v := i.ChannelID; v != nil {
-		m.SetChannelID(*v)
+	if v := i.TotalCost; v != nil {
+		m.SetTotalCost(*v)
+	}
+	if i.ClearCostItems {
+		m.ClearCostItems()
+	}
+	if v := i.CostItems; v != nil {
+		m.SetCostItems(v)
+	}
+	if i.AppendCostItems != nil {
+		m.AppendCostItems(i.CostItems)
+	}
+	if i.ClearCostPriceReferenceID {
+		m.ClearCostPriceReferenceID()
+	}
+	if v := i.CostPriceReferenceID; v != nil {
+		m.SetCostPriceReferenceID(*v)
 	}
 }
 

@@ -13,11 +13,13 @@ import { ChannelsTable } from './components/channels-table';
 import { ChannelsTypeTabs } from './components/channels-type-tabs';
 import ChannelsProvider from './context/channels-context';
 import { useQueryChannels, useChannelTypes, useErrorChannelsCount, useChannelProbeData } from './data/channels';
+import { useProvidersData } from '@/features/models/data/providers';
 
 const ChannelsDialogs = lazy(() => import('./components/channels-dialogs').then((m) => ({ default: m.ChannelsDialogs })));
 
 function ChannelsContent() {
   const { t } = useTranslation();
+  useProvidersData();
   const { channelPermissions } = usePermissions();
   const { pageSize, setCursors, setPageSize, resetCursor, paginationArgs } = usePaginationSearch({
     defaultPageSize: 20,
@@ -180,7 +182,8 @@ function ChannelsContent() {
       setNameFilter(filter);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleTypeFilterChange = useCallback(
@@ -188,7 +191,8 @@ function ChannelsContent() {
       setTypeFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleTabChange = useCallback(
@@ -197,7 +201,8 @@ function ChannelsContent() {
       setTypeFilter([]);
       resetCursor();
     },
-    [setSelectedTypeTab, setTypeFilter, resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setSelectedTypeTab, setTypeFilter]
   );
 
   const handleStatusFilterChange = useCallback(
@@ -205,7 +210,8 @@ function ChannelsContent() {
       setStatusFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleTagFilterChange = useCallback(
@@ -213,7 +219,8 @@ function ChannelsContent() {
       setTagFilter(filter);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleModelFilterChange = useCallback(
@@ -221,18 +228,21 @@ function ChannelsContent() {
       setModelFilter(filter);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleFilterErrorChannels = useCallback(() => {
     setShowErrorOnly(true);
     resetCursor();
-  }, [resetCursor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleExitErrorOnlyMode = useCallback(() => {
     setShowErrorOnly(false);
     resetCursor();
-  }, [resetCursor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columns = useMemo(() => createColumns(t, channelPermissions.canWrite), [t, channelPermissions.canWrite]);
 
@@ -283,16 +293,17 @@ export default function ChannelsManagement() {
 
   return (
     <ChannelsProvider>
-      <Header fixed>{/* <Search /> */}</Header>
-
-      <Main fixed>
-        <div className='mb-2 flex flex-wrap items-center justify-between space-y-2'>
+      <Header fixed>
+        <div className='flex flex-1 items-center justify-between'>
           <div>
-            <h2 className='text-2xl font-bold tracking-tight'>{t('channels.title')}</h2>
-            <p className='text-muted-foreground'>{t('channels.description')}</p>
+            <h2 className='text-xl font-bold tracking-tight'>{t('channels.title')}</h2>
+            <p className='text-sm text-muted-foreground'>{t('channels.description')}</p>
           </div>
           <ChannelsPrimaryButtons />
         </div>
+      </Header>
+
+      <Main fixed>
         <ChannelsContent />
       </Main>
       <Suspense fallback={null}>

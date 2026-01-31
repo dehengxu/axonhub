@@ -17,6 +17,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
@@ -24,6 +26,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -45,6 +48,10 @@ type Client struct {
 	APIKey *APIKeyClient
 	// Channel is the client for interacting with the Channel builders.
 	Channel *ChannelClient
+	// ChannelModelPrice is the client for interacting with the ChannelModelPrice builders.
+	ChannelModelPrice *ChannelModelPriceClient
+	// ChannelModelPriceVersion is the client for interacting with the ChannelModelPriceVersion builders.
+	ChannelModelPriceVersion *ChannelModelPriceVersionClient
 	// ChannelOverrideTemplate is the client for interacting with the ChannelOverrideTemplate builders.
 	ChannelOverrideTemplate *ChannelOverrideTemplateClient
 	// ChannelPerformance is the client for interacting with the ChannelPerformance builders.
@@ -59,6 +66,8 @@ type Client struct {
 	Project *ProjectClient
 	// Prompt is the client for interacting with the Prompt builders.
 	Prompt *PromptClient
+	// ProviderQuotaStatus is the client for interacting with the ProviderQuotaStatus builders.
+	ProviderQuotaStatus *ProviderQuotaStatusClient
 	// Request is the client for interacting with the Request builders.
 	Request *RequestClient
 	// RequestExecution is the client for interacting with the RequestExecution builders.
@@ -94,6 +103,8 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.APIKey = NewAPIKeyClient(c.config)
 	c.Channel = NewChannelClient(c.config)
+	c.ChannelModelPrice = NewChannelModelPriceClient(c.config)
+	c.ChannelModelPriceVersion = NewChannelModelPriceVersionClient(c.config)
 	c.ChannelOverrideTemplate = NewChannelOverrideTemplateClient(c.config)
 	c.ChannelPerformance = NewChannelPerformanceClient(c.config)
 	c.ChannelProbe = NewChannelProbeClient(c.config)
@@ -101,6 +112,7 @@ func (c *Client) init() {
 	c.Model = NewModelClient(c.config)
 	c.Project = NewProjectClient(c.config)
 	c.Prompt = NewPromptClient(c.config)
+	c.ProviderQuotaStatus = NewProviderQuotaStatusClient(c.config)
 	c.Request = NewRequestClient(c.config)
 	c.RequestExecution = NewRequestExecutionClient(c.config)
 	c.Role = NewRoleClient(c.config)
@@ -201,27 +213,30 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Channel:                 NewChannelClient(cfg),
-		ChannelOverrideTemplate: NewChannelOverrideTemplateClient(cfg),
-		ChannelPerformance:      NewChannelPerformanceClient(cfg),
-		ChannelProbe:            NewChannelProbeClient(cfg),
-		DataStorage:             NewDataStorageClient(cfg),
-		Model:                   NewModelClient(cfg),
-		Project:                 NewProjectClient(cfg),
-		Prompt:                  NewPromptClient(cfg),
-		Request:                 NewRequestClient(cfg),
-		RequestExecution:        NewRequestExecutionClient(cfg),
-		Role:                    NewRoleClient(cfg),
-		System:                  NewSystemClient(cfg),
-		Thread:                  NewThreadClient(cfg),
-		Trace:                   NewTraceClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserProject:             NewUserProjectClient(cfg),
-		UserRole:                NewUserRoleClient(cfg),
+		ctx:                      ctx,
+		config:                   cfg,
+		APIKey:                   NewAPIKeyClient(cfg),
+		Channel:                  NewChannelClient(cfg),
+		ChannelModelPrice:        NewChannelModelPriceClient(cfg),
+		ChannelModelPriceVersion: NewChannelModelPriceVersionClient(cfg),
+		ChannelOverrideTemplate:  NewChannelOverrideTemplateClient(cfg),
+		ChannelPerformance:       NewChannelPerformanceClient(cfg),
+		ChannelProbe:             NewChannelProbeClient(cfg),
+		DataStorage:              NewDataStorageClient(cfg),
+		Model:                    NewModelClient(cfg),
+		Project:                  NewProjectClient(cfg),
+		Prompt:                   NewPromptClient(cfg),
+		ProviderQuotaStatus:      NewProviderQuotaStatusClient(cfg),
+		Request:                  NewRequestClient(cfg),
+		RequestExecution:         NewRequestExecutionClient(cfg),
+		Role:                     NewRoleClient(cfg),
+		System:                   NewSystemClient(cfg),
+		Thread:                   NewThreadClient(cfg),
+		Trace:                    NewTraceClient(cfg),
+		UsageLog:                 NewUsageLogClient(cfg),
+		User:                     NewUserClient(cfg),
+		UserProject:              NewUserProjectClient(cfg),
+		UserRole:                 NewUserRoleClient(cfg),
 	}, nil
 }
 
@@ -239,27 +254,30 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Channel:                 NewChannelClient(cfg),
-		ChannelOverrideTemplate: NewChannelOverrideTemplateClient(cfg),
-		ChannelPerformance:      NewChannelPerformanceClient(cfg),
-		ChannelProbe:            NewChannelProbeClient(cfg),
-		DataStorage:             NewDataStorageClient(cfg),
-		Model:                   NewModelClient(cfg),
-		Project:                 NewProjectClient(cfg),
-		Prompt:                  NewPromptClient(cfg),
-		Request:                 NewRequestClient(cfg),
-		RequestExecution:        NewRequestExecutionClient(cfg),
-		Role:                    NewRoleClient(cfg),
-		System:                  NewSystemClient(cfg),
-		Thread:                  NewThreadClient(cfg),
-		Trace:                   NewTraceClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserProject:             NewUserProjectClient(cfg),
-		UserRole:                NewUserRoleClient(cfg),
+		ctx:                      ctx,
+		config:                   cfg,
+		APIKey:                   NewAPIKeyClient(cfg),
+		Channel:                  NewChannelClient(cfg),
+		ChannelModelPrice:        NewChannelModelPriceClient(cfg),
+		ChannelModelPriceVersion: NewChannelModelPriceVersionClient(cfg),
+		ChannelOverrideTemplate:  NewChannelOverrideTemplateClient(cfg),
+		ChannelPerformance:       NewChannelPerformanceClient(cfg),
+		ChannelProbe:             NewChannelProbeClient(cfg),
+		DataStorage:              NewDataStorageClient(cfg),
+		Model:                    NewModelClient(cfg),
+		Project:                  NewProjectClient(cfg),
+		Prompt:                   NewPromptClient(cfg),
+		ProviderQuotaStatus:      NewProviderQuotaStatusClient(cfg),
+		Request:                  NewRequestClient(cfg),
+		RequestExecution:         NewRequestExecutionClient(cfg),
+		Role:                     NewRoleClient(cfg),
+		System:                   NewSystemClient(cfg),
+		Thread:                   NewThreadClient(cfg),
+		Trace:                    NewTraceClient(cfg),
+		UsageLog:                 NewUsageLogClient(cfg),
+		User:                     NewUserClient(cfg),
+		UserProject:              NewUserProjectClient(cfg),
+		UserRole:                 NewUserRoleClient(cfg),
 	}, nil
 }
 
@@ -289,8 +307,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Channel, c.ChannelOverrideTemplate, c.ChannelPerformance,
-		c.ChannelProbe, c.DataStorage, c.Model, c.Project, c.Prompt, c.Request,
+		c.APIKey, c.Channel, c.ChannelModelPrice, c.ChannelModelPriceVersion,
+		c.ChannelOverrideTemplate, c.ChannelPerformance, c.ChannelProbe, c.DataStorage,
+		c.Model, c.Project, c.Prompt, c.ProviderQuotaStatus, c.Request,
 		c.RequestExecution, c.Role, c.System, c.Thread, c.Trace, c.UsageLog, c.User,
 		c.UserProject, c.UserRole,
 	} {
@@ -302,8 +321,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Channel, c.ChannelOverrideTemplate, c.ChannelPerformance,
-		c.ChannelProbe, c.DataStorage, c.Model, c.Project, c.Prompt, c.Request,
+		c.APIKey, c.Channel, c.ChannelModelPrice, c.ChannelModelPriceVersion,
+		c.ChannelOverrideTemplate, c.ChannelPerformance, c.ChannelProbe, c.DataStorage,
+		c.Model, c.Project, c.Prompt, c.ProviderQuotaStatus, c.Request,
 		c.RequestExecution, c.Role, c.System, c.Thread, c.Trace, c.UsageLog, c.User,
 		c.UserProject, c.UserRole,
 	} {
@@ -318,6 +338,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.APIKey.mutate(ctx, m)
 	case *ChannelMutation:
 		return c.Channel.mutate(ctx, m)
+	case *ChannelModelPriceMutation:
+		return c.ChannelModelPrice.mutate(ctx, m)
+	case *ChannelModelPriceVersionMutation:
+		return c.ChannelModelPriceVersion.mutate(ctx, m)
 	case *ChannelOverrideTemplateMutation:
 		return c.ChannelOverrideTemplate.mutate(ctx, m)
 	case *ChannelPerformanceMutation:
@@ -332,6 +356,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Project.mutate(ctx, m)
 	case *PromptMutation:
 		return c.Prompt.mutate(ctx, m)
+	case *ProviderQuotaStatusMutation:
+		return c.ProviderQuotaStatus.mutate(ctx, m)
 	case *RequestMutation:
 		return c.Request.mutate(ctx, m)
 	case *RequestExecutionMutation:
@@ -728,6 +754,38 @@ func (c *ChannelClient) QueryChannelProbes(_m *Channel) *ChannelProbeQuery {
 	return query
 }
 
+// QueryChannelModelPrices queries the channel_model_prices edge of a Channel.
+func (c *ChannelClient) QueryChannelModelPrices(_m *Channel) *ChannelModelPriceQuery {
+	query := (&ChannelModelPriceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(channel.Table, channel.FieldID, id),
+			sqlgraph.To(channelmodelprice.Table, channelmodelprice.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, channel.ChannelModelPricesTable, channel.ChannelModelPricesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProviderQuotaStatus queries the provider_quota_status edge of a Channel.
+func (c *ChannelClient) QueryProviderQuotaStatus(_m *Channel) *ProviderQuotaStatusQuery {
+	query := (&ProviderQuotaStatusClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(channel.Table, channel.FieldID, id),
+			sqlgraph.To(providerquotastatus.Table, providerquotastatus.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, channel.ProviderQuotaStatusTable, channel.ProviderQuotaStatusColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ChannelClient) Hooks() []Hook {
 	hooks := c.hooks.Channel
@@ -752,6 +810,323 @@ func (c *ChannelClient) mutate(ctx context.Context, m *ChannelMutation) (Value, 
 		return (&ChannelDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Channel mutation op: %q", m.Op())
+	}
+}
+
+// ChannelModelPriceClient is a client for the ChannelModelPrice schema.
+type ChannelModelPriceClient struct {
+	config
+}
+
+// NewChannelModelPriceClient returns a client for the ChannelModelPrice from the given config.
+func NewChannelModelPriceClient(c config) *ChannelModelPriceClient {
+	return &ChannelModelPriceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `channelmodelprice.Hooks(f(g(h())))`.
+func (c *ChannelModelPriceClient) Use(hooks ...Hook) {
+	c.hooks.ChannelModelPrice = append(c.hooks.ChannelModelPrice, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `channelmodelprice.Intercept(f(g(h())))`.
+func (c *ChannelModelPriceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ChannelModelPrice = append(c.inters.ChannelModelPrice, interceptors...)
+}
+
+// Create returns a builder for creating a ChannelModelPrice entity.
+func (c *ChannelModelPriceClient) Create() *ChannelModelPriceCreate {
+	mutation := newChannelModelPriceMutation(c.config, OpCreate)
+	return &ChannelModelPriceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ChannelModelPrice entities.
+func (c *ChannelModelPriceClient) CreateBulk(builders ...*ChannelModelPriceCreate) *ChannelModelPriceCreateBulk {
+	return &ChannelModelPriceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ChannelModelPriceClient) MapCreateBulk(slice any, setFunc func(*ChannelModelPriceCreate, int)) *ChannelModelPriceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ChannelModelPriceCreateBulk{err: fmt.Errorf("calling to ChannelModelPriceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ChannelModelPriceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ChannelModelPriceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ChannelModelPrice.
+func (c *ChannelModelPriceClient) Update() *ChannelModelPriceUpdate {
+	mutation := newChannelModelPriceMutation(c.config, OpUpdate)
+	return &ChannelModelPriceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ChannelModelPriceClient) UpdateOne(_m *ChannelModelPrice) *ChannelModelPriceUpdateOne {
+	mutation := newChannelModelPriceMutation(c.config, OpUpdateOne, withChannelModelPrice(_m))
+	return &ChannelModelPriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ChannelModelPriceClient) UpdateOneID(id int) *ChannelModelPriceUpdateOne {
+	mutation := newChannelModelPriceMutation(c.config, OpUpdateOne, withChannelModelPriceID(id))
+	return &ChannelModelPriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ChannelModelPrice.
+func (c *ChannelModelPriceClient) Delete() *ChannelModelPriceDelete {
+	mutation := newChannelModelPriceMutation(c.config, OpDelete)
+	return &ChannelModelPriceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ChannelModelPriceClient) DeleteOne(_m *ChannelModelPrice) *ChannelModelPriceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ChannelModelPriceClient) DeleteOneID(id int) *ChannelModelPriceDeleteOne {
+	builder := c.Delete().Where(channelmodelprice.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ChannelModelPriceDeleteOne{builder}
+}
+
+// Query returns a query builder for ChannelModelPrice.
+func (c *ChannelModelPriceClient) Query() *ChannelModelPriceQuery {
+	return &ChannelModelPriceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeChannelModelPrice},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ChannelModelPrice entity by its id.
+func (c *ChannelModelPriceClient) Get(ctx context.Context, id int) (*ChannelModelPrice, error) {
+	return c.Query().Where(channelmodelprice.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ChannelModelPriceClient) GetX(ctx context.Context, id int) *ChannelModelPrice {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryChannel queries the channel edge of a ChannelModelPrice.
+func (c *ChannelModelPriceClient) QueryChannel(_m *ChannelModelPrice) *ChannelQuery {
+	query := (&ChannelClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(channelmodelprice.Table, channelmodelprice.FieldID, id),
+			sqlgraph.To(channel.Table, channel.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, channelmodelprice.ChannelTable, channelmodelprice.ChannelColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryVersions queries the versions edge of a ChannelModelPrice.
+func (c *ChannelModelPriceClient) QueryVersions(_m *ChannelModelPrice) *ChannelModelPriceVersionQuery {
+	query := (&ChannelModelPriceVersionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(channelmodelprice.Table, channelmodelprice.FieldID, id),
+			sqlgraph.To(channelmodelpriceversion.Table, channelmodelpriceversion.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, channelmodelprice.VersionsTable, channelmodelprice.VersionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ChannelModelPriceClient) Hooks() []Hook {
+	hooks := c.hooks.ChannelModelPrice
+	return append(hooks[:len(hooks):len(hooks)], channelmodelprice.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *ChannelModelPriceClient) Interceptors() []Interceptor {
+	inters := c.inters.ChannelModelPrice
+	return append(inters[:len(inters):len(inters)], channelmodelprice.Interceptors[:]...)
+}
+
+func (c *ChannelModelPriceClient) mutate(ctx context.Context, m *ChannelModelPriceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ChannelModelPriceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ChannelModelPriceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ChannelModelPriceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ChannelModelPriceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ChannelModelPrice mutation op: %q", m.Op())
+	}
+}
+
+// ChannelModelPriceVersionClient is a client for the ChannelModelPriceVersion schema.
+type ChannelModelPriceVersionClient struct {
+	config
+}
+
+// NewChannelModelPriceVersionClient returns a client for the ChannelModelPriceVersion from the given config.
+func NewChannelModelPriceVersionClient(c config) *ChannelModelPriceVersionClient {
+	return &ChannelModelPriceVersionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `channelmodelpriceversion.Hooks(f(g(h())))`.
+func (c *ChannelModelPriceVersionClient) Use(hooks ...Hook) {
+	c.hooks.ChannelModelPriceVersion = append(c.hooks.ChannelModelPriceVersion, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `channelmodelpriceversion.Intercept(f(g(h())))`.
+func (c *ChannelModelPriceVersionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ChannelModelPriceVersion = append(c.inters.ChannelModelPriceVersion, interceptors...)
+}
+
+// Create returns a builder for creating a ChannelModelPriceVersion entity.
+func (c *ChannelModelPriceVersionClient) Create() *ChannelModelPriceVersionCreate {
+	mutation := newChannelModelPriceVersionMutation(c.config, OpCreate)
+	return &ChannelModelPriceVersionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ChannelModelPriceVersion entities.
+func (c *ChannelModelPriceVersionClient) CreateBulk(builders ...*ChannelModelPriceVersionCreate) *ChannelModelPriceVersionCreateBulk {
+	return &ChannelModelPriceVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ChannelModelPriceVersionClient) MapCreateBulk(slice any, setFunc func(*ChannelModelPriceVersionCreate, int)) *ChannelModelPriceVersionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ChannelModelPriceVersionCreateBulk{err: fmt.Errorf("calling to ChannelModelPriceVersionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ChannelModelPriceVersionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ChannelModelPriceVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ChannelModelPriceVersion.
+func (c *ChannelModelPriceVersionClient) Update() *ChannelModelPriceVersionUpdate {
+	mutation := newChannelModelPriceVersionMutation(c.config, OpUpdate)
+	return &ChannelModelPriceVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ChannelModelPriceVersionClient) UpdateOne(_m *ChannelModelPriceVersion) *ChannelModelPriceVersionUpdateOne {
+	mutation := newChannelModelPriceVersionMutation(c.config, OpUpdateOne, withChannelModelPriceVersion(_m))
+	return &ChannelModelPriceVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ChannelModelPriceVersionClient) UpdateOneID(id int) *ChannelModelPriceVersionUpdateOne {
+	mutation := newChannelModelPriceVersionMutation(c.config, OpUpdateOne, withChannelModelPriceVersionID(id))
+	return &ChannelModelPriceVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ChannelModelPriceVersion.
+func (c *ChannelModelPriceVersionClient) Delete() *ChannelModelPriceVersionDelete {
+	mutation := newChannelModelPriceVersionMutation(c.config, OpDelete)
+	return &ChannelModelPriceVersionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ChannelModelPriceVersionClient) DeleteOne(_m *ChannelModelPriceVersion) *ChannelModelPriceVersionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ChannelModelPriceVersionClient) DeleteOneID(id int) *ChannelModelPriceVersionDeleteOne {
+	builder := c.Delete().Where(channelmodelpriceversion.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ChannelModelPriceVersionDeleteOne{builder}
+}
+
+// Query returns a query builder for ChannelModelPriceVersion.
+func (c *ChannelModelPriceVersionClient) Query() *ChannelModelPriceVersionQuery {
+	return &ChannelModelPriceVersionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeChannelModelPriceVersion},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ChannelModelPriceVersion entity by its id.
+func (c *ChannelModelPriceVersionClient) Get(ctx context.Context, id int) (*ChannelModelPriceVersion, error) {
+	return c.Query().Where(channelmodelpriceversion.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ChannelModelPriceVersionClient) GetX(ctx context.Context, id int) *ChannelModelPriceVersion {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryChannelModelPrice queries the channel_model_price edge of a ChannelModelPriceVersion.
+func (c *ChannelModelPriceVersionClient) QueryChannelModelPrice(_m *ChannelModelPriceVersion) *ChannelModelPriceQuery {
+	query := (&ChannelModelPriceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(channelmodelpriceversion.Table, channelmodelpriceversion.FieldID, id),
+			sqlgraph.To(channelmodelprice.Table, channelmodelprice.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, channelmodelpriceversion.ChannelModelPriceTable, channelmodelpriceversion.ChannelModelPriceColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ChannelModelPriceVersionClient) Hooks() []Hook {
+	hooks := c.hooks.ChannelModelPriceVersion
+	return append(hooks[:len(hooks):len(hooks)], channelmodelpriceversion.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *ChannelModelPriceVersionClient) Interceptors() []Interceptor {
+	return c.inters.ChannelModelPriceVersion
+}
+
+func (c *ChannelModelPriceVersionClient) mutate(ctx context.Context, m *ChannelModelPriceVersionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ChannelModelPriceVersionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ChannelModelPriceVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ChannelModelPriceVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ChannelModelPriceVersionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ChannelModelPriceVersion mutation op: %q", m.Op())
 	}
 }
 
@@ -1935,6 +2310,157 @@ func (c *PromptClient) mutate(ctx context.Context, m *PromptMutation) (Value, er
 		return (&PromptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Prompt mutation op: %q", m.Op())
+	}
+}
+
+// ProviderQuotaStatusClient is a client for the ProviderQuotaStatus schema.
+type ProviderQuotaStatusClient struct {
+	config
+}
+
+// NewProviderQuotaStatusClient returns a client for the ProviderQuotaStatus from the given config.
+func NewProviderQuotaStatusClient(c config) *ProviderQuotaStatusClient {
+	return &ProviderQuotaStatusClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `providerquotastatus.Hooks(f(g(h())))`.
+func (c *ProviderQuotaStatusClient) Use(hooks ...Hook) {
+	c.hooks.ProviderQuotaStatus = append(c.hooks.ProviderQuotaStatus, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `providerquotastatus.Intercept(f(g(h())))`.
+func (c *ProviderQuotaStatusClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProviderQuotaStatus = append(c.inters.ProviderQuotaStatus, interceptors...)
+}
+
+// Create returns a builder for creating a ProviderQuotaStatus entity.
+func (c *ProviderQuotaStatusClient) Create() *ProviderQuotaStatusCreate {
+	mutation := newProviderQuotaStatusMutation(c.config, OpCreate)
+	return &ProviderQuotaStatusCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProviderQuotaStatus entities.
+func (c *ProviderQuotaStatusClient) CreateBulk(builders ...*ProviderQuotaStatusCreate) *ProviderQuotaStatusCreateBulk {
+	return &ProviderQuotaStatusCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProviderQuotaStatusClient) MapCreateBulk(slice any, setFunc func(*ProviderQuotaStatusCreate, int)) *ProviderQuotaStatusCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProviderQuotaStatusCreateBulk{err: fmt.Errorf("calling to ProviderQuotaStatusClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProviderQuotaStatusCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProviderQuotaStatusCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProviderQuotaStatus.
+func (c *ProviderQuotaStatusClient) Update() *ProviderQuotaStatusUpdate {
+	mutation := newProviderQuotaStatusMutation(c.config, OpUpdate)
+	return &ProviderQuotaStatusUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProviderQuotaStatusClient) UpdateOne(_m *ProviderQuotaStatus) *ProviderQuotaStatusUpdateOne {
+	mutation := newProviderQuotaStatusMutation(c.config, OpUpdateOne, withProviderQuotaStatus(_m))
+	return &ProviderQuotaStatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProviderQuotaStatusClient) UpdateOneID(id int) *ProviderQuotaStatusUpdateOne {
+	mutation := newProviderQuotaStatusMutation(c.config, OpUpdateOne, withProviderQuotaStatusID(id))
+	return &ProviderQuotaStatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProviderQuotaStatus.
+func (c *ProviderQuotaStatusClient) Delete() *ProviderQuotaStatusDelete {
+	mutation := newProviderQuotaStatusMutation(c.config, OpDelete)
+	return &ProviderQuotaStatusDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProviderQuotaStatusClient) DeleteOne(_m *ProviderQuotaStatus) *ProviderQuotaStatusDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProviderQuotaStatusClient) DeleteOneID(id int) *ProviderQuotaStatusDeleteOne {
+	builder := c.Delete().Where(providerquotastatus.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProviderQuotaStatusDeleteOne{builder}
+}
+
+// Query returns a query builder for ProviderQuotaStatus.
+func (c *ProviderQuotaStatusClient) Query() *ProviderQuotaStatusQuery {
+	return &ProviderQuotaStatusQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProviderQuotaStatus},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProviderQuotaStatus entity by its id.
+func (c *ProviderQuotaStatusClient) Get(ctx context.Context, id int) (*ProviderQuotaStatus, error) {
+	return c.Query().Where(providerquotastatus.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProviderQuotaStatusClient) GetX(ctx context.Context, id int) *ProviderQuotaStatus {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryChannel queries the channel edge of a ProviderQuotaStatus.
+func (c *ProviderQuotaStatusClient) QueryChannel(_m *ProviderQuotaStatus) *ChannelQuery {
+	query := (&ChannelClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(providerquotastatus.Table, providerquotastatus.FieldID, id),
+			sqlgraph.To(channel.Table, channel.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, true, providerquotastatus.ChannelTable, providerquotastatus.ChannelColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ProviderQuotaStatusClient) Hooks() []Hook {
+	hooks := c.hooks.ProviderQuotaStatus
+	return append(hooks[:len(hooks):len(hooks)], providerquotastatus.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProviderQuotaStatusClient) Interceptors() []Interceptor {
+	inters := c.inters.ProviderQuotaStatus
+	return append(inters[:len(inters):len(inters)], providerquotastatus.Interceptors[:]...)
+}
+
+func (c *ProviderQuotaStatusClient) mutate(ctx context.Context, m *ProviderQuotaStatusMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProviderQuotaStatusCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProviderQuotaStatusUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProviderQuotaStatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProviderQuotaStatusDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProviderQuotaStatus mutation op: %q", m.Op())
 	}
 }
 
@@ -3778,13 +4304,15 @@ func (c *UserRoleClient) mutate(ctx context.Context, m *UserRoleMutation) (Value
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Channel, ChannelOverrideTemplate, ChannelPerformance, ChannelProbe,
-		DataStorage, Model, Project, Prompt, Request, RequestExecution, Role, System,
+		APIKey, Channel, ChannelModelPrice, ChannelModelPriceVersion,
+		ChannelOverrideTemplate, ChannelPerformance, ChannelProbe, DataStorage, Model,
+		Project, Prompt, ProviderQuotaStatus, Request, RequestExecution, Role, System,
 		Thread, Trace, UsageLog, User, UserProject, UserRole []ent.Hook
 	}
 	inters struct {
-		APIKey, Channel, ChannelOverrideTemplate, ChannelPerformance, ChannelProbe,
-		DataStorage, Model, Project, Prompt, Request, RequestExecution, Role, System,
+		APIKey, Channel, ChannelModelPrice, ChannelModelPriceVersion,
+		ChannelOverrideTemplate, ChannelPerformance, ChannelProbe, DataStorage, Model,
+		Project, Prompt, ProviderQuotaStatus, Request, RequestExecution, Role, System,
 		Thread, Trace, UsageLog, User, UserProject, UserRole []ent.Interceptor
 	}
 )

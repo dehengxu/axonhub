@@ -8,12 +8,15 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -129,14 +132,77 @@ func init() {
 	channelDescTags := channelFields[7].Descriptor()
 	// channel.DefaultTags holds the default value on creation for the tags field.
 	channel.DefaultTags = channelDescTags.Default.([]string)
+	// channelDescPolicies is the schema descriptor for policies field.
+	channelDescPolicies := channelFields[9].Descriptor()
+	// channel.DefaultPolicies holds the default value on creation for the policies field.
+	channel.DefaultPolicies = channelDescPolicies.Default.(objects.ChannelPolicies)
 	// channelDescSettings is the schema descriptor for settings field.
-	channelDescSettings := channelFields[9].Descriptor()
+	channelDescSettings := channelFields[10].Descriptor()
 	// channel.DefaultSettings holds the default value on creation for the settings field.
 	channel.DefaultSettings = channelDescSettings.Default.(*objects.ChannelSettings)
 	// channelDescOrderingWeight is the schema descriptor for ordering_weight field.
-	channelDescOrderingWeight := channelFields[10].Descriptor()
+	channelDescOrderingWeight := channelFields[11].Descriptor()
 	// channel.DefaultOrderingWeight holds the default value on creation for the ordering_weight field.
 	channel.DefaultOrderingWeight = channelDescOrderingWeight.Default.(int)
+	channelmodelpriceMixin := schema.ChannelModelPrice{}.Mixin()
+	channelmodelprice.Policy = privacy.NewPolicies(schema.ChannelModelPrice{})
+	channelmodelprice.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := channelmodelprice.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	channelmodelpriceMixinHooks1 := channelmodelpriceMixin[1].Hooks()
+
+	channelmodelprice.Hooks[1] = channelmodelpriceMixinHooks1[0]
+	channelmodelpriceMixinInters1 := channelmodelpriceMixin[1].Interceptors()
+	channelmodelprice.Interceptors[0] = channelmodelpriceMixinInters1[0]
+	channelmodelpriceMixinFields0 := channelmodelpriceMixin[0].Fields()
+	_ = channelmodelpriceMixinFields0
+	channelmodelpriceMixinFields1 := channelmodelpriceMixin[1].Fields()
+	_ = channelmodelpriceMixinFields1
+	channelmodelpriceFields := schema.ChannelModelPrice{}.Fields()
+	_ = channelmodelpriceFields
+	// channelmodelpriceDescCreatedAt is the schema descriptor for created_at field.
+	channelmodelpriceDescCreatedAt := channelmodelpriceMixinFields0[0].Descriptor()
+	// channelmodelprice.DefaultCreatedAt holds the default value on creation for the created_at field.
+	channelmodelprice.DefaultCreatedAt = channelmodelpriceDescCreatedAt.Default.(func() time.Time)
+	// channelmodelpriceDescUpdatedAt is the schema descriptor for updated_at field.
+	channelmodelpriceDescUpdatedAt := channelmodelpriceMixinFields0[1].Descriptor()
+	// channelmodelprice.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	channelmodelprice.DefaultUpdatedAt = channelmodelpriceDescUpdatedAt.Default.(func() time.Time)
+	// channelmodelprice.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	channelmodelprice.UpdateDefaultUpdatedAt = channelmodelpriceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// channelmodelpriceDescDeletedAt is the schema descriptor for deleted_at field.
+	channelmodelpriceDescDeletedAt := channelmodelpriceMixinFields1[0].Descriptor()
+	// channelmodelprice.DefaultDeletedAt holds the default value on creation for the deleted_at field.
+	channelmodelprice.DefaultDeletedAt = channelmodelpriceDescDeletedAt.Default.(int)
+	channelmodelpriceversionMixin := schema.ChannelModelPriceVersion{}.Mixin()
+	channelmodelpriceversion.Policy = privacy.NewPolicies(schema.ChannelModelPriceVersion{})
+	channelmodelpriceversion.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := channelmodelpriceversion.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	channelmodelpriceversionMixinFields0 := channelmodelpriceversionMixin[0].Fields()
+	_ = channelmodelpriceversionMixinFields0
+	channelmodelpriceversionFields := schema.ChannelModelPriceVersion{}.Fields()
+	_ = channelmodelpriceversionFields
+	// channelmodelpriceversionDescCreatedAt is the schema descriptor for created_at field.
+	channelmodelpriceversionDescCreatedAt := channelmodelpriceversionMixinFields0[0].Descriptor()
+	// channelmodelpriceversion.DefaultCreatedAt holds the default value on creation for the created_at field.
+	channelmodelpriceversion.DefaultCreatedAt = channelmodelpriceversionDescCreatedAt.Default.(func() time.Time)
+	// channelmodelpriceversionDescUpdatedAt is the schema descriptor for updated_at field.
+	channelmodelpriceversionDescUpdatedAt := channelmodelpriceversionMixinFields0[1].Descriptor()
+	// channelmodelpriceversion.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	channelmodelpriceversion.DefaultUpdatedAt = channelmodelpriceversionDescUpdatedAt.Default.(func() time.Time)
+	// channelmodelpriceversion.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	channelmodelpriceversion.UpdateDefaultUpdatedAt = channelmodelpriceversionDescUpdatedAt.UpdateDefault.(func() time.Time)
 	channeloverridetemplateMixin := schema.ChannelOverrideTemplate{}.Mixin()
 	channeloverridetemplate.Policy = privacy.NewPolicies(schema.ChannelOverrideTemplate{})
 	channeloverridetemplate.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -425,6 +491,35 @@ func init() {
 	promptDescDescription := promptFields[2].Descriptor()
 	// prompt.DefaultDescription holds the default value on creation for the description field.
 	prompt.DefaultDescription = promptDescDescription.Default.(string)
+	providerquotastatusMixin := schema.ProviderQuotaStatus{}.Mixin()
+	providerquotastatusMixinHooks1 := providerquotastatusMixin[1].Hooks()
+	providerquotastatus.Hooks[0] = providerquotastatusMixinHooks1[0]
+	providerquotastatusMixinInters1 := providerquotastatusMixin[1].Interceptors()
+	providerquotastatus.Interceptors[0] = providerquotastatusMixinInters1[0]
+	providerquotastatusMixinFields0 := providerquotastatusMixin[0].Fields()
+	_ = providerquotastatusMixinFields0
+	providerquotastatusMixinFields1 := providerquotastatusMixin[1].Fields()
+	_ = providerquotastatusMixinFields1
+	providerquotastatusFields := schema.ProviderQuotaStatus{}.Fields()
+	_ = providerquotastatusFields
+	// providerquotastatusDescCreatedAt is the schema descriptor for created_at field.
+	providerquotastatusDescCreatedAt := providerquotastatusMixinFields0[0].Descriptor()
+	// providerquotastatus.DefaultCreatedAt holds the default value on creation for the created_at field.
+	providerquotastatus.DefaultCreatedAt = providerquotastatusDescCreatedAt.Default.(func() time.Time)
+	// providerquotastatusDescUpdatedAt is the schema descriptor for updated_at field.
+	providerquotastatusDescUpdatedAt := providerquotastatusMixinFields0[1].Descriptor()
+	// providerquotastatus.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	providerquotastatus.DefaultUpdatedAt = providerquotastatusDescUpdatedAt.Default.(func() time.Time)
+	// providerquotastatus.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	providerquotastatus.UpdateDefaultUpdatedAt = providerquotastatusDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// providerquotastatusDescDeletedAt is the schema descriptor for deleted_at field.
+	providerquotastatusDescDeletedAt := providerquotastatusMixinFields1[0].Descriptor()
+	// providerquotastatus.DefaultDeletedAt holds the default value on creation for the deleted_at field.
+	providerquotastatus.DefaultDeletedAt = providerquotastatusDescDeletedAt.Default.(int)
+	// providerquotastatusDescReady is the schema descriptor for ready field.
+	providerquotastatusDescReady := providerquotastatusFields[5].Descriptor()
+	// providerquotastatus.DefaultReady holds the default value on creation for the ready field.
+	providerquotastatus.DefaultReady = providerquotastatusDescReady.Default.(bool)
 	requestMixin := schema.Request{}.Mixin()
 	request.Policy = privacy.NewPolicies(schema.Request{})
 	request.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -639,53 +734,65 @@ func init() {
 	// usagelog.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	usagelog.UpdateDefaultUpdatedAt = usagelogDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// usagelogDescProjectID is the schema descriptor for project_id field.
-	usagelogDescProjectID := usagelogFields[1].Descriptor()
+	usagelogDescProjectID := usagelogFields[2].Descriptor()
 	// usagelog.DefaultProjectID holds the default value on creation for the project_id field.
 	usagelog.DefaultProjectID = usagelogDescProjectID.Default.(int)
 	// usagelogDescPromptTokens is the schema descriptor for prompt_tokens field.
-	usagelogDescPromptTokens := usagelogFields[4].Descriptor()
+	usagelogDescPromptTokens := usagelogFields[5].Descriptor()
 	// usagelog.DefaultPromptTokens holds the default value on creation for the prompt_tokens field.
 	usagelog.DefaultPromptTokens = usagelogDescPromptTokens.Default.(int64)
 	// usagelogDescCompletionTokens is the schema descriptor for completion_tokens field.
-	usagelogDescCompletionTokens := usagelogFields[5].Descriptor()
+	usagelogDescCompletionTokens := usagelogFields[6].Descriptor()
 	// usagelog.DefaultCompletionTokens holds the default value on creation for the completion_tokens field.
 	usagelog.DefaultCompletionTokens = usagelogDescCompletionTokens.Default.(int64)
 	// usagelogDescTotalTokens is the schema descriptor for total_tokens field.
-	usagelogDescTotalTokens := usagelogFields[6].Descriptor()
+	usagelogDescTotalTokens := usagelogFields[7].Descriptor()
 	// usagelog.DefaultTotalTokens holds the default value on creation for the total_tokens field.
 	usagelog.DefaultTotalTokens = usagelogDescTotalTokens.Default.(int64)
 	// usagelogDescPromptAudioTokens is the schema descriptor for prompt_audio_tokens field.
-	usagelogDescPromptAudioTokens := usagelogFields[7].Descriptor()
+	usagelogDescPromptAudioTokens := usagelogFields[8].Descriptor()
 	// usagelog.DefaultPromptAudioTokens holds the default value on creation for the prompt_audio_tokens field.
 	usagelog.DefaultPromptAudioTokens = usagelogDescPromptAudioTokens.Default.(int64)
 	// usagelogDescPromptCachedTokens is the schema descriptor for prompt_cached_tokens field.
-	usagelogDescPromptCachedTokens := usagelogFields[8].Descriptor()
+	usagelogDescPromptCachedTokens := usagelogFields[9].Descriptor()
 	// usagelog.DefaultPromptCachedTokens holds the default value on creation for the prompt_cached_tokens field.
 	usagelog.DefaultPromptCachedTokens = usagelogDescPromptCachedTokens.Default.(int64)
 	// usagelogDescPromptWriteCachedTokens is the schema descriptor for prompt_write_cached_tokens field.
-	usagelogDescPromptWriteCachedTokens := usagelogFields[9].Descriptor()
+	usagelogDescPromptWriteCachedTokens := usagelogFields[10].Descriptor()
 	// usagelog.DefaultPromptWriteCachedTokens holds the default value on creation for the prompt_write_cached_tokens field.
 	usagelog.DefaultPromptWriteCachedTokens = usagelogDescPromptWriteCachedTokens.Default.(int64)
+	// usagelogDescPromptWriteCachedTokens5m is the schema descriptor for prompt_write_cached_tokens_5m field.
+	usagelogDescPromptWriteCachedTokens5m := usagelogFields[11].Descriptor()
+	// usagelog.DefaultPromptWriteCachedTokens5m holds the default value on creation for the prompt_write_cached_tokens_5m field.
+	usagelog.DefaultPromptWriteCachedTokens5m = usagelogDescPromptWriteCachedTokens5m.Default.(int64)
+	// usagelogDescPromptWriteCachedTokens1h is the schema descriptor for prompt_write_cached_tokens_1h field.
+	usagelogDescPromptWriteCachedTokens1h := usagelogFields[12].Descriptor()
+	// usagelog.DefaultPromptWriteCachedTokens1h holds the default value on creation for the prompt_write_cached_tokens_1h field.
+	usagelog.DefaultPromptWriteCachedTokens1h = usagelogDescPromptWriteCachedTokens1h.Default.(int64)
 	// usagelogDescCompletionAudioTokens is the schema descriptor for completion_audio_tokens field.
-	usagelogDescCompletionAudioTokens := usagelogFields[10].Descriptor()
+	usagelogDescCompletionAudioTokens := usagelogFields[13].Descriptor()
 	// usagelog.DefaultCompletionAudioTokens holds the default value on creation for the completion_audio_tokens field.
 	usagelog.DefaultCompletionAudioTokens = usagelogDescCompletionAudioTokens.Default.(int64)
 	// usagelogDescCompletionReasoningTokens is the schema descriptor for completion_reasoning_tokens field.
-	usagelogDescCompletionReasoningTokens := usagelogFields[11].Descriptor()
+	usagelogDescCompletionReasoningTokens := usagelogFields[14].Descriptor()
 	// usagelog.DefaultCompletionReasoningTokens holds the default value on creation for the completion_reasoning_tokens field.
 	usagelog.DefaultCompletionReasoningTokens = usagelogDescCompletionReasoningTokens.Default.(int64)
 	// usagelogDescCompletionAcceptedPredictionTokens is the schema descriptor for completion_accepted_prediction_tokens field.
-	usagelogDescCompletionAcceptedPredictionTokens := usagelogFields[12].Descriptor()
+	usagelogDescCompletionAcceptedPredictionTokens := usagelogFields[15].Descriptor()
 	// usagelog.DefaultCompletionAcceptedPredictionTokens holds the default value on creation for the completion_accepted_prediction_tokens field.
 	usagelog.DefaultCompletionAcceptedPredictionTokens = usagelogDescCompletionAcceptedPredictionTokens.Default.(int64)
 	// usagelogDescCompletionRejectedPredictionTokens is the schema descriptor for completion_rejected_prediction_tokens field.
-	usagelogDescCompletionRejectedPredictionTokens := usagelogFields[13].Descriptor()
+	usagelogDescCompletionRejectedPredictionTokens := usagelogFields[16].Descriptor()
 	// usagelog.DefaultCompletionRejectedPredictionTokens holds the default value on creation for the completion_rejected_prediction_tokens field.
 	usagelog.DefaultCompletionRejectedPredictionTokens = usagelogDescCompletionRejectedPredictionTokens.Default.(int64)
 	// usagelogDescFormat is the schema descriptor for format field.
-	usagelogDescFormat := usagelogFields[15].Descriptor()
+	usagelogDescFormat := usagelogFields[18].Descriptor()
 	// usagelog.DefaultFormat holds the default value on creation for the format field.
 	usagelog.DefaultFormat = usagelogDescFormat.Default.(string)
+	// usagelogDescCostItems is the schema descriptor for cost_items field.
+	usagelogDescCostItems := usagelogFields[20].Descriptor()
+	// usagelog.DefaultCostItems holds the default value on creation for the cost_items field.
+	usagelog.DefaultCostItems = usagelogDescCostItems.Default.([]objects.CostItem)
 	userMixin := schema.User{}.Mixin()
 	user.Policy = privacy.NewPolicies(schema.User{})
 	user.Hooks[0] = func(next ent.Mutator) ent.Mutator {

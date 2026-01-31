@@ -79,7 +79,8 @@ func newTestRequestServiceForChannels(client *ent.Client, systemService *biz.Sys
 		SystemService:   systemService,
 		Cache:           xcache.NewFromConfig[ent.DataStorage](xcache.Config{Mode: xcache.ModeMemory}),
 	}
-	usageLogService := biz.NewUsageLogService(client, systemService)
+	channelService := biz.NewChannelServiceForTest(client)
+	usageLogService := biz.NewUsageLogService(client, systemService, channelService)
 
 	return biz.NewRequestService(client, systemService, usageLogService, dataStorageService)
 }
@@ -169,7 +170,7 @@ func createTestChannels(t *testing.T, ctx context.Context, client *ent.Client) [
 }
 
 // getCandidateNameByID returns the channel name from a candidate list by channel ID.
-func getCandidateNameByID(result []*ChannelModelCandidate, channelID int) string {
+func getCandidateNameByID(result []*ChannelModelsCandidate, channelID int) string {
 	for _, c := range result {
 		if c.Channel.ID == channelID {
 			return c.Channel.Name
@@ -227,10 +228,11 @@ func setupTestServices(t *testing.T, client *ent.Client) (*biz.ChannelService, *
 		Cache:           xcache.NewFromConfig[ent.DataStorage](cacheConfig),
 	}
 
-	usageLogService := biz.NewUsageLogService(client, systemService)
+	channelService := biz.NewChannelServiceForTest(client)
+	usageLogService := biz.NewUsageLogService(client, systemService, channelService)
 	requestService := biz.NewRequestService(client, systemService, usageLogService, dataStorageService)
 
-	channelService := biz.NewChannelServiceForTest(client)
+	channelService = biz.NewChannelServiceForTest(client)
 
 	return channelService, requestService, systemService, usageLogService
 }
@@ -320,16 +322,16 @@ func buildTestRequest(model, content string, stream bool) *httpclient.Request {
 
 // staticChannelSelector is a simple channel selector for testing.
 type staticChannelSelector struct {
-	candidates []*ChannelModelCandidate
+	candidates []*ChannelModelsCandidate
 }
 
-func (s *staticChannelSelector) Select(ctx context.Context, req *llm.Request) ([]*ChannelModelCandidate, error) {
+func (s *staticChannelSelector) Select(ctx context.Context, req *llm.Request) ([]*ChannelModelsCandidate, error) {
 	return s.candidates, nil
 }
 
 // channelsToTestCandidates creates candidates from channels for testing.
-func channelsToTestCandidates(channels []*biz.Channel, model string) []*ChannelModelCandidate {
-	candidates := make([]*ChannelModelCandidate, 0, len(channels))
+func channelsToTestCandidates(channels []*biz.Channel, model string) []*ChannelModelsCandidate {
+	candidates := make([]*ChannelModelsCandidate, 0, len(channels))
 	for _, ch := range channels {
 		entries := ch.GetModelEntries()
 
@@ -338,11 +340,10 @@ func channelsToTestCandidates(channels []*biz.Channel, model string) []*ChannelM
 			continue
 		}
 
-		candidates = append(candidates, &ChannelModelCandidate{
-			Channel:      ch,
-			RequestModel: entry.RequestModel,
-			ActualModel:  entry.ActualModel,
-			Priority:     0,
+		candidates = append(candidates, &ChannelModelsCandidate{
+			Channel:  ch,
+			Priority: 0,
+			Models:   []biz.ChannelModelEntry{entry},
 		})
 	}
 

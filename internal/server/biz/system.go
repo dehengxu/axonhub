@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -69,7 +70,18 @@ const (
 	// SystemKeyChannelSettings is the key used to store channel settings.
 	// The value is JSON-encoded SystemChannelSettings struct.
 	SystemKeyChannelSettings = "system_channel_settings"
+
+	// SystemKeyGeneralSettings is the key used to store general settings.
+	// The value is JSON-encoded SystemGeneralSettings struct.
+	SystemKeyGeneralSettings = "system_general_settings"
 )
+
+// SystemGeneralSettings represents general system configuration settings.
+type SystemGeneralSettings struct {
+	// CurrencyCode is the code used for currency display (e.g., USD, RMB).
+	CurrencyCode string `json:"currency_code"`
+	Timezone     string `json:"timezone"`
+}
 
 // StoragePolicy represents the storage policy configuration.
 type StoragePolicy struct {
@@ -86,6 +98,17 @@ type CleanupOption struct {
 	CleanupDays  int    `json:"cleanup_days"`
 }
 
+const (
+	// LoadBalancerStrategyAdaptive is a dynamic load balancer strategy that adapts to the current load.
+	LoadBalancerStrategyAdaptive = "adaptive"
+
+	// LoadBalancerStrategyFailover is a deterministic load balancer strategy that fails over to the next available channel based on the weight of the channels.
+	LoadBalancerStrategyFailover = "failover"
+
+	// LoadBalancerStrategyCircuitBreaker is a dynamic load balancer strategy that monitors the health of channels and fails over to a backup channel when the primary channel is unhealthy.
+	LoadBalancerStrategyCircuitBreaker = "circuit-breaker"
+)
+
 // RetryPolicy represents the retry policy configuration.
 type RetryPolicy struct {
 	// Enabled controls whether retry policy is active
@@ -97,7 +120,7 @@ type RetryPolicy struct {
 	// RetryDelayMs defines the delay between retries in milliseconds
 	RetryDelayMs int `json:"retry_delay_ms"`
 	// LoadBalancerStrategy defines which channel load balancer strategy to use.
-	// Supported values: "adaptive", "weighted".
+	// Supported values: "adaptive", "failover", "circuit-breaker".
 	LoadBalancerStrategy string `json:"load_balancer_strategy"`
 
 	// AutoDisableChannel controls whether to auto-disable a channel when it exceeds the maximum number of retries.
@@ -278,14 +301,19 @@ func NewSystemService(params SystemServiceParams) *SystemService {
 		AbstractService: &AbstractService{
 			db: params.Ent,
 		},
-		Cache: xcache.NewFromConfig[ent.System](params.CacheConfig),
+		CacheConfig: params.CacheConfig,
+		Cache:       xcache.NewFromConfig[ent.System](params.CacheConfig),
 	}
 }
 
 type SystemService struct {
 	*AbstractService
 
-	Cache xcache.Cache[ent.System]
+	CacheConfig xcache.Config
+	Cache       xcache.Cache[ent.System]
+
+	mu           sync.RWMutex
+	timeLocation *time.Location
 }
 
 func (s *SystemService) IsInitialized(ctx context.Context) (bool, error) {
@@ -304,7 +332,7 @@ func (s *SystemService) IsInitialized(ctx context.Context) (bool, error) {
 	return strings.EqualFold(sys.Value, "true"), nil
 }
 
-type InitializeSystemArgs struct {
+type InitializeSystemParams struct {
 	OwnerEmail     string
 	OwnerPassword  string
 	OwnerFirstName string
@@ -313,7 +341,7 @@ type InitializeSystemArgs struct {
 }
 
 // Initialize initializes the system with a secret key and sets the initialized flag.
-func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemArgs) (err error) {
+func (s *SystemService) Initialize(ctx context.Context, params *InitializeSystemParams) (err error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	// Check if system is already initialized
 	isInitialized, err := s.IsInitialized(ctx)
@@ -346,17 +374,17 @@ func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemAr
 
 	ctx = ent.NewContext(ctx, tx.Client())
 
-	hashedPassword, err := HashPassword(args.OwnerPassword)
+	hashedPassword, err := HashPassword(params.OwnerPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	// Create owner user.
 	user, err := tx.User.Create().
-		SetEmail(args.OwnerEmail).
+		SetEmail(params.OwnerEmail).
 		SetPassword(hashedPassword).
-		SetFirstName(args.OwnerFirstName).
-		SetLastName(args.OwnerLastName).
+		SetFirstName(params.OwnerFirstName).
+		SetLastName(params.OwnerLastName).
 		SetIsOwner(true).
 		SetScopes([]string{"*"}). // Give owner all scopes
 		Save(ctx)
@@ -389,7 +417,7 @@ func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemAr
 	}
 
 	// Set brand name.
-	err = s.setSystemValue(ctx, SystemKeyBrandName, args.BrandName)
+	err = s.setSystemValue(ctx, SystemKeyBrandName, params.BrandName)
 	if err != nil {
 		return fmt.Errorf("failed to set brand name: %w", err)
 	}
@@ -588,6 +616,11 @@ var defaultChannelSetting = SystemChannelSettings{
 	},
 }
 
+var defaultGeneralSettings = SystemGeneralSettings{
+	CurrencyCode: "USD",
+	Timezone:     "UTC",
+}
+
 // StoragePolicy retrieves the storage policy configuration.
 func (s *SystemService) StoragePolicy(ctx context.Context) (*StoragePolicy, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
@@ -648,6 +681,10 @@ func (s *SystemService) RetryPolicy(ctx context.Context) (*RetryPolicy, error) {
 
 	if policy.LoadBalancerStrategy == "" {
 		policy.LoadBalancerStrategy = defaultRetryPolicy.LoadBalancerStrategy
+	}
+	// The weighted load balancer strategy is deprecated. Use the failover strategy instead.
+	if policy.LoadBalancerStrategy == "weighted" {
+		policy.LoadBalancerStrategy = LoadBalancerStrategyFailover
 	}
 
 	return &policy, nil
@@ -780,6 +817,101 @@ func (s *SystemService) SetChannelSetting(ctx context.Context, setting SystemCha
 	}
 
 	return s.setSystemValue(ctx, SystemKeyChannelSettings, string(jsonBytes))
+}
+
+func (s *SystemService) TimeLocation(ctx context.Context) *time.Location {
+	s.mu.RLock()
+
+	if s.timeLocation != nil {
+		defer s.mu.RUnlock()
+		return s.timeLocation
+	}
+
+	s.mu.RUnlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double check
+	if s.timeLocation != nil {
+		return s.timeLocation
+	}
+
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	settings, err := s.GeneralSettings(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			s.timeLocation = time.UTC
+			return time.UTC
+		}
+
+		log.Warn(ctx, "failed to get general settings", log.Cause(err))
+
+		return time.UTC
+	}
+
+	if settings.Timezone == "" {
+		s.timeLocation = time.UTC
+		return time.UTC
+	}
+
+	if l, err := time.LoadLocation(settings.Timezone); err == nil {
+		s.timeLocation = l
+		return l
+	}
+
+	s.timeLocation = time.UTC
+
+	return time.UTC
+}
+
+// GeneralSettings retrieves the general settings configuration.
+func (s *SystemService) GeneralSettings(ctx context.Context) (*SystemGeneralSettings, error) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	value, err := s.getSystemValue(ctx, SystemKeyGeneralSettings)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultGeneralSettings), nil
+		}
+
+		return nil, fmt.Errorf("failed to get general settings: %w", err)
+	}
+
+	var settings SystemGeneralSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal general settings: %w", err)
+	}
+
+	if settings.CurrencyCode == "" {
+		settings.CurrencyCode = defaultGeneralSettings.CurrencyCode
+	}
+
+	if settings.Timezone == "" {
+		settings.Timezone = defaultGeneralSettings.Timezone
+	}
+
+	return &settings, nil
+}
+
+// SetGeneralSettings sets the general settings configuration.
+func (s *SystemService) SetGeneralSettings(ctx context.Context, settings SystemGeneralSettings) error {
+	jsonBytes, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal general settings: %w", err)
+	}
+
+	err = s.setSystemValue(ctx, SystemKeyGeneralSettings, string(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("failed to set general settings: %w", err)
+	}
+
+	s.mu.Lock()
+	s.timeLocation = nil
+	s.mu.Unlock()
+
+	return nil
 }
 
 // DefaultDataStorageID retrieves the default data storage ID from system settings.

@@ -105,6 +105,28 @@ func (r *mutationResolver) UpdateSystemChannelSettings(ctx context.Context, inpu
 	return true, nil
 }
 
+// UpdateSystemGeneralSettings is the resolver for the updateSystemGeneralSettings field.
+func (r *mutationResolver) UpdateSystemGeneralSettings(ctx context.Context, input biz.SystemGeneralSettings) (bool, error) {
+	err := r.systemService.SetGeneralSettings(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update general settings: %w", err)
+	}
+
+	return true, nil
+}
+
+// CheckProviderQuotas is the resolver for the checkProviderQuotas field.
+func (r *mutationResolver) CheckProviderQuotas(ctx context.Context) (bool, error) {
+	if r.providerQuotaService == nil {
+		return false, fmt.Errorf("provider quota service is not available")
+	}
+
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	r.providerQuotaService.ManualCheck(ctx)
+
+	return true, nil
+}
+
 // SystemStatus is the resolver for the systemStatus field.
 func (r *queryResolver) SystemStatus(ctx context.Context) (*SystemStatus, error) {
 	isInitialized, err := r.systemService.IsInitialized(ctx)
@@ -229,4 +251,9 @@ func (r *queryResolver) SystemChannelSettings(ctx context.Context) (*biz.SystemC
 	}
 
 	return setting, nil
+}
+
+// SystemGeneralSettings is the resolver for the systemGeneralSettings field.
+func (r *queryResolver) SystemGeneralSettings(ctx context.Context) (*biz.SystemGeneralSettings, error) {
+	return r.systemService.GeneralSettings(ctx)
 }

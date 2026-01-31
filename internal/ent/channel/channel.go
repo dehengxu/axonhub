@@ -43,6 +43,8 @@ const (
 	FieldTags = "tags"
 	// FieldDefaultTestModel holds the string denoting the default_test_model field in the database.
 	FieldDefaultTestModel = "default_test_model"
+	// FieldPolicies holds the string denoting the policies field in the database.
+	FieldPolicies = "policies"
 	// FieldSettings holds the string denoting the settings field in the database.
 	FieldSettings = "settings"
 	// FieldOrderingWeight holds the string denoting the ordering_weight field in the database.
@@ -61,6 +63,10 @@ const (
 	EdgeChannelPerformance = "channel_performance"
 	// EdgeChannelProbes holds the string denoting the channel_probes edge name in mutations.
 	EdgeChannelProbes = "channel_probes"
+	// EdgeChannelModelPrices holds the string denoting the channel_model_prices edge name in mutations.
+	EdgeChannelModelPrices = "channel_model_prices"
+	// EdgeProviderQuotaStatus holds the string denoting the provider_quota_status edge name in mutations.
+	EdgeProviderQuotaStatus = "provider_quota_status"
 	// Table holds the table name of the channel in the database.
 	Table = "channels"
 	// RequestsTable is the table that holds the requests relation/edge.
@@ -98,6 +104,20 @@ const (
 	ChannelProbesInverseTable = "channel_probes"
 	// ChannelProbesColumn is the table column denoting the channel_probes relation/edge.
 	ChannelProbesColumn = "channel_id"
+	// ChannelModelPricesTable is the table that holds the channel_model_prices relation/edge.
+	ChannelModelPricesTable = "channel_model_prices"
+	// ChannelModelPricesInverseTable is the table name for the ChannelModelPrice entity.
+	// It exists in this package in order to avoid circular dependency with the "channelmodelprice" package.
+	ChannelModelPricesInverseTable = "channel_model_prices"
+	// ChannelModelPricesColumn is the table column denoting the channel_model_prices relation/edge.
+	ChannelModelPricesColumn = "channel_id"
+	// ProviderQuotaStatusTable is the table that holds the provider_quota_status relation/edge.
+	ProviderQuotaStatusTable = "provider_quota_status"
+	// ProviderQuotaStatusInverseTable is the table name for the ProviderQuotaStatus entity.
+	// It exists in this package in order to avoid circular dependency with the "providerquotastatus" package.
+	ProviderQuotaStatusInverseTable = "provider_quota_status"
+	// ProviderQuotaStatusColumn is the table column denoting the provider_quota_status relation/edge.
+	ProviderQuotaStatusColumn = "channel_id"
 )
 
 // Columns holds all SQL columns for channel fields.
@@ -115,6 +135,7 @@ var Columns = []string{
 	FieldAutoSyncSupportedModels,
 	FieldTags,
 	FieldDefaultTestModel,
+	FieldPolicies,
 	FieldSettings,
 	FieldOrderingWeight,
 	FieldErrorMessage,
@@ -154,6 +175,8 @@ var (
 	DefaultAutoSyncSupportedModels bool
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
+	// DefaultPolicies holds the default value on creation for the "policies" field.
+	DefaultPolicies objects.ChannelPolicies
 	// DefaultSettings holds the default value on creation for the "settings" field.
 	DefaultSettings *objects.ChannelSettings
 	// DefaultOrderingWeight holds the default value on creation for the "ordering_weight" field.
@@ -167,6 +190,7 @@ type Type string
 const (
 	TypeOpenai            Type = "openai"
 	TypeOpenaiResponses   Type = "openai_responses"
+	TypeCodex             Type = "codex"
 	TypeVercel            Type = "vercel"
 	TypeAnthropic         Type = "anthropic"
 	TypeAnthropicAWS      Type = "anthropic_aws"
@@ -203,6 +227,7 @@ const (
 	TypeJina              Type = "jina"
 	TypeGithub            Type = "github"
 	TypeClaudecode        Type = "claudecode"
+	TypeCerebras          Type = "cerebras"
 )
 
 func (_type Type) String() string {
@@ -212,7 +237,7 @@ func (_type Type) String() string {
 // TypeValidator is a validator for the "type" field enum values. It is called by the builders before save.
 func TypeValidator(_type Type) error {
 	switch _type {
-	case TypeOpenai, TypeOpenaiResponses, TypeVercel, TypeAnthropic, TypeAnthropicAWS, TypeAnthropicGcp, TypeGeminiOpenai, TypeGemini, TypeGeminiVertex, TypeDeepseek, TypeDeepseekAnthropic, TypeDeepinfra, TypeDoubao, TypeDoubaoAnthropic, TypeMoonshot, TypeMoonshotAnthropic, TypeZhipu, TypeZai, TypeZhipuAnthropic, TypeZaiAnthropic, TypeAnthropicFake, TypeOpenaiFake, TypeOpenrouter, TypeXai, TypePpio, TypeSiliconflow, TypeVolcengine, TypeLongcat, TypeLongcatAnthropic, TypeMinimax, TypeMinimaxAnthropic, TypeAihubmix, TypeBurncloud, TypeModelscope, TypeBailian, TypeJina, TypeGithub, TypeClaudecode:
+	case TypeOpenai, TypeOpenaiResponses, TypeCodex, TypeVercel, TypeAnthropic, TypeAnthropicAWS, TypeAnthropicGcp, TypeGeminiOpenai, TypeGemini, TypeGeminiVertex, TypeDeepseek, TypeDeepseekAnthropic, TypeDeepinfra, TypeDoubao, TypeDoubaoAnthropic, TypeMoonshot, TypeMoonshotAnthropic, TypeZhipu, TypeZai, TypeZhipuAnthropic, TypeZaiAnthropic, TypeAnthropicFake, TypeOpenaiFake, TypeOpenrouter, TypeXai, TypePpio, TypeSiliconflow, TypeVolcengine, TypeLongcat, TypeLongcatAnthropic, TypeMinimax, TypeMinimaxAnthropic, TypeAihubmix, TypeBurncloud, TypeModelscope, TypeBailian, TypeJina, TypeGithub, TypeClaudecode, TypeCerebras:
 		return nil
 	default:
 		return fmt.Errorf("channel: invalid enum value for type field: %q", _type)
@@ -376,6 +401,27 @@ func ByChannelProbes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newChannelProbesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByChannelModelPricesCount orders the results by channel_model_prices count.
+func ByChannelModelPricesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newChannelModelPricesStep(), opts...)
+	}
+}
+
+// ByChannelModelPrices orders the results by channel_model_prices terms.
+func ByChannelModelPrices(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newChannelModelPricesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByProviderQuotaStatusField orders the results by provider_quota_status field.
+func ByProviderQuotaStatusField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newProviderQuotaStatusStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newRequestsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -409,6 +455,20 @@ func newChannelProbesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(ChannelProbesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, ChannelProbesTable, ChannelProbesColumn),
+	)
+}
+func newChannelModelPricesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ChannelModelPricesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ChannelModelPricesTable, ChannelModelPricesColumn),
+	)
+}
+func newProviderQuotaStatusStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ProviderQuotaStatusInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2O, false, ProviderQuotaStatusTable, ProviderQuotaStatusColumn),
 	)
 }
 

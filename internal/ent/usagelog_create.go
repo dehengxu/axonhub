@@ -15,6 +15,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
+	"github.com/looplj/axonhub/internal/objects"
 )
 
 // UsageLogCreate is the builder for creating a UsageLog entity.
@@ -56,6 +57,20 @@ func (_c *UsageLogCreate) SetNillableUpdatedAt(v *time.Time) *UsageLogCreate {
 // SetRequestID sets the "request_id" field.
 func (_c *UsageLogCreate) SetRequestID(v int) *UsageLogCreate {
 	_c.mutation.SetRequestID(v)
+	return _c
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (_c *UsageLogCreate) SetAPIKeyID(v int) *UsageLogCreate {
+	_c.mutation.SetAPIKeyID(v)
+	return _c
+}
+
+// SetNillableAPIKeyID sets the "api_key_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableAPIKeyID(v *int) *UsageLogCreate {
+	if v != nil {
+		_c.SetAPIKeyID(*v)
+	}
 	return _c
 }
 
@@ -177,6 +192,34 @@ func (_c *UsageLogCreate) SetNillablePromptWriteCachedTokens(v *int64) *UsageLog
 	return _c
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (_c *UsageLogCreate) SetPromptWriteCachedTokens5m(v int64) *UsageLogCreate {
+	_c.mutation.SetPromptWriteCachedTokens5m(v)
+	return _c
+}
+
+// SetNillablePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillablePromptWriteCachedTokens5m(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetPromptWriteCachedTokens5m(*v)
+	}
+	return _c
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (_c *UsageLogCreate) SetPromptWriteCachedTokens1h(v int64) *UsageLogCreate {
+	_c.mutation.SetPromptWriteCachedTokens1h(v)
+	return _c
+}
+
+// SetNillablePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillablePromptWriteCachedTokens1h(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetPromptWriteCachedTokens1h(*v)
+	}
+	return _c
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (_c *UsageLogCreate) SetCompletionAudioTokens(v int64) *UsageLogCreate {
 	_c.mutation.SetCompletionAudioTokens(v)
@@ -257,6 +300,40 @@ func (_c *UsageLogCreate) SetFormat(v string) *UsageLogCreate {
 func (_c *UsageLogCreate) SetNillableFormat(v *string) *UsageLogCreate {
 	if v != nil {
 		_c.SetFormat(*v)
+	}
+	return _c
+}
+
+// SetTotalCost sets the "total_cost" field.
+func (_c *UsageLogCreate) SetTotalCost(v float64) *UsageLogCreate {
+	_c.mutation.SetTotalCost(v)
+	return _c
+}
+
+// SetNillableTotalCost sets the "total_cost" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableTotalCost(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetTotalCost(*v)
+	}
+	return _c
+}
+
+// SetCostItems sets the "cost_items" field.
+func (_c *UsageLogCreate) SetCostItems(v []objects.CostItem) *UsageLogCreate {
+	_c.mutation.SetCostItems(v)
+	return _c
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (_c *UsageLogCreate) SetCostPriceReferenceID(v string) *UsageLogCreate {
+	_c.mutation.SetCostPriceReferenceID(v)
+	return _c
+}
+
+// SetNillableCostPriceReferenceID sets the "cost_price_reference_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableCostPriceReferenceID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetCostPriceReferenceID(*v)
 	}
 	return _c
 }
@@ -355,6 +432,14 @@ func (_c *UsageLogCreate) defaults() error {
 		v := usagelog.DefaultPromptWriteCachedTokens
 		_c.mutation.SetPromptWriteCachedTokens(v)
 	}
+	if _, ok := _c.mutation.PromptWriteCachedTokens5m(); !ok {
+		v := usagelog.DefaultPromptWriteCachedTokens5m
+		_c.mutation.SetPromptWriteCachedTokens5m(v)
+	}
+	if _, ok := _c.mutation.PromptWriteCachedTokens1h(); !ok {
+		v := usagelog.DefaultPromptWriteCachedTokens1h
+		_c.mutation.SetPromptWriteCachedTokens1h(v)
+	}
 	if _, ok := _c.mutation.CompletionAudioTokens(); !ok {
 		v := usagelog.DefaultCompletionAudioTokens
 		_c.mutation.SetCompletionAudioTokens(v)
@@ -378,6 +463,10 @@ func (_c *UsageLogCreate) defaults() error {
 	if _, ok := _c.mutation.Format(); !ok {
 		v := usagelog.DefaultFormat
 		_c.mutation.SetFormat(v)
+	}
+	if _, ok := _c.mutation.CostItems(); !ok {
+		v := usagelog.DefaultCostItems
+		_c.mutation.SetCostItems(v)
 	}
 	return nil
 }
@@ -460,6 +549,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
+	if value, ok := _c.mutation.APIKeyID(); ok {
+		_spec.SetField(usagelog.FieldAPIKeyID, field.TypeInt, value)
+		_node.APIKeyID = value
+	}
 	if value, ok := _c.mutation.ModelID(); ok {
 		_spec.SetField(usagelog.FieldModelID, field.TypeString, value)
 		_node.ModelID = value
@@ -488,6 +581,14 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldPromptWriteCachedTokens, field.TypeInt64, value)
 		_node.PromptWriteCachedTokens = value
 	}
+	if value, ok := _c.mutation.PromptWriteCachedTokens5m(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64, value)
+		_node.PromptWriteCachedTokens5m = value
+	}
+	if value, ok := _c.mutation.PromptWriteCachedTokens1h(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64, value)
+		_node.PromptWriteCachedTokens1h = value
+	}
 	if value, ok := _c.mutation.CompletionAudioTokens(); ok {
 		_spec.SetField(usagelog.FieldCompletionAudioTokens, field.TypeInt64, value)
 		_node.CompletionAudioTokens = value
@@ -511,6 +612,18 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Format(); ok {
 		_spec.SetField(usagelog.FieldFormat, field.TypeString, value)
 		_node.Format = value
+	}
+	if value, ok := _c.mutation.TotalCost(); ok {
+		_spec.SetField(usagelog.FieldTotalCost, field.TypeFloat64, value)
+		_node.TotalCost = &value
+	}
+	if value, ok := _c.mutation.CostItems(); ok {
+		_spec.SetField(usagelog.FieldCostItems, field.TypeJSON, value)
+		_node.CostItems = value
+	}
+	if value, ok := _c.mutation.CostPriceReferenceID(); ok {
+		_spec.SetField(usagelog.FieldCostPriceReferenceID, field.TypeString, value)
+		_node.CostPriceReferenceID = value
 	}
 	if nodes := _c.mutation.RequestIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -624,24 +737,6 @@ func (u *UsageLogUpsert) SetUpdatedAt(v time.Time) *UsageLogUpsert {
 // UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
 func (u *UsageLogUpsert) UpdateUpdatedAt() *UsageLogUpsert {
 	u.SetExcluded(usagelog.FieldUpdatedAt)
-	return u
-}
-
-// SetChannelID sets the "channel_id" field.
-func (u *UsageLogUpsert) SetChannelID(v int) *UsageLogUpsert {
-	u.Set(usagelog.FieldChannelID, v)
-	return u
-}
-
-// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
-func (u *UsageLogUpsert) UpdateChannelID() *UsageLogUpsert {
-	u.SetExcluded(usagelog.FieldChannelID)
-	return u
-}
-
-// ClearChannelID clears the value of the "channel_id" field.
-func (u *UsageLogUpsert) ClearChannelID() *UsageLogUpsert {
-	u.SetNull(usagelog.FieldChannelID)
 	return u
 }
 
@@ -771,6 +866,54 @@ func (u *UsageLogUpsert) ClearPromptWriteCachedTokens() *UsageLogUpsert {
 	return u
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsert) SetPromptWriteCachedTokens5m(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldPromptWriteCachedTokens5m, v)
+	return u
+}
+
+// UpdatePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdatePromptWriteCachedTokens5m() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldPromptWriteCachedTokens5m)
+	return u
+}
+
+// AddPromptWriteCachedTokens5m adds v to the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsert) AddPromptWriteCachedTokens5m(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldPromptWriteCachedTokens5m, v)
+	return u
+}
+
+// ClearPromptWriteCachedTokens5m clears the value of the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsert) ClearPromptWriteCachedTokens5m() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldPromptWriteCachedTokens5m)
+	return u
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsert) SetPromptWriteCachedTokens1h(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldPromptWriteCachedTokens1h, v)
+	return u
+}
+
+// UpdatePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdatePromptWriteCachedTokens1h() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldPromptWriteCachedTokens1h)
+	return u
+}
+
+// AddPromptWriteCachedTokens1h adds v to the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsert) AddPromptWriteCachedTokens1h(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldPromptWriteCachedTokens1h, v)
+	return u
+}
+
+// ClearPromptWriteCachedTokens1h clears the value of the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsert) ClearPromptWriteCachedTokens1h() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldPromptWriteCachedTokens1h)
+	return u
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (u *UsageLogUpsert) SetCompletionAudioTokens(v int64) *UsageLogUpsert {
 	u.Set(usagelog.FieldCompletionAudioTokens, v)
@@ -867,6 +1010,66 @@ func (u *UsageLogUpsert) ClearCompletionRejectedPredictionTokens() *UsageLogUpse
 	return u
 }
 
+// SetTotalCost sets the "total_cost" field.
+func (u *UsageLogUpsert) SetTotalCost(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldTotalCost, v)
+	return u
+}
+
+// UpdateTotalCost sets the "total_cost" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateTotalCost() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldTotalCost)
+	return u
+}
+
+// AddTotalCost adds v to the "total_cost" field.
+func (u *UsageLogUpsert) AddTotalCost(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldTotalCost, v)
+	return u
+}
+
+// ClearTotalCost clears the value of the "total_cost" field.
+func (u *UsageLogUpsert) ClearTotalCost() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldTotalCost)
+	return u
+}
+
+// SetCostItems sets the "cost_items" field.
+func (u *UsageLogUpsert) SetCostItems(v []objects.CostItem) *UsageLogUpsert {
+	u.Set(usagelog.FieldCostItems, v)
+	return u
+}
+
+// UpdateCostItems sets the "cost_items" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateCostItems() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldCostItems)
+	return u
+}
+
+// ClearCostItems clears the value of the "cost_items" field.
+func (u *UsageLogUpsert) ClearCostItems() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldCostItems)
+	return u
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (u *UsageLogUpsert) SetCostPriceReferenceID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldCostPriceReferenceID, v)
+	return u
+}
+
+// UpdateCostPriceReferenceID sets the "cost_price_reference_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateCostPriceReferenceID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldCostPriceReferenceID)
+	return u
+}
+
+// ClearCostPriceReferenceID clears the value of the "cost_price_reference_id" field.
+func (u *UsageLogUpsert) ClearCostPriceReferenceID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldCostPriceReferenceID)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -884,8 +1087,14 @@ func (u *UsageLogUpsertOne) UpdateNewValues() *UsageLogUpsertOne {
 		if _, exists := u.create.mutation.RequestID(); exists {
 			s.SetIgnore(usagelog.FieldRequestID)
 		}
+		if _, exists := u.create.mutation.APIKeyID(); exists {
+			s.SetIgnore(usagelog.FieldAPIKeyID)
+		}
 		if _, exists := u.create.mutation.ProjectID(); exists {
 			s.SetIgnore(usagelog.FieldProjectID)
+		}
+		if _, exists := u.create.mutation.ChannelID(); exists {
+			s.SetIgnore(usagelog.FieldChannelID)
 		}
 		if _, exists := u.create.mutation.ModelID(); exists {
 			s.SetIgnore(usagelog.FieldModelID)
@@ -938,27 +1147,6 @@ func (u *UsageLogUpsertOne) SetUpdatedAt(v time.Time) *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) UpdateUpdatedAt() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateUpdatedAt()
-	})
-}
-
-// SetChannelID sets the "channel_id" field.
-func (u *UsageLogUpsertOne) SetChannelID(v int) *UsageLogUpsertOne {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.SetChannelID(v)
-	})
-}
-
-// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
-func (u *UsageLogUpsertOne) UpdateChannelID() *UsageLogUpsertOne {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.UpdateChannelID()
-	})
-}
-
-// ClearChannelID clears the value of the "channel_id" field.
-func (u *UsageLogUpsertOne) ClearChannelID() *UsageLogUpsertOne {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.ClearChannelID()
 	})
 }
 
@@ -1109,6 +1297,62 @@ func (u *UsageLogUpsertOne) ClearPromptWriteCachedTokens() *UsageLogUpsertOne {
 	})
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertOne) SetPromptWriteCachedTokens5m(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromptWriteCachedTokens5m(v)
+	})
+}
+
+// AddPromptWriteCachedTokens5m adds v to the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertOne) AddPromptWriteCachedTokens5m(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromptWriteCachedTokens5m(v)
+	})
+}
+
+// UpdatePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdatePromptWriteCachedTokens5m() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromptWriteCachedTokens5m()
+	})
+}
+
+// ClearPromptWriteCachedTokens5m clears the value of the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertOne) ClearPromptWriteCachedTokens5m() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromptWriteCachedTokens5m()
+	})
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertOne) SetPromptWriteCachedTokens1h(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromptWriteCachedTokens1h(v)
+	})
+}
+
+// AddPromptWriteCachedTokens1h adds v to the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertOne) AddPromptWriteCachedTokens1h(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromptWriteCachedTokens1h(v)
+	})
+}
+
+// UpdatePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdatePromptWriteCachedTokens1h() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromptWriteCachedTokens1h()
+	})
+}
+
+// ClearPromptWriteCachedTokens1h clears the value of the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertOne) ClearPromptWriteCachedTokens1h() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromptWriteCachedTokens1h()
+	})
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (u *UsageLogUpsertOne) SetCompletionAudioTokens(v int64) *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -1218,6 +1462,76 @@ func (u *UsageLogUpsertOne) UpdateCompletionRejectedPredictionTokens() *UsageLog
 func (u *UsageLogUpsertOne) ClearCompletionRejectedPredictionTokens() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearCompletionRejectedPredictionTokens()
+	})
+}
+
+// SetTotalCost sets the "total_cost" field.
+func (u *UsageLogUpsertOne) SetTotalCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetTotalCost(v)
+	})
+}
+
+// AddTotalCost adds v to the "total_cost" field.
+func (u *UsageLogUpsertOne) AddTotalCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddTotalCost(v)
+	})
+}
+
+// UpdateTotalCost sets the "total_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateTotalCost() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateTotalCost()
+	})
+}
+
+// ClearTotalCost clears the value of the "total_cost" field.
+func (u *UsageLogUpsertOne) ClearTotalCost() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearTotalCost()
+	})
+}
+
+// SetCostItems sets the "cost_items" field.
+func (u *UsageLogUpsertOne) SetCostItems(v []objects.CostItem) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCostItems(v)
+	})
+}
+
+// UpdateCostItems sets the "cost_items" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateCostItems() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCostItems()
+	})
+}
+
+// ClearCostItems clears the value of the "cost_items" field.
+func (u *UsageLogUpsertOne) ClearCostItems() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCostItems()
+	})
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (u *UsageLogUpsertOne) SetCostPriceReferenceID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCostPriceReferenceID(v)
+	})
+}
+
+// UpdateCostPriceReferenceID sets the "cost_price_reference_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateCostPriceReferenceID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCostPriceReferenceID()
+	})
+}
+
+// ClearCostPriceReferenceID clears the value of the "cost_price_reference_id" field.
+func (u *UsageLogUpsertOne) ClearCostPriceReferenceID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCostPriceReferenceID()
 	})
 }
 
@@ -1403,8 +1717,14 @@ func (u *UsageLogUpsertBulk) UpdateNewValues() *UsageLogUpsertBulk {
 			if _, exists := b.mutation.RequestID(); exists {
 				s.SetIgnore(usagelog.FieldRequestID)
 			}
+			if _, exists := b.mutation.APIKeyID(); exists {
+				s.SetIgnore(usagelog.FieldAPIKeyID)
+			}
 			if _, exists := b.mutation.ProjectID(); exists {
 				s.SetIgnore(usagelog.FieldProjectID)
+			}
+			if _, exists := b.mutation.ChannelID(); exists {
+				s.SetIgnore(usagelog.FieldChannelID)
 			}
 			if _, exists := b.mutation.ModelID(); exists {
 				s.SetIgnore(usagelog.FieldModelID)
@@ -1458,27 +1778,6 @@ func (u *UsageLogUpsertBulk) SetUpdatedAt(v time.Time) *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) UpdateUpdatedAt() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateUpdatedAt()
-	})
-}
-
-// SetChannelID sets the "channel_id" field.
-func (u *UsageLogUpsertBulk) SetChannelID(v int) *UsageLogUpsertBulk {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.SetChannelID(v)
-	})
-}
-
-// UpdateChannelID sets the "channel_id" field to the value that was provided on create.
-func (u *UsageLogUpsertBulk) UpdateChannelID() *UsageLogUpsertBulk {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.UpdateChannelID()
-	})
-}
-
-// ClearChannelID clears the value of the "channel_id" field.
-func (u *UsageLogUpsertBulk) ClearChannelID() *UsageLogUpsertBulk {
-	return u.Update(func(s *UsageLogUpsert) {
-		s.ClearChannelID()
 	})
 }
 
@@ -1629,6 +1928,62 @@ func (u *UsageLogUpsertBulk) ClearPromptWriteCachedTokens() *UsageLogUpsertBulk 
 	})
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertBulk) SetPromptWriteCachedTokens5m(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromptWriteCachedTokens5m(v)
+	})
+}
+
+// AddPromptWriteCachedTokens5m adds v to the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertBulk) AddPromptWriteCachedTokens5m(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromptWriteCachedTokens5m(v)
+	})
+}
+
+// UpdatePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdatePromptWriteCachedTokens5m() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromptWriteCachedTokens5m()
+	})
+}
+
+// ClearPromptWriteCachedTokens5m clears the value of the "prompt_write_cached_tokens_5m" field.
+func (u *UsageLogUpsertBulk) ClearPromptWriteCachedTokens5m() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromptWriteCachedTokens5m()
+	})
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertBulk) SetPromptWriteCachedTokens1h(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPromptWriteCachedTokens1h(v)
+	})
+}
+
+// AddPromptWriteCachedTokens1h adds v to the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertBulk) AddPromptWriteCachedTokens1h(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddPromptWriteCachedTokens1h(v)
+	})
+}
+
+// UpdatePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdatePromptWriteCachedTokens1h() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePromptWriteCachedTokens1h()
+	})
+}
+
+// ClearPromptWriteCachedTokens1h clears the value of the "prompt_write_cached_tokens_1h" field.
+func (u *UsageLogUpsertBulk) ClearPromptWriteCachedTokens1h() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPromptWriteCachedTokens1h()
+	})
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (u *UsageLogUpsertBulk) SetCompletionAudioTokens(v int64) *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -1738,6 +2093,76 @@ func (u *UsageLogUpsertBulk) UpdateCompletionRejectedPredictionTokens() *UsageLo
 func (u *UsageLogUpsertBulk) ClearCompletionRejectedPredictionTokens() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearCompletionRejectedPredictionTokens()
+	})
+}
+
+// SetTotalCost sets the "total_cost" field.
+func (u *UsageLogUpsertBulk) SetTotalCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetTotalCost(v)
+	})
+}
+
+// AddTotalCost adds v to the "total_cost" field.
+func (u *UsageLogUpsertBulk) AddTotalCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddTotalCost(v)
+	})
+}
+
+// UpdateTotalCost sets the "total_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateTotalCost() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateTotalCost()
+	})
+}
+
+// ClearTotalCost clears the value of the "total_cost" field.
+func (u *UsageLogUpsertBulk) ClearTotalCost() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearTotalCost()
+	})
+}
+
+// SetCostItems sets the "cost_items" field.
+func (u *UsageLogUpsertBulk) SetCostItems(v []objects.CostItem) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCostItems(v)
+	})
+}
+
+// UpdateCostItems sets the "cost_items" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateCostItems() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCostItems()
+	})
+}
+
+// ClearCostItems clears the value of the "cost_items" field.
+func (u *UsageLogUpsertBulk) ClearCostItems() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCostItems()
+	})
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (u *UsageLogUpsertBulk) SetCostPriceReferenceID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCostPriceReferenceID(v)
+	})
+}
+
+// UpdateCostPriceReferenceID sets the "cost_price_reference_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateCostPriceReferenceID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCostPriceReferenceID()
+	})
+}
+
+// ClearCostPriceReferenceID clears the value of the "cost_price_reference_id" field.
+func (u *UsageLogUpsertBulk) ClearCostPriceReferenceID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCostPriceReferenceID()
 	})
 }
 

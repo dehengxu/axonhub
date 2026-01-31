@@ -2,6 +2,8 @@ import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateRange } from 'react-day-picker';
 import { usePaginationSearch } from '@/hooks/use-pagination-search';
+import useInterval from '@/hooks/useInterval';
+import { Header } from '@/components/layout/header';
 import { Main } from '@/components/layout/main';
 import { RequestsTable } from './components';
 import { RequestsProvider } from './context';
@@ -87,12 +89,18 @@ function RequestsContent() {
     }
   };
 
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    resetCursor();
+  };
+
   const handleStatusFilterChange = useCallback(
     (filters: string[]) => {
       setStatusFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleSourceFilterChange = useCallback(
@@ -100,7 +108,8 @@ function RequestsContent() {
       setSourceFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleChannelFilterChange = useCallback(
@@ -108,7 +117,8 @@ function RequestsContent() {
       setChannelFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleApiKeyFilterChange = useCallback(
@@ -116,7 +126,8 @@ function RequestsContent() {
       setApiKeyFilter(filters);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   const handleDateRangeChange = useCallback(
@@ -124,7 +135,8 @@ function RequestsContent() {
       setDateRange(range);
       resetCursor();
     },
-    [resetCursor]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
   return (
@@ -172,7 +184,7 @@ function RequestsContent() {
         dateRange={dateRange}
         onNextPage={handleNextPage}
         onPreviousPage={handlePreviousPage}
-        onPageSizeChange={setPageSize}
+        onPageSizeChange={handlePageSizeChange}
         onStatusFilterChange={handleStatusFilterChange}
         onSourceFilterChange={handleSourceFilterChange}
         onChannelFilterChange={handleChannelFilterChange}
@@ -192,6 +204,15 @@ export default function RequestsManagement() {
 
   return (
     <RequestsProvider>
+      <Header fixed>
+        <div className='flex flex-1 items-center justify-between'>
+          <div>
+            <h2 className='text-xl font-bold tracking-tight'>{t('requests.title')}</h2>
+            <p className='text-sm text-muted-foreground'>{t('requests.description')}</p>
+          </div>
+        </div>
+      </Header>
+
       <Main fixed>
         <RequestsContent />
       </Main>

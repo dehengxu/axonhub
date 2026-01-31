@@ -7,7 +7,7 @@ AxonHub 可以作为 OpenAI 接口的直接替代方案，使 Codex 能够通过
 
 ### 关键点
 - AxonHub 支持多种 AI 协议/格式转换。你可以配置多个上游渠道（provider/channel），对外提供统一的 OpenAI 兼容接口，供 Codex 使用。
-- 你可以通过配置 `server.trace.extra_trace_headers` 将 Codex 同一次对话的请求聚合到同一条 Trace。
+- 你可以开启 `server.trace.codex_trace_enabled`（使用 `Session_id`）或配置 `server.trace.extra_trace_headers` 将 Codex 同一次对话的请求聚合到同一条 Trace。
 
 ### 前置要求
 - 可访问的 AxonHub 实例。
@@ -34,15 +34,25 @@ AxonHub 可以作为 OpenAI 接口的直接替代方案，使 Codex 能够通过
    ```
 3. 重启 Codex 以加载配置。
 
-#### 按对话聚合 Trace（可选）
-若 Codex 会携带稳定的对话标识 header（例如 `Conversation_id`），可在 `config.yml` 中将其加入 `extra_trace_headers`，用于在主 trace header 缺失时进行聚合：
+#### 按对话聚合 Trace（重要）
+开启内置 Codex 追踪提取后，AxonHub 会将 `Session_id` header 作为 trace ID 使用：
 
 ```yaml
 server:
   trace:
+    codex_trace_enabled: true
+```
+
+若 Codex 还会携带其他稳定的对话标识 header（例如 `Conversation_id`），可在 `config.yml` 中将其加入 `extra_trace_headers`，用于在主 trace header 缺失时进行聚合：
+
+```yaml
+server: 
+  trace:
     extra_trace_headers:
       - Conversation_id
 ```
+
+**提示**：开启此功能后，AxonHub 会将同一个 Trace 的请求优先转发到同一个上游渠道，从而大幅提高提供商端的缓存命中率（例如 Anthropic 的 Prompt Caching）。
 
 #### 验证
 - 发送测试 Prompt，AxonHub 日志中应出现 `/v1/chat/completions` 调用。

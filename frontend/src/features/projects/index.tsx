@@ -54,7 +54,8 @@ function ProjectsContent() {
   // Reset cursor when filters change
   React.useEffect(() => {
     resetCursor();
-  }, [debouncedSearchFilter, resetCursor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchFilter]);
 
   const handleNextPage = () => {
     if (data?.pageInfo?.hasNextPage && data?.pageInfo?.endCursor) {
@@ -96,16 +97,17 @@ export default function ProjectsPage() {
 
   return (
     <ProjectsProvider>
-      <Header fixed>{/* <Search /> */}</Header>
-
-      <Main fixed>
-        <div className='mb-2 flex flex-wrap items-center justify-between space-y-2'>
+      <Header fixed>
+        <div className='flex flex-1 items-center justify-between'>
           <div>
-            <h2 className='text-2xl font-bold tracking-tight'>{t('projects.title')}</h2>
-            <p className='text-muted-foreground'>{t('projects.description')}</p>
+            <h2 className='text-xl font-bold tracking-tight'>{t('projects.title')}</h2>
+            <p className='text-sm text-muted-foreground'>{t('projects.description')}</p>
           </div>
           <ProjectsPrimaryButtons />
         </div>
+      </Header>
+
+      <Main fixed>
         <ProjectsContent />
       </Main>
       <ProjectsDialogs />

@@ -12,6 +12,8 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
@@ -19,6 +21,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -180,11 +183,6 @@ func (_q *APIKeyQuery) collectField(ctx context.Context, oneNode bool, opCtx *gr
 			if _, ok := fieldSeen[apikey.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, apikey.FieldUpdatedAt)
 				fieldSeen[apikey.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[apikey.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, apikey.FieldDeletedAt)
-				fieldSeen[apikey.FieldDeletedAt] = struct{}{}
 			}
 		case "userID":
 			if _, ok := fieldSeen[apikey.FieldUserID]; !ok {
@@ -601,6 +599,30 @@ func (_q *ChannelQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 			_q.WithNamedChannelProbes(alias, func(wq *ChannelProbeQuery) {
 				*wq = *query
 			})
+
+		case "channelModelPrices":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ChannelModelPriceClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, false, opCtx, field, path, mayAddCondition(satisfies, channelmodelpriceImplementors)...); err != nil {
+				return err
+			}
+			_q.WithNamedChannelModelPrices(alias, func(wq *ChannelModelPriceQuery) {
+				*wq = *query
+			})
+
+		case "providerQuotaStatus":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ProviderQuotaStatusClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, oneNode, opCtx, field, path, mayAddCondition(satisfies, providerquotastatusImplementors)...); err != nil {
+				return err
+			}
+			_q.withProviderQuotaStatus = query
 		case "createdAt":
 			if _, ok := fieldSeen[channel.FieldCreatedAt]; !ok {
 				selectedFields = append(selectedFields, channel.FieldCreatedAt)
@@ -610,11 +632,6 @@ func (_q *ChannelQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 			if _, ok := fieldSeen[channel.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, channel.FieldUpdatedAt)
 				fieldSeen[channel.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[channel.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, channel.FieldDeletedAt)
-				fieldSeen[channel.FieldDeletedAt] = struct{}{}
 			}
 		case "type":
 			if _, ok := fieldSeen[channel.FieldType]; !ok {
@@ -655,6 +672,11 @@ func (_q *ChannelQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 			if _, ok := fieldSeen[channel.FieldDefaultTestModel]; !ok {
 				selectedFields = append(selectedFields, channel.FieldDefaultTestModel)
 				fieldSeen[channel.FieldDefaultTestModel] = struct{}{}
+			}
+		case "policies":
+			if _, ok := fieldSeen[channel.FieldPolicies]; !ok {
+				selectedFields = append(selectedFields, channel.FieldPolicies)
+				fieldSeen[channel.FieldPolicies] = struct{}{}
 			}
 		case "settings":
 			if _, ok := fieldSeen[channel.FieldSettings]; !ok {
@@ -740,6 +762,297 @@ func newChannelPaginateArgs(rv map[string]any) *channelPaginateArgs {
 }
 
 // CollectFields tells the query-builder to eagerly load connected nodes by resolver context.
+func (_q *ChannelModelPriceQuery) CollectFields(ctx context.Context, satisfies ...string) (*ChannelModelPriceQuery, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil {
+		return _q, nil
+	}
+	if err := _q.collectField(ctx, false, graphql.GetOperationContext(ctx), fc.Field, nil, satisfies...); err != nil {
+		return nil, err
+	}
+	return _q, nil
+}
+
+func (_q *ChannelModelPriceQuery) collectField(ctx context.Context, oneNode bool, opCtx *graphql.OperationContext, collected graphql.CollectedField, path []string, satisfies ...string) error {
+	path = append([]string(nil), path...)
+	var (
+		unknownSeen    bool
+		fieldSeen      = make(map[string]struct{}, len(channelmodelprice.Columns))
+		selectedFields = []string{channelmodelprice.FieldID}
+	)
+	for _, field := range graphql.CollectFields(opCtx, collected.Selections, satisfies) {
+		switch field.Name {
+
+		case "channel":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ChannelClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, oneNode, opCtx, field, path, mayAddCondition(satisfies, channelImplementors)...); err != nil {
+				return err
+			}
+			_q.withChannel = query
+			if _, ok := fieldSeen[channelmodelprice.FieldChannelID]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldChannelID)
+				fieldSeen[channelmodelprice.FieldChannelID] = struct{}{}
+			}
+
+		case "versions":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ChannelModelPriceVersionClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, false, opCtx, field, path, mayAddCondition(satisfies, channelmodelpriceversionImplementors)...); err != nil {
+				return err
+			}
+			_q.WithNamedVersions(alias, func(wq *ChannelModelPriceVersionQuery) {
+				*wq = *query
+			})
+		case "createdAt":
+			if _, ok := fieldSeen[channelmodelprice.FieldCreatedAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldCreatedAt)
+				fieldSeen[channelmodelprice.FieldCreatedAt] = struct{}{}
+			}
+		case "updatedAt":
+			if _, ok := fieldSeen[channelmodelprice.FieldUpdatedAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldUpdatedAt)
+				fieldSeen[channelmodelprice.FieldUpdatedAt] = struct{}{}
+			}
+		case "channelID":
+			if _, ok := fieldSeen[channelmodelprice.FieldChannelID]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldChannelID)
+				fieldSeen[channelmodelprice.FieldChannelID] = struct{}{}
+			}
+		case "modelID":
+			if _, ok := fieldSeen[channelmodelprice.FieldModelID]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldModelID)
+				fieldSeen[channelmodelprice.FieldModelID] = struct{}{}
+			}
+		case "price":
+			if _, ok := fieldSeen[channelmodelprice.FieldPrice]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldPrice)
+				fieldSeen[channelmodelprice.FieldPrice] = struct{}{}
+			}
+		case "referenceID":
+			if _, ok := fieldSeen[channelmodelprice.FieldReferenceID]; !ok {
+				selectedFields = append(selectedFields, channelmodelprice.FieldReferenceID)
+				fieldSeen[channelmodelprice.FieldReferenceID] = struct{}{}
+			}
+		case "id":
+		case "__typename":
+		default:
+			unknownSeen = true
+		}
+	}
+	if !unknownSeen {
+		_q.Select(selectedFields...)
+	}
+	return nil
+}
+
+type channelmodelpricePaginateArgs struct {
+	first, last   *int
+	after, before *Cursor
+	opts          []ChannelModelPricePaginateOption
+}
+
+func newChannelModelPricePaginateArgs(rv map[string]any) *channelmodelpricePaginateArgs {
+	args := &channelmodelpricePaginateArgs{}
+	if rv == nil {
+		return args
+	}
+	if v := rv[firstField]; v != nil {
+		args.first = v.(*int)
+	}
+	if v := rv[lastField]; v != nil {
+		args.last = v.(*int)
+	}
+	if v := rv[afterField]; v != nil {
+		args.after = v.(*Cursor)
+	}
+	if v := rv[beforeField]; v != nil {
+		args.before = v.(*Cursor)
+	}
+	if v, ok := rv[orderByField]; ok {
+		switch v := v.(type) {
+		case map[string]any:
+			var (
+				err1, err2 error
+				order      = &ChannelModelPriceOrder{Field: &ChannelModelPriceOrderField{}, Direction: entgql.OrderDirectionAsc}
+			)
+			if d, ok := v[directionField]; ok {
+				err1 = order.Direction.UnmarshalGQL(d)
+			}
+			if f, ok := v[fieldField]; ok {
+				err2 = order.Field.UnmarshalGQL(f)
+			}
+			if err1 == nil && err2 == nil {
+				args.opts = append(args.opts, WithChannelModelPriceOrder(order))
+			}
+		case *ChannelModelPriceOrder:
+			if v != nil {
+				args.opts = append(args.opts, WithChannelModelPriceOrder(v))
+			}
+		}
+	}
+	if v, ok := rv[whereField].(*ChannelModelPriceWhereInput); ok {
+		args.opts = append(args.opts, WithChannelModelPriceFilter(v.Filter))
+	}
+	return args
+}
+
+// CollectFields tells the query-builder to eagerly load connected nodes by resolver context.
+func (_q *ChannelModelPriceVersionQuery) CollectFields(ctx context.Context, satisfies ...string) (*ChannelModelPriceVersionQuery, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil {
+		return _q, nil
+	}
+	if err := _q.collectField(ctx, false, graphql.GetOperationContext(ctx), fc.Field, nil, satisfies...); err != nil {
+		return nil, err
+	}
+	return _q, nil
+}
+
+func (_q *ChannelModelPriceVersionQuery) collectField(ctx context.Context, oneNode bool, opCtx *graphql.OperationContext, collected graphql.CollectedField, path []string, satisfies ...string) error {
+	path = append([]string(nil), path...)
+	var (
+		unknownSeen    bool
+		fieldSeen      = make(map[string]struct{}, len(channelmodelpriceversion.Columns))
+		selectedFields = []string{channelmodelpriceversion.FieldID}
+	)
+	for _, field := range graphql.CollectFields(opCtx, collected.Selections, satisfies) {
+		switch field.Name {
+
+		case "channelModelPrice":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ChannelModelPriceClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, oneNode, opCtx, field, path, mayAddCondition(satisfies, channelmodelpriceImplementors)...); err != nil {
+				return err
+			}
+			_q.withChannelModelPrice = query
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldChannelModelPriceID]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldChannelModelPriceID)
+				fieldSeen[channelmodelpriceversion.FieldChannelModelPriceID] = struct{}{}
+			}
+		case "createdAt":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldCreatedAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldCreatedAt)
+				fieldSeen[channelmodelpriceversion.FieldCreatedAt] = struct{}{}
+			}
+		case "updatedAt":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldUpdatedAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldUpdatedAt)
+				fieldSeen[channelmodelpriceversion.FieldUpdatedAt] = struct{}{}
+			}
+		case "channelID":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldChannelID]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldChannelID)
+				fieldSeen[channelmodelpriceversion.FieldChannelID] = struct{}{}
+			}
+		case "modelID":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldModelID]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldModelID)
+				fieldSeen[channelmodelpriceversion.FieldModelID] = struct{}{}
+			}
+		case "channelModelPriceID":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldChannelModelPriceID]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldChannelModelPriceID)
+				fieldSeen[channelmodelpriceversion.FieldChannelModelPriceID] = struct{}{}
+			}
+		case "price":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldPrice]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldPrice)
+				fieldSeen[channelmodelpriceversion.FieldPrice] = struct{}{}
+			}
+		case "status":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldStatus]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldStatus)
+				fieldSeen[channelmodelpriceversion.FieldStatus] = struct{}{}
+			}
+		case "effectiveStartAt":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldEffectiveStartAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldEffectiveStartAt)
+				fieldSeen[channelmodelpriceversion.FieldEffectiveStartAt] = struct{}{}
+			}
+		case "effectiveEndAt":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldEffectiveEndAt]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldEffectiveEndAt)
+				fieldSeen[channelmodelpriceversion.FieldEffectiveEndAt] = struct{}{}
+			}
+		case "referenceID":
+			if _, ok := fieldSeen[channelmodelpriceversion.FieldReferenceID]; !ok {
+				selectedFields = append(selectedFields, channelmodelpriceversion.FieldReferenceID)
+				fieldSeen[channelmodelpriceversion.FieldReferenceID] = struct{}{}
+			}
+		case "id":
+		case "__typename":
+		default:
+			unknownSeen = true
+		}
+	}
+	if !unknownSeen {
+		_q.Select(selectedFields...)
+	}
+	return nil
+}
+
+type channelmodelpriceversionPaginateArgs struct {
+	first, last   *int
+	after, before *Cursor
+	opts          []ChannelModelPriceVersionPaginateOption
+}
+
+func newChannelModelPriceVersionPaginateArgs(rv map[string]any) *channelmodelpriceversionPaginateArgs {
+	args := &channelmodelpriceversionPaginateArgs{}
+	if rv == nil {
+		return args
+	}
+	if v := rv[firstField]; v != nil {
+		args.first = v.(*int)
+	}
+	if v := rv[lastField]; v != nil {
+		args.last = v.(*int)
+	}
+	if v := rv[afterField]; v != nil {
+		args.after = v.(*Cursor)
+	}
+	if v := rv[beforeField]; v != nil {
+		args.before = v.(*Cursor)
+	}
+	if v, ok := rv[orderByField]; ok {
+		switch v := v.(type) {
+		case map[string]any:
+			var (
+				err1, err2 error
+				order      = &ChannelModelPriceVersionOrder{Field: &ChannelModelPriceVersionOrderField{}, Direction: entgql.OrderDirectionAsc}
+			)
+			if d, ok := v[directionField]; ok {
+				err1 = order.Direction.UnmarshalGQL(d)
+			}
+			if f, ok := v[fieldField]; ok {
+				err2 = order.Field.UnmarshalGQL(f)
+			}
+			if err1 == nil && err2 == nil {
+				args.opts = append(args.opts, WithChannelModelPriceVersionOrder(order))
+			}
+		case *ChannelModelPriceVersionOrder:
+			if v != nil {
+				args.opts = append(args.opts, WithChannelModelPriceVersionOrder(v))
+			}
+		}
+	}
+	if v, ok := rv[whereField].(*ChannelModelPriceVersionWhereInput); ok {
+		args.opts = append(args.opts, WithChannelModelPriceVersionFilter(v.Filter))
+	}
+	return args
+}
+
+// CollectFields tells the query-builder to eagerly load connected nodes by resolver context.
 func (_q *ChannelOverrideTemplateQuery) CollectFields(ctx context.Context, satisfies ...string) (*ChannelOverrideTemplateQuery, error) {
 	fc := graphql.GetFieldContext(ctx)
 	if fc == nil {
@@ -784,11 +1097,6 @@ func (_q *ChannelOverrideTemplateQuery) collectField(ctx context.Context, oneNod
 			if _, ok := fieldSeen[channeloverridetemplate.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, channeloverridetemplate.FieldUpdatedAt)
 				fieldSeen[channeloverridetemplate.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[channeloverridetemplate.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, channeloverridetemplate.FieldDeletedAt)
-				fieldSeen[channeloverridetemplate.FieldDeletedAt] = struct{}{}
 			}
 		case "userID":
 			if _, ok := fieldSeen[channeloverridetemplate.FieldUserID]; !ok {
@@ -928,11 +1236,6 @@ func (_q *ChannelPerformanceQuery) collectField(ctx context.Context, oneNode boo
 			if _, ok := fieldSeen[channelperformance.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, channelperformance.FieldUpdatedAt)
 				fieldSeen[channelperformance.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[channelperformance.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, channelperformance.FieldDeletedAt)
-				fieldSeen[channelperformance.FieldDeletedAt] = struct{}{}
 			}
 		case "channelID":
 			if _, ok := fieldSeen[channelperformance.FieldChannelID]; !ok {
@@ -1398,11 +1701,6 @@ func (_q *DataStorageQuery) collectField(ctx context.Context, oneNode bool, opCt
 				selectedFields = append(selectedFields, datastorage.FieldUpdatedAt)
 				fieldSeen[datastorage.FieldUpdatedAt] = struct{}{}
 			}
-		case "deletedAt":
-			if _, ok := fieldSeen[datastorage.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, datastorage.FieldDeletedAt)
-				fieldSeen[datastorage.FieldDeletedAt] = struct{}{}
-			}
 		case "name":
 			if _, ok := fieldSeen[datastorage.FieldName]; !ok {
 				selectedFields = append(selectedFields, datastorage.FieldName)
@@ -1526,11 +1824,6 @@ func (_q *ModelQuery) collectField(ctx context.Context, oneNode bool, opCtx *gra
 			if _, ok := fieldSeen[model.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, model.FieldUpdatedAt)
 				fieldSeen[model.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[model.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, model.FieldDeletedAt)
-				fieldSeen[model.FieldDeletedAt] = struct{}{}
 			}
 		case "developer":
 			if _, ok := fieldSeen[model.FieldDeveloper]; !ok {
@@ -2485,11 +2778,6 @@ func (_q *ProjectQuery) collectField(ctx context.Context, oneNode bool, opCtx *g
 				selectedFields = append(selectedFields, project.FieldUpdatedAt)
 				fieldSeen[project.FieldUpdatedAt] = struct{}{}
 			}
-		case "deletedAt":
-			if _, ok := fieldSeen[project.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, project.FieldDeletedAt)
-				fieldSeen[project.FieldDeletedAt] = struct{}{}
-			}
 		case "name":
 			if _, ok := fieldSeen[project.FieldName]; !ok {
 				selectedFields = append(selectedFields, project.FieldName)
@@ -2692,11 +2980,6 @@ func (_q *PromptQuery) collectField(ctx context.Context, oneNode bool, opCtx *gr
 				selectedFields = append(selectedFields, prompt.FieldUpdatedAt)
 				fieldSeen[prompt.FieldUpdatedAt] = struct{}{}
 			}
-		case "deletedAt":
-			if _, ok := fieldSeen[prompt.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, prompt.FieldDeletedAt)
-				fieldSeen[prompt.FieldDeletedAt] = struct{}{}
-			}
 		case "projectID":
 			if _, ok := fieldSeen[prompt.FieldProjectID]; !ok {
 				selectedFields = append(selectedFields, prompt.FieldProjectID)
@@ -2791,6 +3074,150 @@ func newPromptPaginateArgs(rv map[string]any) *promptPaginateArgs {
 	}
 	if v, ok := rv[whereField].(*PromptWhereInput); ok {
 		args.opts = append(args.opts, WithPromptFilter(v.Filter))
+	}
+	return args
+}
+
+// CollectFields tells the query-builder to eagerly load connected nodes by resolver context.
+func (_q *ProviderQuotaStatusQuery) CollectFields(ctx context.Context, satisfies ...string) (*ProviderQuotaStatusQuery, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil {
+		return _q, nil
+	}
+	if err := _q.collectField(ctx, false, graphql.GetOperationContext(ctx), fc.Field, nil, satisfies...); err != nil {
+		return nil, err
+	}
+	return _q, nil
+}
+
+func (_q *ProviderQuotaStatusQuery) collectField(ctx context.Context, oneNode bool, opCtx *graphql.OperationContext, collected graphql.CollectedField, path []string, satisfies ...string) error {
+	path = append([]string(nil), path...)
+	var (
+		unknownSeen    bool
+		fieldSeen      = make(map[string]struct{}, len(providerquotastatus.Columns))
+		selectedFields = []string{providerquotastatus.FieldID}
+	)
+	for _, field := range graphql.CollectFields(opCtx, collected.Selections, satisfies) {
+		switch field.Name {
+
+		case "channel":
+			var (
+				alias = field.Alias
+				path  = append(path, alias)
+				query = (&ChannelClient{config: _q.config}).Query()
+			)
+			if err := query.collectField(ctx, oneNode, opCtx, field, path, mayAddCondition(satisfies, channelImplementors)...); err != nil {
+				return err
+			}
+			_q.withChannel = query
+			if _, ok := fieldSeen[providerquotastatus.FieldChannelID]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldChannelID)
+				fieldSeen[providerquotastatus.FieldChannelID] = struct{}{}
+			}
+		case "createdAt":
+			if _, ok := fieldSeen[providerquotastatus.FieldCreatedAt]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldCreatedAt)
+				fieldSeen[providerquotastatus.FieldCreatedAt] = struct{}{}
+			}
+		case "updatedAt":
+			if _, ok := fieldSeen[providerquotastatus.FieldUpdatedAt]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldUpdatedAt)
+				fieldSeen[providerquotastatus.FieldUpdatedAt] = struct{}{}
+			}
+		case "channelID":
+			if _, ok := fieldSeen[providerquotastatus.FieldChannelID]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldChannelID)
+				fieldSeen[providerquotastatus.FieldChannelID] = struct{}{}
+			}
+		case "providerType":
+			if _, ok := fieldSeen[providerquotastatus.FieldProviderType]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldProviderType)
+				fieldSeen[providerquotastatus.FieldProviderType] = struct{}{}
+			}
+		case "status":
+			if _, ok := fieldSeen[providerquotastatus.FieldStatus]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldStatus)
+				fieldSeen[providerquotastatus.FieldStatus] = struct{}{}
+			}
+		case "quotaData":
+			if _, ok := fieldSeen[providerquotastatus.FieldQuotaData]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldQuotaData)
+				fieldSeen[providerquotastatus.FieldQuotaData] = struct{}{}
+			}
+		case "nextResetAt":
+			if _, ok := fieldSeen[providerquotastatus.FieldNextResetAt]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldNextResetAt)
+				fieldSeen[providerquotastatus.FieldNextResetAt] = struct{}{}
+			}
+		case "ready":
+			if _, ok := fieldSeen[providerquotastatus.FieldReady]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldReady)
+				fieldSeen[providerquotastatus.FieldReady] = struct{}{}
+			}
+		case "nextCheckAt":
+			if _, ok := fieldSeen[providerquotastatus.FieldNextCheckAt]; !ok {
+				selectedFields = append(selectedFields, providerquotastatus.FieldNextCheckAt)
+				fieldSeen[providerquotastatus.FieldNextCheckAt] = struct{}{}
+			}
+		case "id":
+		case "__typename":
+		default:
+			unknownSeen = true
+		}
+	}
+	if !unknownSeen {
+		_q.Select(selectedFields...)
+	}
+	return nil
+}
+
+type providerquotastatusPaginateArgs struct {
+	first, last   *int
+	after, before *Cursor
+	opts          []ProviderQuotaStatusPaginateOption
+}
+
+func newProviderQuotaStatusPaginateArgs(rv map[string]any) *providerquotastatusPaginateArgs {
+	args := &providerquotastatusPaginateArgs{}
+	if rv == nil {
+		return args
+	}
+	if v := rv[firstField]; v != nil {
+		args.first = v.(*int)
+	}
+	if v := rv[lastField]; v != nil {
+		args.last = v.(*int)
+	}
+	if v := rv[afterField]; v != nil {
+		args.after = v.(*Cursor)
+	}
+	if v := rv[beforeField]; v != nil {
+		args.before = v.(*Cursor)
+	}
+	if v, ok := rv[orderByField]; ok {
+		switch v := v.(type) {
+		case map[string]any:
+			var (
+				err1, err2 error
+				order      = &ProviderQuotaStatusOrder{Field: &ProviderQuotaStatusOrderField{}, Direction: entgql.OrderDirectionAsc}
+			)
+			if d, ok := v[directionField]; ok {
+				err1 = order.Direction.UnmarshalGQL(d)
+			}
+			if f, ok := v[fieldField]; ok {
+				err2 = order.Field.UnmarshalGQL(f)
+			}
+			if err1 == nil && err2 == nil {
+				args.opts = append(args.opts, WithProviderQuotaStatusOrder(order))
+			}
+		case *ProviderQuotaStatusOrder:
+			if v != nil {
+				args.opts = append(args.opts, WithProviderQuotaStatusOrder(v))
+			}
+		}
+	}
+	if v, ok := rv[whereField].(*ProviderQuotaStatusWhereInput); ok {
+		args.opts = append(args.opts, WithProviderQuotaStatusFilter(v.Filter))
 	}
 	return args
 }
@@ -3679,11 +4106,6 @@ func (_q *RoleQuery) collectField(ctx context.Context, oneNode bool, opCtx *grap
 				selectedFields = append(selectedFields, role.FieldUpdatedAt)
 				fieldSeen[role.FieldUpdatedAt] = struct{}{}
 			}
-		case "deletedAt":
-			if _, ok := fieldSeen[role.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, role.FieldDeletedAt)
-				fieldSeen[role.FieldDeletedAt] = struct{}{}
-			}
 		case "name":
 			if _, ok := fieldSeen[role.FieldName]; !ok {
 				selectedFields = append(selectedFields, role.FieldName)
@@ -3797,11 +4219,6 @@ func (_q *SystemQuery) collectField(ctx context.Context, oneNode bool, opCtx *gr
 			if _, ok := fieldSeen[system.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, system.FieldUpdatedAt)
 				fieldSeen[system.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[system.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, system.FieldDeletedAt)
-				fieldSeen[system.FieldDeletedAt] = struct{}{}
 			}
 		case "key":
 			if _, ok := fieldSeen[system.FieldKey]; !ok {
@@ -4393,6 +4810,11 @@ func (_q *UsageLogQuery) collectField(ctx context.Context, oneNode bool, opCtx *
 				selectedFields = append(selectedFields, usagelog.FieldRequestID)
 				fieldSeen[usagelog.FieldRequestID] = struct{}{}
 			}
+		case "apiKeyID":
+			if _, ok := fieldSeen[usagelog.FieldAPIKeyID]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldAPIKeyID)
+				fieldSeen[usagelog.FieldAPIKeyID] = struct{}{}
+			}
 		case "projectID":
 			if _, ok := fieldSeen[usagelog.FieldProjectID]; !ok {
 				selectedFields = append(selectedFields, usagelog.FieldProjectID)
@@ -4438,6 +4860,16 @@ func (_q *UsageLogQuery) collectField(ctx context.Context, oneNode bool, opCtx *
 				selectedFields = append(selectedFields, usagelog.FieldPromptWriteCachedTokens)
 				fieldSeen[usagelog.FieldPromptWriteCachedTokens] = struct{}{}
 			}
+		case "promptWriteCachedTokens5m":
+			if _, ok := fieldSeen[usagelog.FieldPromptWriteCachedTokens5m]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldPromptWriteCachedTokens5m)
+				fieldSeen[usagelog.FieldPromptWriteCachedTokens5m] = struct{}{}
+			}
+		case "promptWriteCachedTokens1h":
+			if _, ok := fieldSeen[usagelog.FieldPromptWriteCachedTokens1h]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldPromptWriteCachedTokens1h)
+				fieldSeen[usagelog.FieldPromptWriteCachedTokens1h] = struct{}{}
+			}
 		case "completionAudioTokens":
 			if _, ok := fieldSeen[usagelog.FieldCompletionAudioTokens]; !ok {
 				selectedFields = append(selectedFields, usagelog.FieldCompletionAudioTokens)
@@ -4467,6 +4899,21 @@ func (_q *UsageLogQuery) collectField(ctx context.Context, oneNode bool, opCtx *
 			if _, ok := fieldSeen[usagelog.FieldFormat]; !ok {
 				selectedFields = append(selectedFields, usagelog.FieldFormat)
 				fieldSeen[usagelog.FieldFormat] = struct{}{}
+			}
+		case "totalCost":
+			if _, ok := fieldSeen[usagelog.FieldTotalCost]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldTotalCost)
+				fieldSeen[usagelog.FieldTotalCost] = struct{}{}
+			}
+		case "costItems":
+			if _, ok := fieldSeen[usagelog.FieldCostItems]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldCostItems)
+				fieldSeen[usagelog.FieldCostItems] = struct{}{}
+			}
+		case "costPriceReferenceID":
+			if _, ok := fieldSeen[usagelog.FieldCostPriceReferenceID]; !ok {
+				selectedFields = append(selectedFields, usagelog.FieldCostPriceReferenceID)
+				fieldSeen[usagelog.FieldCostPriceReferenceID] = struct{}{}
 			}
 		case "id":
 		case "__typename":
@@ -5103,11 +5550,6 @@ func (_q *UserQuery) collectField(ctx context.Context, oneNode bool, opCtx *grap
 			if _, ok := fieldSeen[user.FieldUpdatedAt]; !ok {
 				selectedFields = append(selectedFields, user.FieldUpdatedAt)
 				fieldSeen[user.FieldUpdatedAt] = struct{}{}
-			}
-		case "deletedAt":
-			if _, ok := fieldSeen[user.FieldDeletedAt]; !ok {
-				selectedFields = append(selectedFields, user.FieldDeletedAt)
-				fieldSeen[user.FieldDeletedAt] = struct{}{}
 			}
 		case "email":
 			if _, ok := fieldSeen[user.FieldEmail]; !ok {

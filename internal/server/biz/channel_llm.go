@@ -10,12 +10,16 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/oauth"
 	"github.com/looplj/axonhub/llm/pipeline"
 	"github.com/looplj/axonhub/llm/transformer"
 	"github.com/looplj/axonhub/llm/transformer/anthropic"
+	"github.com/looplj/axonhub/llm/transformer/anthropic/claudecode"
 	"github.com/looplj/axonhub/llm/transformer/bailian"
 	"github.com/looplj/axonhub/llm/transformer/deepseek"
 	"github.com/looplj/axonhub/llm/transformer/doubao"
@@ -26,6 +30,7 @@ import (
 	"github.com/looplj/axonhub/llm/transformer/modelscope"
 	"github.com/looplj/axonhub/llm/transformer/moonshot"
 	"github.com/looplj/axonhub/llm/transformer/openai"
+	"github.com/looplj/axonhub/llm/transformer/openai/codex"
 	"github.com/looplj/axonhub/llm/transformer/openai/responses"
 	"github.com/looplj/axonhub/llm/transformer/openrouter"
 	"github.com/looplj/axonhub/llm/transformer/xai"
@@ -159,7 +164,6 @@ func buildChannelWithTransformer(
 func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 	httpClient := httpclient.NewHttpClientWithProxy(getProxyConfig(c.Settings))
 
-	//nolint:exhaustive // TODO SUPPORT more providers.
 	switch c.Type {
 	case channel.TypeDoubao, channel.TypeVolcengine:
 		transformer, err := doubao.NewOutboundTransformerWithConfig(&doubao.Config{
@@ -171,7 +175,7 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 		}
 
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
-	case channel.TypeOpenrouter:
+	case channel.TypeOpenrouter, channel.TypeCerebras:
 		transformer, err := openrouter.NewOutboundTransformer(c.BaseURL, c.Credentials.APIKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -230,13 +234,65 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
 	case channel.TypeClaudecode:
-		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-			Type:    anthropic.PlatformClaudeCode,
-			BaseURL: c.BaseURL,
-			APIKey:  c.Credentials.APIKey,
+		// Parse OAuth credentials from JSON or structured field
+		credsJSON := strings.TrimSpace(c.Credentials.APIKey)
+		if c.Credentials != nil && c.Credentials.OAuth != nil {
+			o := c.Credentials.OAuth
+			creds, err := (&oauth.OAuthCredentials{
+				AccessToken:  o.AccessToken,
+				RefreshToken: o.RefreshToken,
+				ClientID:     o.ClientID,
+				ExpiresAt:    o.ExpiresAt,
+				TokenType:    o.TokenType,
+				Scopes:       o.Scopes,
+			}).ToJSON()
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode claudecode oauth credentials: %w", err)
+			}
+			credsJSON = creds
+		}
+
+		// Check if using OAuth credentials
+		if isOAuthJSON(credsJSON) {
+			creds, err := oauth.ParseCredentialsJSON(credsJSON)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse claudecode oauth credentials: %w", err)
+			}
+
+			tokens := claudecode.NewTokenProvider(oauth.TokenProviderParams{
+				Credentials: creds,
+				HTTPClient:  httpClient,
+				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+			})
+
+			transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
+				TokenProvider: tokens,
+				BaseURL:       c.BaseURL,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
+			}
+
+			ch := buildChannelWithTransformer(c, transformer, httpClient)
+			ch.startTokenProvider = func() {
+				tokens.StartAutoRefresh(context.Background(), oauth.AutoRefreshOptions{})
+			}
+			ch.stopTokenProvider = tokens.StopAutoRefresh
+
+			return ch, nil
+		}
+
+		// Third-party Claude Code with plain API key
+		tokens := oauth.NewStaticTokenProvider(&oauth.OAuthCredentials{
+			AccessToken: credsJSON,
+		})
+
+		transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
+			TokenProvider: tokens,
+			BaseURL:       c.BaseURL,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
+			return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
 		}
 
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
@@ -371,9 +427,77 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 		transformer, err := bailian.NewOutboundTransformerWithConfig(&bailian.Config{
 			BaseURL: c.BaseURL,
 			APIKey:  c.Credentials.APIKey,
+			ReplaceDeveloperRoleWithSystem: c.Settings != nil &&
+				c.Settings.TransformOptions.ReplaceDeveloperRoleWithSystem,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
+		}
+
+		return buildChannelWithTransformer(c, transformer, httpClient), nil
+	case channel.TypeCodex:
+		credsJSON := strings.TrimSpace(c.Credentials.APIKey)
+		if c.Credentials != nil && c.Credentials.OAuth != nil {
+			o := c.Credentials.OAuth
+
+			creds, err := (&oauth.OAuthCredentials{
+				AccessToken:  o.AccessToken,
+				RefreshToken: o.RefreshToken,
+				ClientID:     o.ClientID,
+				ExpiresAt:    o.ExpiresAt,
+				TokenType:    o.TokenType,
+				Scopes:       o.Scopes,
+			}).ToJSON()
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode codex oauth credentials: %w", err)
+			}
+
+			credsJSON = creds
+		}
+
+		var tokens oauth.TokenGetter
+
+		if isOAuthJSON(credsJSON) {
+			creds, err := oauth.ParseCredentialsJSON(credsJSON)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse codex oauth credentials: %w", err)
+			}
+
+			p := codex.NewTokenProvider(codex.TokenProviderParams{
+				Credentials: creds,
+				HTTPClient:  httpClient,
+				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+			})
+			tokens = p
+
+			transformer, err := codex.NewOutboundTransformer(codex.Params{
+				TokenProvider: tokens,
+				BaseURL:       c.BaseURL,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create codex outbound transformer: %w", err)
+			}
+
+			ch := buildChannelWithTransformer(c, transformer, httpClient)
+			ch.startTokenProvider = func() {
+				p.StartAutoRefresh(context.Background(), oauth.AutoRefreshOptions{})
+			}
+			ch.stopTokenProvider = p.StopAutoRefresh
+
+			return ch, nil
+		}
+
+		// Third-party Codex with plain API key
+		tokens = oauth.NewStaticTokenProvider(&oauth.OAuthCredentials{
+			AccessToken: credsJSON,
+		})
+
+		transformer, err := codex.NewOutboundTransformer(codex.Params{
+			TokenProvider: tokens,
+			BaseURL:       c.BaseURL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create codex outbound transformer: %w", err)
 		}
 
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
@@ -430,6 +554,60 @@ func (svc *ChannelService) buildChannel(c *ent.Channel) (*Channel, error) {
 		return buildChannelWithTransformer(c, transformer, httpClient), nil
 	default:
 		return nil, errors.New("unknown channel type")
+	}
+}
+
+func isOAuthJSON(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return strings.HasPrefix(trimmed, "{") && strings.Contains(s, "access_token")
+}
+
+func (svc *ChannelService) refreshOAuthTokenFunc(ch *ent.Channel) func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
+	return func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
+		if refreshed == nil {
+			return nil
+		}
+
+		credJSON, err := refreshed.ToJSON()
+		if err != nil {
+			return err
+		}
+
+		updated := ch.Credentials
+
+		updated.APIKey = credJSON
+		updated.OAuth = refreshed
+
+		dbCtx := privacy.DecisionContext(ctx, privacy.Allow)
+		_, err = svc.entFromContext(dbCtx).Channel.UpdateOneID(ch.ID).SetCredentials(updated).Save(dbCtx)
+
+		return err
+	}
+}
+
+// preloadModelPrices loads active model prices for a channel and caches them.
+func (svc *ChannelService) preloadModelPrices(ctx context.Context, ch *Channel) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	prices, err := svc.entFromContext(ctx).ChannelModelPrice.Query().
+		Where(
+			channelmodelprice.ChannelID(ch.ID),
+			channelmodelprice.DeletedAtEQ(0),
+		).
+		All(ctx)
+	if err != nil {
+		log.Warn(ctx, "failed to preload model prices", log.Int("channel_id", ch.ID), log.Cause(err))
+		return
+	}
+
+	cache := make(map[string]*ent.ChannelModelPrice, len(prices))
+	for _, p := range prices {
+		cache[p.ModelID] = p
+	}
+
+	ch.cachedModelPrices = cache
+	if log.DebugEnabled(ctx) {
+		log.Debug(ctx, "preloaded model prices", log.Int("channel_id", ch.ID), log.Int("count", len(cache)))
 	}
 }
 

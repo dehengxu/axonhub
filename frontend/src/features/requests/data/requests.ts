@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
 import { graphqlRequest } from '@/gql/graphql';
+import { useTranslation } from 'react-i18next';
 import { useSelectedProjectId } from '@/stores/projectStore';
 import { useErrorHandler } from '@/hooks/use-error-handler';
 import { useRequestPermissions } from '../../../hooks/useRequestPermissions';
@@ -82,6 +82,7 @@ function buildRequestsQuery(permissions: { canViewApiKeys: boolean; canViewChann
                   totalTokens
                   promptCachedTokens
                   promptWriteCachedTokens
+                  totalCost
                 }
               }
             }
@@ -138,13 +139,14 @@ function buildRequestDetailQuery(permissions: { canViewApiKeys: boolean; canView
           usageLogs(first: 1) {
             edges {
               node {
-                id
-                promptTokens
-                completionTokens
-                totalTokens
-                promptCachedTokens
-                promptWriteCachedTokens
-              }
+                  id
+                  promptTokens
+                  completionTokens
+                  totalTokens
+                  promptCachedTokens
+                  promptWriteCachedTokens
+                  totalCost
+                }
             }
           }
         }
@@ -236,14 +238,24 @@ export function useRequests(variables?: {
       try {
         const query = buildRequestsQuery(permissions);
         const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
-        const data = await graphqlRequest<{ requests: RequestConnection }>(query, variables, headers);
+
+        // Add project filter if project is selected
+        const finalVariables = {
+          ...variables,
+          where: {
+            ...variables?.where,
+            ...(selectedProjectId && { projectID: selectedProjectId }),
+          },
+        };
+
+        const data = await graphqlRequest<{ requests: RequestConnection }>(query, finalVariables, headers);
         return requestConnectionSchema.parse(data?.requests);
       } catch (error) {
         handleError(error, t('requests.errors.loadRequestsFailed'));
         throw error;
       }
     },
-    enabled: !!selectedProjectId, // Only query when a project is selected
+    enabled: true, // Requests can be queried without project selection for admin users
   });
 }
 
@@ -290,7 +302,11 @@ export function useRequestExecutions(
     queryFn: async () => {
       const query = buildRequestExecutionsQuery(permissions);
       const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
-      const data = await graphqlRequest<{ node: { executions: RequestExecutionConnection } }>(query, { requestID, ...variables }, headers);
+      const finalVariables = {
+        requestID,
+        ...variables,
+      };
+      const data = await graphqlRequest<{ node: { executions: RequestExecutionConnection } }>(query, finalVariables, headers);
       return requestExecutionConnectionSchema.parse(data?.node?.executions);
     },
     enabled: !!requestID,

@@ -10,7 +10,8 @@ schema:
   - backup.graphql
   - channel_probe.graphql
   - prompt.graphql
-
+  - price.graphql
+  - cost.graphql
 
 omit_gqlgen_version_in_file_notice: true
 
@@ -73,6 +74,22 @@ models:
   Node:
     model:
       - github.com/looplj/axonhub/internal/ent.Noder
+
+  Cursor:
+    model:
+      - github.com/looplj/axonhub/internal/server/gql.Cursor
+  JSONRawMessage:
+    model:
+      - github.com/looplj/axonhub/internal/objects.JSONRawMessage
+  JSONRawMessageInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.JSONRawMessage
+  Decimal:
+    model:
+      - github.com/looplj/axonhub/internal/objects.Decimal
+  DecimalInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.Decimal
   ModelMapping:
     model:
       - github.com/looplj/axonhub/internal/objects.ModelMapping
@@ -88,6 +105,15 @@ models:
   ProxyConfigInput:
     model:
       - github.com/looplj/axonhub/internal/objects.ProxyConfig
+  CapabilityPolicy:
+    model:
+      - github.com/looplj/axonhub/internal/objects.CapabilityPolicy
+  ChannelPolicies:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelPolicies
+  ChannelPoliciesInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ChannelPolicies
   ChannelSettings:
     model:
       - github.com/looplj/axonhub/internal/objects.ChannelSettings
@@ -100,6 +126,12 @@ models:
   ChannelCredentialsInput:
     model:
       - github.com/looplj/axonhub/internal/objects.ChannelCredentials
+  OAuthCredentials:
+    model:
+      - github.com/looplj/axonhub/internal/objects.OAuthCredentials
+  OAuthCredentialsInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.OAuthCredentials
   BulkCreateChannelsInput:
     model:
       - github.com/looplj/axonhub/internal/server/biz.BulkCreateChannelsInput
@@ -144,28 +176,64 @@ models:
       - github.com/looplj/axonhub/internal/objects.APIKeyProfile
   APIKeyProfiles:
     model:
-      - github.com/looplj/axonhub/internal/objects.APIKeyProfiles    
+      - github.com/looplj/axonhub/internal/objects.APIKeyProfiles
   APIKeyProfile:
     model:
       - github.com/looplj/axonhub/internal/objects.APIKeyProfile
+  APIKeyQuotaInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuota
+  APIKeyQuota:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuota
+  APIKeyQuotaPeriodInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPeriod
+  APIKeyQuotaPeriod:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPeriod
+  APIKeyQuotaPeriodType:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPeriodType
+  APIKeyQuotaPastDurationInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPastDuration
+  APIKeyQuotaPastDuration:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPastDuration
+  APIKeyQuotaPastDurationUnit:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaPastDurationUnit
+  APIKeyQuotaCalendarDurationInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaCalendarDuration
+  APIKeyQuotaCalendarDuration:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaCalendarDuration
+  APIKeyQuotaCalendarDurationUnit:
+    model:
+      - github.com/looplj/axonhub/internal/objects.APIKeyQuotaCalendarDurationUnit
   AWSCredential:
     model:
       - github.com/looplj/axonhub/internal/objects.AWSCredential
-  AWSCredentialInput: 
+  AWSCredentialInput:
     model:
       - github.com/looplj/axonhub/internal/objects.AWSCredential
+  BackupOptionsInput:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.BackupOptions
+  RestoreOptionsInput:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.RestoreOptions
+  BackupConflictStrategy:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.ConflictStrategy
   GCPCredential:
     model:
       - github.com/looplj/axonhub/internal/objects.GCPCredential
   GCPCredentialInput:
     model:
       - github.com/looplj/axonhub/internal/objects.GCPCredential
-  JSONRawMessage:
-    model:
-      - github.com/looplj/axonhub/internal/objects.JSONRawMessage
-  JSONRawMessageInput:
-    model:
-      - github.com/looplj/axonhub/internal/objects.JSONRawMessage
   ModelIdentify:
     model:
       - github.com/looplj/axonhub/internal/server/biz.ModelIdentify
@@ -202,6 +270,9 @@ models:
   RequestMetadata:
     model:
       - github.com/looplj/axonhub/internal/server/biz.RequestMetadata
+  UsageMetadata:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.UsageMetadata
   Span:
     model:
       - github.com/looplj/axonhub/internal/server/biz.Span
@@ -244,6 +315,54 @@ models:
   ModelIdentityWithStatus:
     model:
       - github.com/looplj/axonhub/internal/server/biz.ModelIdentityWithStatus
+  SaveChannelModelPriceInput:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.SaveChannelModelPriceInput
+  ModelPrice:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ModelPrice
+  ModelPriceInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ModelPrice
+  ModelPriceItem:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ModelPriceItem
+  ModelPriceItemInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.ModelPriceItem
+  Pricing:
+    model:
+      - github.com/looplj/axonhub/internal/objects.Pricing
+  PricingInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.Pricing
+  TieredPricing:
+    model:
+      - github.com/looplj/axonhub/internal/objects.TieredPricing
+  TieredPricingInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.TieredPricing
+  PriceTier:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PriceTier
+  PriceTierInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PriceTier
+  PromptWriteCacheVariant:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PromptWriteCacheVariant
+  PromptWriteCacheVariantInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PromptWriteCacheVariant
+  PricingMode:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PricingMode
+  PriceItemCode:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PriceItemCode
+  PromptWriteCacheVariantCode:
+    model:
+      - github.com/looplj/axonhub/internal/objects.PromptWriteCacheVariantCode
   ModelCard:
     model:
       - github.com/looplj/axonhub/internal/objects.ModelCard
@@ -307,7 +426,7 @@ models:
   ModelIDAssociation:
     model:
       - github.com/looplj/axonhub/internal/objects.ModelIDAssociation
-  ModelIDAssociationInput:    
+  ModelIDAssociationInput:
     model:
       - github.com/looplj/axonhub/internal/objects.ModelIDAssociation
   ExcludeAssociation:
@@ -343,6 +462,18 @@ models:
   HeaderEntryInput:
     model:
       - github.com/looplj/axonhub/internal/objects.HeaderEntry
+  TierCost:
+    model:
+      - github.com/looplj/axonhub/internal/objects.TierCost
+  CostItem:
+    model:
+      - github.com/looplj/axonhub/internal/objects.CostItem
+  TierCostInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.TierCost
+  CostItemInput:
+    model:
+      - github.com/looplj/axonhub/internal/objects.CostItem
   TransformOptions:
     model:
       - github.com/looplj/axonhub/internal/objects.TransformOptions
@@ -364,6 +495,12 @@ models:
   UpdateSystemChannelSettingsInput:
     model:
       - github.com/looplj/axonhub/internal/server/biz.SystemChannelSettings
+  SystemGeneralSettings:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.SystemGeneralSettings
+  UpdateSystemGeneralSettingsInput:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.SystemGeneralSettings
   ChannelProbeSetting:
     model:
       - github.com/looplj/axonhub/internal/server/biz.ChannelProbeSetting

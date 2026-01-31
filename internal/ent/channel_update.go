@@ -13,9 +13,11 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
 	"github.com/looplj/axonhub/internal/ent/predicate"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -175,6 +177,26 @@ func (_u *ChannelUpdate) SetNillableDefaultTestModel(v *string) *ChannelUpdate {
 	return _u
 }
 
+// SetPolicies sets the "policies" field.
+func (_u *ChannelUpdate) SetPolicies(v objects.ChannelPolicies) *ChannelUpdate {
+	_u.mutation.SetPolicies(v)
+	return _u
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelUpdate {
+	if v != nil {
+		_u.SetPolicies(*v)
+	}
+	return _u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (_u *ChannelUpdate) ClearPolicies() *ChannelUpdate {
+	_u.mutation.ClearPolicies()
+	return _u
+}
+
 // SetSettings sets the "settings" field.
 func (_u *ChannelUpdate) SetSettings(v *objects.ChannelSettings) *ChannelUpdate {
 	_u.mutation.SetSettings(v)
@@ -327,6 +349,40 @@ func (_u *ChannelUpdate) AddChannelProbes(v ...*ChannelProbe) *ChannelUpdate {
 	return _u.AddChannelProbeIDs(ids...)
 }
 
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_u *ChannelUpdate) AddChannelModelPriceIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.AddChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdate) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_u *ChannelUpdate) SetProviderQuotaStatusID(id int) *ChannelUpdate {
+	_u.mutation.SetProviderQuotaStatusID(id)
+	return _u
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableProviderQuotaStatusID(id *int) *ChannelUpdate {
+	if id != nil {
+		_u = _u.SetProviderQuotaStatusID(*id)
+	}
+	return _u
+}
+
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdate) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelUpdate {
+	return _u.SetProviderQuotaStatusID(v.ID)
+}
+
 // Mutation returns the ChannelMutation object of the builder.
 func (_u *ChannelUpdate) Mutation() *ChannelMutation {
 	return _u.mutation
@@ -420,6 +476,33 @@ func (_u *ChannelUpdate) RemoveChannelProbes(v ...*ChannelProbe) *ChannelUpdate 
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChannelProbeIDs(ids...)
+}
+
+// ClearChannelModelPrices clears all "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdate) ClearChannelModelPrices() *ChannelUpdate {
+	_u.mutation.ClearChannelModelPrices()
+	return _u
+}
+
+// RemoveChannelModelPriceIDs removes the "channel_model_prices" edge to ChannelModelPrice entities by IDs.
+func (_u *ChannelUpdate) RemoveChannelModelPriceIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.RemoveChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// RemoveChannelModelPrices removes "channel_model_prices" edges to ChannelModelPrice entities.
+func (_u *ChannelUpdate) RemoveChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelModelPriceIDs(ids...)
+}
+
+// ClearProviderQuotaStatus clears the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdate) ClearProviderQuotaStatus() *ChannelUpdate {
+	_u.mutation.ClearProviderQuotaStatus()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -540,6 +623,12 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.DefaultTestModel(); ok {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+	}
+	if _u.mutation.PoliciesCleared() {
+		_spec.ClearField(channel.FieldPolicies, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
@@ -767,6 +856,80 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedChannelModelPricesIDs(); len(nodes) > 0 && !_u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderQuotaStatusCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -935,6 +1098,26 @@ func (_u *ChannelUpdateOne) SetNillableDefaultTestModel(v *string) *ChannelUpdat
 	return _u
 }
 
+// SetPolicies sets the "policies" field.
+func (_u *ChannelUpdateOne) SetPolicies(v objects.ChannelPolicies) *ChannelUpdateOne {
+	_u.mutation.SetPolicies(v)
+	return _u
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetPolicies(*v)
+	}
+	return _u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (_u *ChannelUpdateOne) ClearPolicies() *ChannelUpdateOne {
+	_u.mutation.ClearPolicies()
+	return _u
+}
+
 // SetSettings sets the "settings" field.
 func (_u *ChannelUpdateOne) SetSettings(v *objects.ChannelSettings) *ChannelUpdateOne {
 	_u.mutation.SetSettings(v)
@@ -1087,6 +1270,40 @@ func (_u *ChannelUpdateOne) AddChannelProbes(v ...*ChannelProbe) *ChannelUpdateO
 	return _u.AddChannelProbeIDs(ids...)
 }
 
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_u *ChannelUpdateOne) AddChannelModelPriceIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.AddChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdateOne) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_u *ChannelUpdateOne) SetProviderQuotaStatusID(id int) *ChannelUpdateOne {
+	_u.mutation.SetProviderQuotaStatusID(id)
+	return _u
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableProviderQuotaStatusID(id *int) *ChannelUpdateOne {
+	if id != nil {
+		_u = _u.SetProviderQuotaStatusID(*id)
+	}
+	return _u
+}
+
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdateOne) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelUpdateOne {
+	return _u.SetProviderQuotaStatusID(v.ID)
+}
+
 // Mutation returns the ChannelMutation object of the builder.
 func (_u *ChannelUpdateOne) Mutation() *ChannelMutation {
 	return _u.mutation
@@ -1180,6 +1397,33 @@ func (_u *ChannelUpdateOne) RemoveChannelProbes(v ...*ChannelProbe) *ChannelUpda
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveChannelProbeIDs(ids...)
+}
+
+// ClearChannelModelPrices clears all "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdateOne) ClearChannelModelPrices() *ChannelUpdateOne {
+	_u.mutation.ClearChannelModelPrices()
+	return _u
+}
+
+// RemoveChannelModelPriceIDs removes the "channel_model_prices" edge to ChannelModelPrice entities by IDs.
+func (_u *ChannelUpdateOne) RemoveChannelModelPriceIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.RemoveChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// RemoveChannelModelPrices removes "channel_model_prices" edges to ChannelModelPrice entities.
+func (_u *ChannelUpdateOne) RemoveChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelModelPriceIDs(ids...)
+}
+
+// ClearProviderQuotaStatus clears the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdateOne) ClearProviderQuotaStatus() *ChannelUpdateOne {
+	_u.mutation.ClearProviderQuotaStatus()
+	return _u
 }
 
 // Where appends a list predicates to the ChannelUpdate builder.
@@ -1330,6 +1574,12 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 	}
 	if value, ok := _u.mutation.DefaultTestModel(); ok {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+	}
+	if _u.mutation.PoliciesCleared() {
+		_spec.ClearField(channel.FieldPolicies, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
@@ -1557,6 +1807,80 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedChannelModelPricesIDs(); len(nodes) > 0 && !_u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderQuotaStatusCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

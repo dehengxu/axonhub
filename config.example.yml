@@ -3,6 +3,7 @@
 
 # Server configuration
 server:
+  host: "0.0.0.0"               # Server host (env: AXONHUB_SERVER_HOST)
   port: 8090                    # Server port (env: AXONHUB_SERVER_PORT)
   name: "AxonHub"               # Server name (env: AXONHUB_SERVER_NAME)
   base_path: ""                 # Base path for API routes (env: AXONHUB_SERVER_BASE_PATH)
@@ -14,6 +15,7 @@ server:
     extra_trace_headers: [] # Extra trace headers (env: AXONHUB_SERVER_TRACE_EXTRA_TRACE_HEADERS)
     extra_trace_body_fields: [] # Extra trace body fields (env: AXONHUB_SERVER_TRACE_EXTRA_TRACE_BODY_FIELDS)
     claude_code_trace_enabled: false # Enable extracting trace IDs from Claude Code request metadata (env: AXONHUB_SERVER_TRACE_CLAUDE_CODE_TRACE_ENABLED)
+    codex_trace_enabled: false # Enable extracting trace IDs from Codex Session_id header (env: AXONHUB_SERVER_TRACE_CODEX_TRACE_ENABLED)
   debug: false                  # Enable debug mode (env: AXONHUB_SERVER_DEBUG)
   cors:
     enabled: true               # Enable CORS middleware (env: AXONHUB_SERVER_CORS_ENABLED)
@@ -117,6 +119,13 @@ gc:
                                  # "0 2 * * *"     - Daily at 2:00 AM
                                  # "0 3 * * 0"     - Weekly on Sunday at 3:00 AM
                                  # "0 4 1 * *"     - Monthly on 1st day at 4:00 AM
+
+# Provider Quota configuration
+provider_quota:
+  check_interval: "20m"          # Interval for checking provider quota status (env: AXONHUB_PROVIDER_QUOTA_CHECK_INTERVAL)
+                                 # Supported values: 1m, 2m, 3m, 4m, 5m, 6m, 10m, 12m, 15m, 20m, 30m, 1h, 2h, etc.
+                                 # Default: 20m
+                                 # Longer intervals reduce API calls but show less fresh quota data
 
 # Environment Variable Examples:
 # export AXONHUB_SERVER_PORT=8080

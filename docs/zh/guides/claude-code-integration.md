@@ -20,11 +20,13 @@ AxonHub 可以作为 Anthropic 接口的直接替代方案，使 Claude Code 能
    ```bash
    export ANTHROPIC_AUTH_TOKEN="<your-axonhub-api-key>"
    export ANTHROPIC_BASE_URL="http://localhost:8090/anthropic"
+   # 或者使用根路径：
+   # export ANTHROPIC_BASE_URL="http://localhost:8090"
    ```
 2. 启动 Claude Code，程序会自动读取上述变量并将所有 Anthropic 请求代理到 AxonHub。
 3. （可选）触发一次对话并在 AxonHub 的 Traces 页面确认流量已成功记录。
 
-#### Trace 聚合（可选）
+#### Trace 聚合（重要）
 若希望将 Claude Code 同一次会话的请求聚合到同一条 Trace，可在 `config.yml` 中开启：
 
 ```yaml
@@ -32,6 +34,8 @@ server:
   trace:
     claude_code_trace_enabled: true
 ```
+
+**提示**：开启此功能后，AxonHub 会将同一个 Trace 的请求优先转发到同一个上游渠道，从而大幅提高提供商端的缓存命中率（例如 Anthropic 的 Prompt Caching）。
 
 #### 提示
 - 请务必保密 API Key，可写入 shell profile 或使用密钥管理工具。
@@ -99,7 +103,7 @@ AxonHub 还可以将您的 Claude Code 订阅作为后端提供商，允许非 C
 2. 创建新渠道并进行以下配置：
    - **类型（Type）**：`claude-code`
    - **名称（Name）**：描述性名称（例如 "Claude Code Provider"）
-   - **基础 URL（Base URL）**：此字段将被覆盖为标准 Claude Code 基础 URL
+   - **基础 URL（Base URL）**：默认是 `https://api.anthropic.com/v1`。你也可以填反向代理或兼容网关的地址；AxonHub 会将请求发送到 `{baseURL}/messages`（或当 baseURL 以 `/v1` 结尾时发送到 `{baseURL}/messages`，否则发送到 `{baseURL}/v1/messages`）。
    - **API 密钥（API Key）**：从 `claude setup-token` 获取的令牌（以 `sk-ant` 开头）
    - **支持的模型（Supported Models）**：添加您想要公开的 Claude 模型：
      - `claude-haiku-4-5`
@@ -121,9 +125,9 @@ AxonHub 还可以将您的 Claude Code 订阅作为后端提供商，允许非 C
 
 ### 常见问题
 
-- **渠道测试失败**：确保 Claude Code 服务器正在运行并且可以在配置的基础 URL 访问
+- **渠道测试失败**：确认配置的基础 URL 可访问，且该地址兼容 Anthropic Messages API
 - **身份验证错误**：验证从 `claude setup-token` 获取的令牌正确且未过期
-- **网络问题**：如果使用远程 Claude Code 实例，检查防火墙规则和网络连接
+- **网络问题**：如果使用远程网关/代理，检查防火墙规则和网络连接
 - **模型不可用**：确认请求的模型已列在渠道的 `supported_models` 中
 
 ---

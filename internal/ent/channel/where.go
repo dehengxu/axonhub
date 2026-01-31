@@ -490,6 +490,16 @@ func DefaultTestModelContainsFold(v string) predicate.Channel {
 	return predicate.Channel(sql.FieldContainsFold(FieldDefaultTestModel, v))
 }
 
+// PoliciesIsNil applies the IsNil predicate on the "policies" field.
+func PoliciesIsNil() predicate.Channel {
+	return predicate.Channel(sql.FieldIsNull(FieldPolicies))
+}
+
+// PoliciesNotNil applies the NotNil predicate on the "policies" field.
+func PoliciesNotNil() predicate.Channel {
+	return predicate.Channel(sql.FieldNotNull(FieldPolicies))
+}
+
 // SettingsIsNil applies the IsNil predicate on the "settings" field.
 func SettingsIsNil() predicate.Channel {
 	return predicate.Channel(sql.FieldIsNull(FieldSettings))
@@ -797,6 +807,52 @@ func HasChannelProbes() predicate.Channel {
 func HasChannelProbesWith(preds ...predicate.ChannelProbe) predicate.Channel {
 	return predicate.Channel(func(s *sql.Selector) {
 		step := newChannelProbesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasChannelModelPrices applies the HasEdge predicate on the "channel_model_prices" edge.
+func HasChannelModelPrices() predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ChannelModelPricesTable, ChannelModelPricesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasChannelModelPricesWith applies the HasEdge predicate on the "channel_model_prices" edge with a given conditions (other predicates).
+func HasChannelModelPricesWith(preds ...predicate.ChannelModelPrice) predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := newChannelModelPricesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasProviderQuotaStatus applies the HasEdge predicate on the "provider_quota_status" edge.
+func HasProviderQuotaStatus() predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ProviderQuotaStatusTable, ProviderQuotaStatusColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasProviderQuotaStatusWith applies the HasEdge predicate on the "provider_quota_status" edge with a given conditions (other predicates).
+func HasProviderQuotaStatusWith(preds ...predicate.ProviderQuotaStatus) predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := newProviderQuotaStatusStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

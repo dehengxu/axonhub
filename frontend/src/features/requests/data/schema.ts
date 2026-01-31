@@ -63,15 +63,6 @@ export const requestSchema = z.object({
   status: requestStatusSchema,
   clientIP: z.string().nullable().optional(),
   stream: z.boolean().nullable(),
-  usageLogs: z
-    .object({
-      edges: z.array(
-        z.object({
-          node: usageLogSchema,
-        })
-      ),
-    })
-    .optional(),
   metricsLatencyMs: z.number().nullable().optional(),
   metricsFirstTokenLatencyMs: z.number().nullable().optional(),
   executions: z

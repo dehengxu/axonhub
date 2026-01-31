@@ -41,6 +41,9 @@ type Channel struct {
 	// HTTPClient is the custom HTTP client for this channel with proxy support
 	HTTPClient *httpclient.HttpClient
 
+	startTokenProvider func()
+	stopTokenProvider  func()
+
 	// cachedOverrideParams stores the parsed override parameters to avoid repeated JSON parsing
 	cachedOverrideParams map[string]any
 
@@ -50,6 +53,10 @@ type Channel struct {
 	// cachedModelEntries caches GetModelEntries results
 	// RequestModel -> Entry
 	cachedModelEntries map[string]ChannelModelEntry
+
+	// cachedModelPrices caches model prices per request model id
+	// RequestModel -> ChannelModelPrice entity (contains Price and ReferenceID)
+	cachedModelPrices map[string]*ent.ChannelModelPrice
 }
 
 type ChannelServiceParams struct {
@@ -195,12 +202,28 @@ func (svc *ChannelService) loadChannels(ctx context.Context) error {
 			)
 		}
 
+		// Preload model prices
+		svc.preloadModelPrices(ctx, channel)
+
 		channels = append(channels, channel)
 	}
 
 	log.Info(ctx, "loaded channels", log.Int("count", len(channels)))
 
+	for _, ch := range channels {
+		if ch != nil && ch.startTokenProvider != nil {
+			ch.startTokenProvider()
+		}
+	}
+
+	old := svc.enabledChannels
 	svc.enabledChannels = channels
+
+	for _, ch := range old {
+		if ch != nil && ch.stopTokenProvider != nil {
+			ch.stopTokenProvider()
+		}
+	}
 
 	return nil
 }
@@ -215,9 +238,20 @@ func (svc *ChannelService) GetEnabledChannels() []*Channel {
 	return svc.enabledChannels
 }
 
-// GetChannelForTest retrieves a specific channel by ID for testing purposes,
+// GetEnabledChannel returns the enabled channel by id, or nil if not found.
+func (svc *ChannelService) GetEnabledChannel(id int) *Channel {
+	for _, ch := range svc.enabledChannels {
+		if ch.ID == id {
+			return ch
+		}
+	}
+
+	return nil
+}
+
+// GetChannel retrieves a specific channel by ID for testing purposes,
 // including disabled channels. This bypasses the normal enabled-only filtering.
-func (svc *ChannelService) GetChannelForTest(ctx context.Context, channelID int) (*Channel, error) {
+func (svc *ChannelService) GetChannel(ctx context.Context, channelID int) (*Channel, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
 	// Get the channel entity from database (including disabled ones)
@@ -420,6 +454,10 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 		}
 
 		mut.SetSettings(input.Settings)
+	}
+
+	if input.Policies != nil {
+		mut.SetPolicies(*input.Policies)
 	}
 
 	if input.Credentials != nil {

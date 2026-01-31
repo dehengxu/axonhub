@@ -20,11 +20,13 @@ AxonHub can act as a drop-in replacement for Anthropic endpoints, letting Claude
    ```bash
    export ANTHROPIC_AUTH_TOKEN="<your-axonhub-api-key>"
    export ANTHROPIC_BASE_URL="http://localhost:8090/anthropic"
+   # Or using the root path:
+   # export ANTHROPIC_BASE_URL="http://localhost:8090"
    ```
 2. Launch Claude Code. It will read the environment variables and route all Anthropic requests through AxonHub.
 3. (Optional) Confirm the integration by triggering a chat completion and checking AxonHub traces.
 
-#### Trace aggregation (optional)
+#### Trace aggregation (important)
 To aggregate requests from the same Claude Code session into a single trace, enable the following in `config.yml`:
 
 ```yaml
@@ -32,6 +34,8 @@ server:
   trace:
     claude_code_trace_enabled: true
 ```
+
+**Note**: Enabling this also ensures that requests from the same trace are prioritized to be sent to the same upstream channel, significantly improving provider-side cache hit rates (e.g., Anthropic Prompt Caching).
 
 #### Tips
 - Keep your API key secret; store it in a shell profile or secret manager.
@@ -99,7 +103,7 @@ To configure Claude Code as a provider channel, you need a long-lived authentica
 2. Create a new channel with the following configuration:
    - **Type**: `claude-code`
    - **Name**: A descriptive name (e.g., "Claude Code Provider")
-   - **Base URL**: This field will be overridden to the standard Claude Code base URL
+   - **Base URL**: Defaults to `https://api.anthropic.com/v1`. You can point this to a reverse proxy or compatible gateway; AxonHub will send requests to `{baseURL}/messages` (or `{baseURL}/v1/messages` depending on whether your base URL ends with `/v1`).
    - **API Key**: The token from `claude setup-token` (starts with `sk-ant`)
    - **Supported Models**: Add the Claude models you want to expose:
      - `claude-haiku-4-5`
@@ -121,10 +125,63 @@ To configure Claude Code as a provider channel, you need a long-lived authentica
 
 ### Troubleshooting
 
-- **Channel test fails**: Ensure Claude Code server is running and accessible at the configured base URL
+- **Channel test fails**: Verify the configured base URL is reachable and the endpoint is compatible with Anthropic Messages API
 - **Authentication errors**: Verify the token from `claude setup-token` is correct and hasn't expired
-- **Network issues**: If using a remote Claude Code instance, check firewall rules and network connectivity
+- **Network issues**: If using a remote gateway/proxy, check firewall rules and network connectivity
 - **Model not available**: Confirm the requested model is listed in the channel's `supported_models`
+
+---
+
+## Provider Quota Tracking
+
+AxonHub automatically tracks quota usage for Claude Code provider channels, displaying the current status with battery icons in the interface.
+
+### How It Works
+
+- **Automatic Polling**: AxonHub periodically polls your Claude Code account to check quota status
+- **Storage**: Quota data is stored in the database and updated based on the configured check interval
+- **Visual Indicators**: Battery icons show your remaining quota at a glance.
+
+### Quota Buckets
+
+Claude Code uses two quota windows:
+- **5-hour window**: Usage limits over a 5-minute rolling period
+- **7-day window**: Usage limits over a 7-day rolling period
+
+The system shows both bucket percentages and indicates which bucket is currently limiting your access.
+
+### Configuration
+
+Adjust the quota check interval in `config.yml`:
+
+```yaml
+provider_quota:
+  check_interval: "20m"          # Check every 20 minutes (default)
+```
+
+Or via environment variable:
+
+```bash
+export AXONHUB_PROVIDER_QUOTA_CHECK_INTERVAL="30m"
+```
+
+Supported intervals: `1m`, `2m`, `3m`, `4m`, `5m`, `6m`, `10m`, `12m`, `15m`, `20m`, `30m`, `1h`, `2h`, etc.
+
+**Recommendations:**
+- **Development**: Use shorter intervals (e.g., `5m`) for quick feedback
+- **Production**: Use `20m` or longer to reduce API calls
+
+### Refreshing Quota Data
+
+You can manually trigger a quota refresh by clicking the refresh icon in the quota status popover.
+
+### Viewing Quota Status
+
+1. Look for the battery icon next to the settings gear in the header
+2. Click the battery icon to view detailed quota information including:
+   - 5-hour and 7-day window usage percentages
+   - Which quota bucket is currently limiting access
+   - Time until the quota window resets
 
 ---
 

@@ -22,6 +22,9 @@ import {
   Jina,
   DeepInfra,
   Github,
+  AiHubMix,
+  Cerebras,
+  Claude,
 } from '@lobehub/icons';
 import { CHANNEL_CONFIGS } from './config_channels';
 import { ApiFormat, ChannelType } from './schema';
@@ -51,7 +54,6 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-blue-100 text-blue-800 border-blue-200',
     channelTypes: ['deepseek', 'deepseek_anthropic'],
   },
-
   gemini: {
     provider: 'gemini',
     icon: Google,
@@ -62,7 +64,7 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'anthropic',
     icon: Anthropic,
     color: 'bg-orange-100 text-orange-800 border-orange-200',
-    channelTypes: ['anthropic', 'anthropic_aws', 'anthropic_gcp', 'claudecode'],
+    channelTypes: ['anthropic', 'anthropic_aws', 'anthropic_gcp'],
   },
   moonshot: {
     provider: 'moonshot',
@@ -76,6 +78,24 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-purple-100 text-purple-800 border-purple-200',
     channelTypes: ['zhipu', 'zhipu_anthropic'],
   },
+  minimax: {
+    provider: 'minimax',
+    icon: Minimax,
+    color: 'bg-red-100 text-red-800 border-red-200',
+    channelTypes: ['minimax', 'minimax_anthropic'],
+  },
+  claudecode: {
+    provider: 'claudecode',
+    icon: Claude,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['claudecode'],
+  },
+  codex: {
+    provider: 'codex',
+    icon: OpenAI,
+    color: 'bg-[#32746D] text-white border-[#32746D]',
+    channelTypes: ['codex'],
+  },
   zai: {
     provider: 'zai',
     icon: ZAI,
@@ -88,17 +108,17 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-blue-100 text-blue-800 border-blue-200',
     channelTypes: ['doubao', 'doubao_anthropic'],
   },
-  minimax: {
-    provider: 'minimax',
-    icon: Minimax,
-    color: 'bg-red-100 text-red-800 border-red-200',
-    channelTypes: ['minimax', 'minimax_anthropic'],
-  },
   longcat: {
     provider: 'longcat',
     icon: LongCat,
     color: 'bg-green-100 text-green-800 border-green-200',
     channelTypes: ['longcat', 'longcat_anthropic'],
+  },
+  jina: {
+    provider: 'jina',
+    icon: Jina,
+    color: 'bg-purple-100 text-purple-800 border-purple-200',
+    channelTypes: ['jina'],
   },
   xai: {
     provider: 'xai',
@@ -106,23 +126,17 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-black-100 text-black-800 border-black-200',
     channelTypes: ['xai'],
   },
-  openrouter: {
-    provider: 'openrouter',
-    icon: OpenRouter,
+  burncloud: {
+    provider: 'burncloud',
+    icon: BurnCloud,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['burncloud'],
+  },
+  github: {
+    provider: 'github',
+    icon: Github,
     color: 'bg-gray-100 text-gray-800 border-gray-200',
-    channelTypes: ['openrouter'],
-  },
-  vercel: {
-    provider: 'vercel',
-    icon: Vercel,
-    color: 'bg-black-100 text-black-800 border-black-200',
-    channelTypes: ['vercel'],
-  },
-  deepinfra: {
-    provider: 'deepinfra',
-    icon: DeepInfra,
-    color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-    channelTypes: ['deepinfra'],
+    channelTypes: ['github'],
   },
   ppio: {
     provider: 'ppio',
@@ -144,15 +158,9 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   },
   aihubmix: {
     provider: 'aihubmix',
-    icon: OpenAI,
+    icon: AiHubMix,
     color: 'bg-blue-100 text-blue-800 border-blue-200',
     channelTypes: ['aihubmix'],
-  },
-  burncloud: {
-    provider: 'burncloud',
-    icon: BurnCloud,
-    color: 'bg-orange-100 text-orange-800 border-orange-200',
-    channelTypes: ['burncloud'],
   },
   modelscope: {
     provider: 'modelscope',
@@ -166,17 +174,29 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-green-100 text-green-800 border-green-200',
     channelTypes: ['bailian'],
   },
-  jina: {
-    provider: 'jina',
-    icon: Jina,
-    color: 'bg-purple-100 text-purple-800 border-purple-200',
-    channelTypes: ['jina'],
-  },
-  github: {
-    provider: 'github',
-    icon: Github,
+  openrouter: {
+    provider: 'openrouter',
+    icon: OpenRouter,
     color: 'bg-gray-100 text-gray-800 border-gray-200',
-    channelTypes: ['github'],
+    channelTypes: ['openrouter'],
+  },
+  vercel: {
+    provider: 'vercel',
+    icon: Vercel,
+    color: 'bg-black-100 text-black-800 border-black-200',
+    channelTypes: ['vercel'],
+  },
+  deepinfra: {
+    provider: 'deepinfra',
+    icon: DeepInfra,
+    color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    channelTypes: ['deepinfra'],
+  },
+  cerebras: {
+    provider: 'cerebras',
+    icon: Cerebras,
+    color: 'bg-[#F15928] text-white border-[#F15928]',
+    channelTypes: ['cerebras'],
   },
 };
 

@@ -12,8 +12,10 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -148,6 +150,20 @@ func (_c *ChannelCreate) SetDefaultTestModel(v string) *ChannelCreate {
 	return _c
 }
 
+// SetPolicies sets the "policies" field.
+func (_c *ChannelCreate) SetPolicies(v objects.ChannelPolicies) *ChannelCreate {
+	_c.mutation.SetPolicies(v)
+	return _c
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_c *ChannelCreate) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelCreate {
+	if v != nil {
+		_c.SetPolicies(*v)
+	}
+	return _c
+}
+
 // SetSettings sets the "settings" field.
 func (_c *ChannelCreate) SetSettings(v *objects.ChannelSettings) *ChannelCreate {
 	_c.mutation.SetSettings(v)
@@ -275,6 +291,40 @@ func (_c *ChannelCreate) AddChannelProbes(v ...*ChannelProbe) *ChannelCreate {
 	return _c.AddChannelProbeIDs(ids...)
 }
 
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_c *ChannelCreate) AddChannelModelPriceIDs(ids ...int) *ChannelCreate {
+	_c.mutation.AddChannelModelPriceIDs(ids...)
+	return _c
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_c *ChannelCreate) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_c *ChannelCreate) SetProviderQuotaStatusID(id int) *ChannelCreate {
+	_c.mutation.SetProviderQuotaStatusID(id)
+	return _c
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_c *ChannelCreate) SetNillableProviderQuotaStatusID(id *int) *ChannelCreate {
+	if id != nil {
+		_c = _c.SetProviderQuotaStatusID(*id)
+	}
+	return _c
+}
+
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_c *ChannelCreate) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelCreate {
+	return _c.SetProviderQuotaStatusID(v.ID)
+}
+
 // Mutation returns the ChannelMutation object of the builder.
 func (_c *ChannelCreate) Mutation() *ChannelMutation {
 	return _c.mutation
@@ -345,6 +395,10 @@ func (_c *ChannelCreate) defaults() error {
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := channel.DefaultTags
 		_c.mutation.SetTags(v)
+	}
+	if _, ok := _c.mutation.Policies(); !ok {
+		v := channel.DefaultPolicies
+		_c.mutation.SetPolicies(v)
 	}
 	if _, ok := _c.mutation.Settings(); !ok {
 		v := channel.DefaultSettings
@@ -477,6 +531,10 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
 		_node.DefaultTestModel = value
 	}
+	if value, ok := _c.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+		_node.Policies = value
+	}
 	if value, ok := _c.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
 		_node.Settings = value
@@ -566,6 +624,38 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -760,6 +850,24 @@ func (u *ChannelUpsert) SetDefaultTestModel(v string) *ChannelUpsert {
 // UpdateDefaultTestModel sets the "default_test_model" field to the value that was provided on create.
 func (u *ChannelUpsert) UpdateDefaultTestModel() *ChannelUpsert {
 	u.SetExcluded(channel.FieldDefaultTestModel)
+	return u
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsert) SetPolicies(v objects.ChannelPolicies) *ChannelUpsert {
+	u.Set(channel.FieldPolicies, v)
+	return u
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdatePolicies() *ChannelUpsert {
+	u.SetExcluded(channel.FieldPolicies)
+	return u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsert) ClearPolicies() *ChannelUpsert {
+	u.SetNull(channel.FieldPolicies)
 	return u
 }
 
@@ -1041,6 +1149,27 @@ func (u *ChannelUpsertOne) SetDefaultTestModel(v string) *ChannelUpsertOne {
 func (u *ChannelUpsertOne) UpdateDefaultTestModel() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDefaultTestModel()
+	})
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsertOne) SetPolicies(v objects.ChannelPolicies) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetPolicies(v)
+	})
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdatePolicies() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdatePolicies()
+	})
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsertOne) ClearPolicies() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearPolicies()
 	})
 }
 
@@ -1500,6 +1629,27 @@ func (u *ChannelUpsertBulk) SetDefaultTestModel(v string) *ChannelUpsertBulk {
 func (u *ChannelUpsertBulk) UpdateDefaultTestModel() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDefaultTestModel()
+	})
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsertBulk) SetPolicies(v objects.ChannelPolicies) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetPolicies(v)
+	})
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdatePolicies() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdatePolicies()
+	})
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsertBulk) ClearPolicies() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearPolicies()
 	})
 }
 

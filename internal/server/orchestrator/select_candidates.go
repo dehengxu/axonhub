@@ -18,7 +18,7 @@ import (
 func selectCandidates(inbound *PersistentInboundTransformer) pipeline.Middleware {
 	return pipeline.OnLlmRequest("select-candidates", func(ctx context.Context, llmRequest *llm.Request) (*llm.Request, error) {
 		// Only select candidates once
-		if len(inbound.state.ChannelModelCandidates) > 0 {
+		if len(inbound.state.ChannelModelsCandidates) > 0 {
 			return llmRequest, nil
 		}
 
@@ -46,6 +46,8 @@ func selectCandidates(inbound *PersistentInboundTransformer) pipeline.Middleware
 		// 都需要优先路由到支持 Anthropic 原生工具的渠道
 		selector = WithAnthropicNativeToolsSelector(selector)
 
+		selector = WithStreamPolicySelector(selector)
+
 		if inbound.state.LoadBalancer != nil {
 			selector = WithLoadBalancedSelector(selector, inbound.state.LoadBalancer, inbound.state.RetryPolicyProvider)
 		}
@@ -59,13 +61,18 @@ func selectCandidates(inbound *PersistentInboundTransformer) pipeline.Middleware
 			log.Debug(ctx, "selected candidates",
 				log.Int("candidate_count", len(candidates)),
 				log.String("model", llmRequest.Model),
-				log.Any("candidates", lo.Map(candidates, func(candidate *ChannelModelCandidate, _ int) map[string]any {
+				log.Any("candidates", lo.Map(candidates, func(candidate *ChannelModelsCandidate, _ int) map[string]any {
 					return map[string]any{
-						"channel_name":  candidate.Channel.Name,
-						"channel_id":    candidate.Channel.ID,
-						"request_model": candidate.RequestModel,
-						"actual_model":  candidate.ActualModel,
-						"priority":      candidate.Priority,
+						"channel_name": candidate.Channel.Name,
+						"channel_id":   candidate.Channel.ID,
+						"priority":     candidate.Priority,
+						"models": lo.Map(candidate.Models, func(entry biz.ChannelModelEntry, _ int) map[string]any {
+							return map[string]any{
+								"request_model": entry.RequestModel,
+								"actual_model":  entry.ActualModel,
+								"source":        entry.Source,
+							}
+						}),
 					}
 				})),
 			)
@@ -76,7 +83,7 @@ func selectCandidates(inbound *PersistentInboundTransformer) pipeline.Middleware
 		}
 
 		// Store candidates directly (no need to extract channels)
-		inbound.state.ChannelModelCandidates = candidates
+		inbound.state.ChannelModelsCandidates = candidates
 
 		return llmRequest, nil
 	})

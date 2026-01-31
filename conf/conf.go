@@ -25,12 +25,17 @@ import (
 type Config struct {
 	fx.Out `yaml:"-" json:"-"`
 
-	DB        db.Config      `conf:"db" yaml:"db" json:"db"`
-	Log       log.Config     `conf:"log" yaml:"log" json:"log"`
-	APIServer server.Config  `conf:"server" yaml:"server" json:"server"`
-	Metrics   metrics.Config `conf:"metrics" yaml:"metrics" json:"metrics"`
-	GC        gc.Config      `conf:"gc" yaml:"gc" json:"gc"`
-	Cache     xcache.Config  `conf:"cache" yaml:"cache" json:"cache"`
+	DB            db.Config           `conf:"db" yaml:"db" json:"db"`
+	Log           log.Config          `conf:"log" yaml:"log" json:"log"`
+	APIServer     server.Config       `conf:"server" yaml:"server" json:"server"`
+	Metrics       metrics.Config      `conf:"metrics" yaml:"metrics" json:"metrics"`
+	GC            gc.Config           `conf:"gc" yaml:"gc" json:"gc"`
+	Cache         xcache.Config       `conf:"cache" yaml:"cache" json:"cache"`
+	ProviderQuota providerQuotaConfig `conf:"provider_quota" yaml:"provider_quota" json:"provider_quota"`
+}
+
+type providerQuotaConfig struct {
+	CheckInterval time.Duration `conf:"check_interval" yaml:"check_interval" json:"check_interval"`
 }
 
 // Load loads configuration from YAML file and environment variables.
@@ -108,6 +113,9 @@ func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data any) 
 
 		return u, nil
 	case dstType == _TypeDuration:
+		if strings.TrimSpace(str) == "" {
+			return time.Duration(0), nil
+		}
 		return time.ParseDuration(str)
 	default:
 		return data, nil
@@ -117,6 +125,7 @@ func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data any) 
 // setDefaults sets default configuration values.
 func setDefaults(v *viper.Viper) {
 	// Server defaults
+	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 8090)
 	v.SetDefault("server.name", "AxonHub")
 	v.SetDefault("server.base_path", "")
@@ -127,6 +136,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.trace.extra_trace_headers", []string{})
 	v.SetDefault("server.trace.extra_trace_body_fields", []string{})
 	v.SetDefault("server.trace.claude_code_trace_enabled", false)
+	v.SetDefault("server.trace.codex_trace_enabled", false)
 	v.SetDefault("server.debug", false)
 
 	// CORS defaults
@@ -169,6 +179,9 @@ func setDefaults(v *viper.Viper) {
 
 	// GC defaults
 	v.SetDefault("gc.cron", "0 2 * * *") // Daily at 2:00 AM
+
+	// Provider quota defaults
+	v.SetDefault("provider_quota.check_interval", "20m") // Check every 20 minutes
 
 	// Cache defaults
 	v.SetDefault("cache.mode", "memory")

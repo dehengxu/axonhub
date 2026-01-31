@@ -16,6 +16,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
 	"github.com/looplj/axonhub/internal/ent/channelperformance"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
@@ -23,6 +25,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -51,6 +54,16 @@ var channelImplementors = []string{"Channel", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*Channel) IsNode() {}
+
+var channelmodelpriceImplementors = []string{"ChannelModelPrice", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ChannelModelPrice) IsNode() {}
+
+var channelmodelpriceversionImplementors = []string{"ChannelModelPriceVersion", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ChannelModelPriceVersion) IsNode() {}
 
 var channeloverridetemplateImplementors = []string{"ChannelOverrideTemplate", "Node"}
 
@@ -86,6 +99,11 @@ var promptImplementors = []string{"Prompt", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*Prompt) IsNode() {}
+
+var providerquotastatusImplementors = []string{"ProviderQuotaStatus", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ProviderQuotaStatus) IsNode() {}
 
 var requestImplementors = []string{"Request", "Node"}
 
@@ -213,6 +231,24 @@ func (c *Client) noder(ctx context.Context, table string, id int) (Noder, error)
 			}
 		}
 		return query.Only(ctx)
+	case channelmodelprice.Table:
+		query := c.ChannelModelPrice.Query().
+			Where(channelmodelprice.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelmodelpriceImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case channelmodelpriceversion.Table:
+		query := c.ChannelModelPriceVersion.Query().
+			Where(channelmodelpriceversion.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelmodelpriceversionImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
 	case channeloverridetemplate.Table:
 		query := c.ChannelOverrideTemplate.Query().
 			Where(channeloverridetemplate.ID(id))
@@ -272,6 +308,15 @@ func (c *Client) noder(ctx context.Context, table string, id int) (Noder, error)
 			Where(prompt.ID(id))
 		if fc := graphql.GetFieldContext(ctx); fc != nil {
 			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, promptImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case providerquotastatus.Table:
+		query := c.ProviderQuotaStatus.Query().
+			Where(providerquotastatus.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, providerquotastatusImplementors...); err != nil {
 				return nil, err
 			}
 		}
@@ -471,6 +516,38 @@ func (c *Client) noders(ctx context.Context, table string, ids []int) ([]Noder, 
 				*noder = node
 			}
 		}
+	case channelmodelprice.Table:
+		query := c.ChannelModelPrice.Query().
+			Where(channelmodelprice.IDIn(ids...))
+		query, err := query.CollectFields(ctx, channelmodelpriceImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case channelmodelpriceversion.Table:
+		query := c.ChannelModelPriceVersion.Query().
+			Where(channelmodelpriceversion.IDIn(ids...))
+		query, err := query.CollectFields(ctx, channelmodelpriceversionImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
 	case channeloverridetemplate.Table:
 		query := c.ChannelOverrideTemplate.Query().
 			Where(channeloverridetemplate.IDIn(ids...))
@@ -571,6 +648,22 @@ func (c *Client) noders(ctx context.Context, table string, ids []int) ([]Noder, 
 		query := c.Prompt.Query().
 			Where(prompt.IDIn(ids...))
 		query, err := query.CollectFields(ctx, promptImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case providerquotastatus.Table:
+		query := c.ProviderQuotaStatus.Query().
+			Where(providerquotastatus.IDIn(ids...))
+		query, err := query.CollectFields(ctx, providerquotastatusImplementors...)
 		if err != nil {
 			return nil, err
 		}

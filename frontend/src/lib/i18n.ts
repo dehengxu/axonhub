@@ -59,6 +59,17 @@ i18n
 
     interpolation: {
       escapeValue: false, // React 已经默认转义了
+      format: (value, format, lng, options) => {
+        if (format === 'currency') {
+          return new Intl.NumberFormat(options?.locale || lng, {
+            style: 'currency',
+            currency: options?.currency || 'USD',
+             currencyDisplay: 'narrowSymbol',
+            ...options,
+          }).format(value);
+        }
+        return value;
+      },
     },
 
     detection: {

@@ -95,7 +95,8 @@ function PromptsContent() {
       setNameFilter(filter);
       resetCursor();
     },
-    [resetCursor, setNameFilter]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setNameFilter]
   );
 
   const canWrite = hasScope('write_prompts');
@@ -150,16 +151,17 @@ export default function PromptsManagement() {
 
   return (
     <PromptsProvider>
-      <Header fixed />
-
-      <Main fixed>
-        <div className='mb-2 flex flex-wrap items-center justify-between space-y-2'>
+      <Header fixed>
+        <div className='flex flex-1 items-center justify-between'>
           <div>
-            <h2 className='text-2xl font-bold tracking-tight'>{t('prompts.title')}</h2>
-            <p className='text-muted-foreground'>{t('prompts.description')}</p>
+            <h2 className='text-xl font-bold tracking-tight'>{t('prompts.title')}</h2>
+            <p className='text-sm text-muted-foreground'>{t('prompts.description')}</p>
           </div>
           <ActionButtons />
         </div>
+      </Header>
+
+      <Main fixed>
         <PromptsContent />
       </Main>
       <PromptsDialogs />

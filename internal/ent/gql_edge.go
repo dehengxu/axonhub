@@ -128,6 +128,54 @@ func (_m *Channel) ChannelProbes(ctx context.Context) (result []*ChannelProbe, e
 	return result, err
 }
 
+func (_m *Channel) ChannelModelPrices(ctx context.Context) (result []*ChannelModelPrice, err error) {
+	if fc := graphql.GetFieldContext(ctx); fc != nil && fc.Field.Alias != "" {
+		result, err = _m.NamedChannelModelPrices(graphql.GetFieldContext(ctx).Field.Alias)
+	} else {
+		result, err = _m.Edges.ChannelModelPricesOrErr()
+	}
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannelModelPrices().All(ctx)
+	}
+	return result, err
+}
+
+func (_m *Channel) ProviderQuotaStatus(ctx context.Context) (*ProviderQuotaStatus, error) {
+	result, err := _m.Edges.ProviderQuotaStatusOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryProviderQuotaStatus().Only(ctx)
+	}
+	return result, MaskNotFound(err)
+}
+
+func (_m *ChannelModelPrice) Channel(ctx context.Context) (*Channel, error) {
+	result, err := _m.Edges.ChannelOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannel().Only(ctx)
+	}
+	return result, err
+}
+
+func (_m *ChannelModelPrice) Versions(ctx context.Context) (result []*ChannelModelPriceVersion, err error) {
+	if fc := graphql.GetFieldContext(ctx); fc != nil && fc.Field.Alias != "" {
+		result, err = _m.NamedVersions(graphql.GetFieldContext(ctx).Field.Alias)
+	} else {
+		result, err = _m.Edges.VersionsOrErr()
+	}
+	if IsNotLoaded(err) {
+		result, err = _m.QueryVersions().All(ctx)
+	}
+	return result, err
+}
+
+func (_m *ChannelModelPriceVersion) ChannelModelPrice(ctx context.Context) (*ChannelModelPrice, error) {
+	result, err := _m.Edges.ChannelModelPriceOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannelModelPrice().Only(ctx)
+	}
+	return result, err
+}
+
 func (_m *ChannelOverrideTemplate) User(ctx context.Context) (*User, error) {
 	result, err := _m.Edges.UserOrErr()
 	if IsNotLoaded(err) {
@@ -402,6 +450,14 @@ func (_m *Prompt) Projects(
 		return conn, nil
 	}
 	return _m.QueryProjects().Paginate(ctx, after, first, before, last, opts...)
+}
+
+func (_m *ProviderQuotaStatus) Channel(ctx context.Context) (*Channel, error) {
+	result, err := _m.Edges.ChannelOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannel().Only(ctx)
+	}
+	return result, err
 }
 
 func (_m *Request) APIKey(ctx context.Context) (*APIKey, error) {

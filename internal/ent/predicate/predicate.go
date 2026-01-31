@@ -12,6 +12,12 @@ type APIKey func(*sql.Selector)
 // Channel is the predicate function for channel builders.
 type Channel func(*sql.Selector)
 
+// ChannelModelPrice is the predicate function for channelmodelprice builders.
+type ChannelModelPrice func(*sql.Selector)
+
+// ChannelModelPriceVersion is the predicate function for channelmodelpriceversion builders.
+type ChannelModelPriceVersion func(*sql.Selector)
+
 // ChannelOverrideTemplate is the predicate function for channeloverridetemplate builders.
 type ChannelOverrideTemplate func(*sql.Selector)
 
@@ -32,6 +38,9 @@ type Project func(*sql.Selector)
 
 // Prompt is the predicate function for prompt builders.
 type Prompt func(*sql.Selector)
+
+// ProviderQuotaStatus is the predicate function for providerquotastatus builders.
+type ProviderQuotaStatus func(*sql.Selector)
 
 // Request is the predicate function for request builders.
 type Request func(*sql.Selector)

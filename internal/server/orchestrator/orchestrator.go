@@ -24,19 +24,25 @@ func NewChatCompletionOrchestrator(
 	systemService *biz.SystemService,
 	usageLogService *biz.UsageLogService,
 	promptService *biz.PromptService,
+	quotaService *biz.QuotaService,
 ) *ChatCompletionOrchestrator {
 	connectionTracker := NewDefaultConnectionTracker(256)
 
-	// Build strategies
-	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(requestService),                         // Priority 1: Last successful channel from trace
-		NewErrorAwareStrategy(channelService),                         // Priority 2: Health and error rate
-		NewWeightRoundRobinStrategy(channelService),                   // Priority 3: Weight round robin
-		NewConnectionAwareStrategy(channelService, connectionTracker), // Priority 4: Connection count
-	}
+	// Initialize model circuit breaker
+	modelCircuitBreaker := biz.NewModelCircuitBreaker()
 
-	adaptiveLoadBalancer := NewLoadBalancer(systemService, channelService, strategies...)
-	weightedLoadBalancer := NewLoadBalancer(systemService, channelService, NewWeightStrategy())
+	adaptiveLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewTraceAwareStrategy(requestService),
+		NewErrorAwareStrategy(channelService),
+		NewWeightRoundRobinStrategy(channelService),
+		NewConnectionAwareStrategy(channelService, connectionTracker),
+	)
+
+	failoverLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewWeightStrategy(), NewRandomStrategy())
+
+	circuitBreakerLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewWeightStrategy(), NewModelAwareCircuitBreakerStrategy(modelCircuitBreaker))
 
 	return &ChatCompletionOrchestrator{
 		Inbound:         inbound,
@@ -44,18 +50,21 @@ func NewChatCompletionOrchestrator(
 		ChannelService:  channelService,
 		SystemService:   systemService,
 		UsageLogService: usageLogService,
+		QuotaService:    quotaService,
 		PromptProvider:  promptService,
 		Middlewares: []pipeline.Middleware{
 			stream.EnsureUsage(),
 		},
-		PipelineFactory:      pipeline.NewFactory(httpClient),
-		ModelMapper:          NewModelMapper(),
-		channelSelector:      NewDefaultSelector(channelService, modelService, systemService),
-		selectedChannelIds:   []int{},
-		connectionTracker:    connectionTracker,
-		adaptiveLoadBalancer: adaptiveLoadBalancer,
-		weightedLoadBalancer: weightedLoadBalancer,
-		proxy:                nil,
+		PipelineFactory:            pipeline.NewFactory(httpClient),
+		ModelMapper:                NewModelMapper(),
+		channelSelector:            NewDefaultSelector(channelService, modelService, systemService),
+		selectedChannelIds:         []int{},
+		connectionTracker:          connectionTracker,
+		adaptiveLoadBalancer:       adaptiveLoadBalancer,
+		failoverLoadBalancer:       failoverLoadBalancer,
+		circuitBreakerLoadBalancer: circuitBreakerLoadBalancer,
+		modelCircuitBreaker:        modelCircuitBreaker,
+		proxy:                      nil,
 	}
 }
 
@@ -65,6 +74,7 @@ type ChatCompletionOrchestrator struct {
 	ChannelService  *biz.ChannelService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
+	QuotaService    *biz.QuotaService
 	PromptProvider  PromptProvider
 	Middlewares     []pipeline.Middleware
 	PipelineFactory *pipeline.Factory
@@ -77,10 +87,13 @@ type ChatCompletionOrchestrator struct {
 	// The runtime selected channel ids.
 	selectedChannelIds []int
 	// The load balancer for channel load balancing.
-	adaptiveLoadBalancer *LoadBalancer
-	weightedLoadBalancer *LoadBalancer
+	adaptiveLoadBalancer       *LoadBalancer
+	failoverLoadBalancer       *LoadBalancer
+	circuitBreakerLoadBalancer *LoadBalancer
 	// The connection tracker for connection aware load balancing.
 	connectionTracker ConnectionTracker
+	// The model circuit breaker for circuit-breaker load balancing.
+	modelCircuitBreaker *biz.ModelCircuitBreaker
 
 	// proxy is the proxy configuration for testing
 	// If set, it will override the channel's default proxy configuration
@@ -119,37 +132,42 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 	// Get retry policy from system settings
 	retryPolicy := processor.SystemService.RetryPolicyOrDefault(ctx)
 
+	strategy := deriveLoadBalancerStrategy(retryPolicy, apiKey)
 	if log.DebugEnabled(ctx) {
 		log.Debug(ctx, "chat request received",
 			log.String("request_body", string(request.Body)),
 			log.Any("request_headers", request.Headers),
 			log.Any("retry_policy", retryPolicy),
+			log.String("system_load_balance_strategy", retryPolicy.LoadBalancerStrategy),
+			log.String("load_balance_strategy", strategy),
 		)
 	}
 
 	loadBalancer := processor.adaptiveLoadBalancer
 
-	switch retryPolicy.LoadBalancerStrategy {
-	case "adaptive":
+	switch strategy {
+	case biz.LoadBalancerStrategyAdaptive:
 		loadBalancer = processor.adaptiveLoadBalancer
-	case "weighted":
-		loadBalancer = processor.weightedLoadBalancer
+	case biz.LoadBalancerStrategyFailover:
+		loadBalancer = processor.failoverLoadBalancer
+	case biz.LoadBalancerStrategyCircuitBreaker:
+		loadBalancer = processor.circuitBreakerLoadBalancer
 	default:
 		// Default to adaptive load balancer
 	}
 
 	state := &PersistenceState{
-		APIKey:              apiKey,
-		RequestService:      processor.RequestService,
-		UsageLogService:     processor.UsageLogService,
-		ChannelService:      processor.ChannelService,
-		PromptProvider:      processor.PromptProvider,
-		RetryPolicyProvider: processor.SystemService,
-		CandidateSelector:   processor.channelSelector,
-		LoadBalancer:        loadBalancer,
-		ModelMapper:         processor.ModelMapper,
-		Proxy:               processor.proxy,
-		CandidateIndex:      0,
+		APIKey:                apiKey,
+		RequestService:        processor.RequestService,
+		UsageLogService:       processor.UsageLogService,
+		ChannelService:        processor.ChannelService,
+		PromptProvider:        processor.PromptProvider,
+		RetryPolicyProvider:   processor.SystemService,
+		CandidateSelector:     processor.channelSelector,
+		LoadBalancer:          loadBalancer,
+		ModelMapper:           processor.ModelMapper,
+		Proxy:                 processor.proxy,
+		CurrentCandidateIndex: 0,
 	}
 
 	var pipelineOpts []pipeline.Option
@@ -172,6 +190,7 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 
 	// Add inbound middlewares (executed after inbound.TransformRequest)
 	middlewares = append(middlewares,
+		enforceQuota(inbound, processor.QuotaService),
 		checkApiKeyModelAccess(inbound),
 		applyModelMapping(inbound),
 		selectCandidates(inbound),
@@ -186,6 +205,8 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 
 		// Unified performance tracking middleware.
 		withPerformanceRecording(outbound),
+
+		withModelCircuitBreaker(outbound, processor.modelCircuitBreaker, strategy),
 
 		// The request execution middleware must be the final middleware
 		// to ensure that the request execution is created with the correct request bodys.
