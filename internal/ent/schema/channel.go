@@ -60,6 +60,7 @@ func (Channel) Fields() []ent.Field {
 				"anthropic_fake",
 				"openai_fake",
 				"openrouter",
+				"xiaomi",
 				"xai",
 				"ppio",
 				"siliconflow",
@@ -77,6 +78,7 @@ func (Channel) Fields() []ent.Field {
 				"claudecode",
 				"cerebras",
 				"antigravity",
+				"nanogpt",
 			).
 			Immutable().
 			Annotations(
@@ -92,9 +94,15 @@ func (Channel) Fields() []ent.Field {
 				entgql.Skip(entgql.SkipMutationCreateInput),
 				entgql.OrderField("STATUS"),
 			),
-		field.JSON("credentials", &objects.ChannelCredentials{}).
+		field.JSON("credentials", objects.ChannelCredentials{}).Sensitive(),
+		field.JSON("disabled_api_keys", []objects.DisabledAPIKey{}).
+			Default([]objects.DisabledAPIKey{}).
+			Optional().
 			Sensitive().
-			Default(&objects.ChannelCredentials{}),
+			Comment("Disabled API keys with metadata (sensitive; requires channel write permission)").
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
 		field.Strings("supported_models"),
 		field.Bool("auto_sync_supported_models").Default(false),
 		field.Strings("tags").Optional().Default([]string{}),
@@ -142,11 +150,6 @@ func (Channel) Edges() []ent.Edge {
 			Annotations(
 				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 				entgql.RelayConnection(),
-			),
-		edge.To("channel_performance", ChannelPerformance.Type).
-			Unique().
-			Annotations(
-				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 			),
 		edge.To("channel_probes", ChannelProbe.Type).
 			Annotations(

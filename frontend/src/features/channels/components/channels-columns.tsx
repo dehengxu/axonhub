@@ -19,6 +19,7 @@ import {
   IconCopy,
   IconCoin,
   IconLoader2,
+  IconKeyOff,
 } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -83,6 +84,7 @@ const ActionCell = memo(({ row }: { row: Row<Channel> }) => {
   const { channelPermissions } = usePermissions();
   const testChannel = useTestChannel();
   const hasError = !!channel.errorMessage;
+  const hasDisabledAPIKeys = channelPermissions.canWrite && (channel.disabledAPIKeys?.length ?? 0) > 0;
 
   const handleDefaultTest = async () => {
     try {
@@ -179,16 +181,30 @@ const ActionCell = memo(({ row }: { row: Row<Channel> }) => {
             <IconTransform size={16} className='mr-2' />
             {t('channels.dialogs.transformOptions.action')}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              setCurrentRow(channel);
-              setOpen('errorResolved');
-            }}
-            className='text-green-500!'
-          >
-            <IconCheck size={16} className='mr-2' />
-            {t('channels.actions.errorResolved')}
-          </DropdownMenuItem>
+          {hasDisabledAPIKeys && (
+            <DropdownMenuItem
+              onClick={() => {
+                setCurrentRow(channel);
+                setOpen('disabledAPIKeys');
+              }}
+              className='text-orange-500!'
+            >
+              <IconKeyOff size={16} className='mr-2' />
+              {t('channels.actions.disabledAPIKeys', { count: channel.disabledAPIKeys?.length ?? 0 })}
+            </DropdownMenuItem>
+          )}
+          {hasError && (
+            <DropdownMenuItem
+              onClick={() => {
+                setCurrentRow(channel);
+                setOpen('errorResolved');
+              }}
+              className='text-green-600!'
+            >
+              <IconCheck size={16} className='mr-2' />
+              {t('channels.actions.markErrorResolved')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => {
@@ -241,11 +257,14 @@ const NameCell = memo(({ row }: { row: Row<Channel> }) => {
   const { t } = useTranslation();
   const channel = row.original;
   const hasError = !!channel.errorMessage;
+  const disabledKeysCount = channel.disabledAPIKeys?.length ?? 0;
+  const hasDisabledKeys = disabledKeysCount > 0;
 
   const content = (
     <div className='flex justify-center'>
       <div className='flex max-w-56 items-center gap-2'>
         {hasError && <IconAlertTriangle className='text-destructive h-4 w-4 shrink-0' />}
+        {!hasError && hasDisabledKeys && <IconKeyOff className='h-4 w-4 shrink-0 text-amber-500' />}
         <div className={cn('truncate font-medium', hasError && 'text-destructive')}>{row.getValue('name')}</div>
       </div>
     </div>
@@ -263,6 +282,19 @@ const NameCell = memo(({ row }: { row: Row<Channel> }) => {
               })}
             </p>
           </div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  if (hasDisabledKeys) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent>
+          <p className='text-sm text-amber-500'>
+            {t('channels.actions.disabledAPIKeys', { count: disabledKeysCount })}
+          </p>
         </TooltipContent>
       </Tooltip>
     );

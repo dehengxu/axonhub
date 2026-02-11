@@ -1,32 +1,9 @@
 import type { ComponentType } from 'react';
-import {
-  OpenAI,
-  Anthropic,
-  Google,
-  DeepSeek,
-  Doubao,
-  Moonshot,
-  Zhipu,
-  OpenRouter,
-  XAI,
-  Volcengine,
-  SiliconCloud,
-  PPIO,
-  ZAI,
-  LongCat,
-  Minimax,
-  BurnCloud,
-  Vercel,
-  ModelScope,
-  Bailian,
-  Jina,
-  DeepInfra,
-  Github,
-  Claude,
-  Cerebras,
-} from '@lobehub/icons';
+import { OpenAI, Anthropic, Google, DeepSeek, Doubao, Moonshot, Zhipu, OpenRouter, XAI, Volcengine, SiliconCloud, PPIO, ZAI, LongCat, Minimax, BurnCloud, Vercel, ModelScope, Bailian, Jina, DeepInfra, Github, Claude, Cerebras, XiaomiMiMo } from '@lobehub/icons';
+import { NanoGPTIcon } from '../components/nanogpt-icon';
 import { BURNCLOUD_DEFAULT_MODELS } from './burncloud-models';
 import { ApiFormat, ChannelType } from './schema';
+
 
 export const OPENAI_CHAT_COMPLETIONS: ApiFormat = 'openai/chat_completions';
 export const OPENAI_RESPONSES: ApiFormat = 'openai/responses';
@@ -271,6 +248,14 @@ export const CHANNEL_CONFIGS: Record<ChannelType, ChannelConfig> = {
     color: 'bg-gray-100 text-gray-800 border-gray-200',
     icon: OpenRouter,
   },
+  xiaomi: {
+    channelType: 'xiaomi',
+    baseURL: 'https://api.xiaomimimo.com/v1',
+    defaultModels: ['mimo-v2-flash'],
+    apiFormat: OPENAI_CHAT_COMPLETIONS,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    icon: XiaomiMiMo,
+  },
   xai: {
     channelType: 'xai',
     baseURL: 'https://api.x.ai/v1',
@@ -502,6 +487,14 @@ export const CHANNEL_CONFIGS: Record<ChannelType, ChannelConfig> = {
     color: 'bg-[#F15928] text-white border-[#F15928]',
     icon: Cerebras,
   },
+  nanogpt: {
+    channelType: 'nanogpt',
+    baseURL: 'https://nano-gpt.com/api/v1',
+    defaultModels: ['zai-org/glm-4.7:thinking', 'zai-org/glm-4.7', 'zai-org/glm-4.6'],
+    apiFormat: OPENAI_CHAT_COMPLETIONS,
+    color: 'bg-gradient-to-br from-[#015a9e] to-[#11e9bb] text-slate-900 border-transparent',
+    icon: NanoGPTIcon,
+  },
 };
 
 /**
@@ -534,6 +527,7 @@ export type Provider =
   | 'doubao'
   | 'minimax'
   | 'longcat'
+  | 'xiaomi'
   | 'xai'
   | 'openrouter'
   | 'vercel'
@@ -547,7 +541,9 @@ export type Provider =
   | 'jina'
   | 'github'
   | 'cerebras'
-  | 'codex';
+  | 'codex'
+  | 'antigravity'
+  | 'nanogpt';
 
 /**
  * Map channel type to provider
@@ -578,6 +574,7 @@ export const CHANNEL_TYPE_TO_PROVIDER: Record<ChannelType, Provider> = {
   minimax_anthropic: 'minimax',
   longcat: 'longcat',
   longcat_anthropic: 'longcat',
+  xiaomi: 'xiaomi',
   xai: 'xai',
   openrouter: 'openrouter',
   vercel: 'vercel',
@@ -594,6 +591,7 @@ export const CHANNEL_TYPE_TO_PROVIDER: Record<ChannelType, Provider> = {
   claudecode: 'claudecode',
   cerebras: 'cerebras',
   antigravity: 'antigravity',
+  nanogpt: 'nanogpt',
 };
 
 /**

@@ -13,6 +13,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
+	"github.com/samber/lo"
 )
 
 // ID is the resolver for the id field.
@@ -116,20 +117,42 @@ func (r *channelOverrideTemplateResolver) UserID(ctx context.Context, obj *ent.C
 	}, nil
 }
 
-// ID is the resolver for the id field.
-func (r *channelPerformanceResolver) ID(ctx context.Context, obj *ent.ChannelPerformance) (*objects.GUID, error) {
-	return &objects.GUID{
-		Type: ent.TypeChannelPerformance,
-		ID:   obj.ID,
-	}, nil
+// HeaderOverrideOperations is the resolver for the headerOverrideOperations field.
+// It returns the new header override operations, converting from legacy OverrideHeaders if needed.
+func (r *channelOverrideTemplateResolver) HeaderOverrideOperations(ctx context.Context, obj *ent.ChannelOverrideTemplate) ([]*objects.OverrideOperation, error) {
+	// If new field has data, use it directly
+	if len(obj.HeaderOverrideOperations) > 0 {
+		return lo.ToSlicePtr(obj.HeaderOverrideOperations), nil
+	}
+
+	// Convert from legacy OverrideHeaders field
+	if len(obj.OverrideHeaders) > 0 {
+		ops := objects.HeaderEntriesToOverrideOperations(obj.OverrideHeaders)
+		return lo.ToSlicePtr(ops), nil
+	}
+
+	return []*objects.OverrideOperation{}, nil
 }
 
-// ChannelID is the resolver for the channelID field.
-func (r *channelPerformanceResolver) ChannelID(ctx context.Context, obj *ent.ChannelPerformance) (*objects.GUID, error) {
-	return &objects.GUID{
-		Type: ent.TypeChannel,
-		ID:   obj.ChannelID,
-	}, nil
+// BodyOverrideOperations is the resolver for the bodyOverrideOperations field.
+// It returns the new body override operations, converting from legacy OverrideParameters if needed.
+func (r *channelOverrideTemplateResolver) BodyOverrideOperations(ctx context.Context, obj *ent.ChannelOverrideTemplate) ([]*objects.OverrideOperation, error) {
+	// If new field has data, use it directly
+	if len(obj.BodyOverrideOperations) > 0 {
+		return lo.ToSlicePtr(obj.BodyOverrideOperations), nil
+	}
+
+	// Convert from legacy OverrideParameters field
+	if obj.OverrideParameters != "" && obj.OverrideParameters != "{}" {
+		ops, err := objects.ParseOverrideOperations(obj.OverrideParameters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse override parameters: %w", err)
+		}
+
+		return lo.ToSlicePtr(ops), nil
+	}
+
+	return []*objects.OverrideOperation{}, nil
 }
 
 // ID is the resolver for the id field.
@@ -806,11 +829,6 @@ func (r *Resolver) ChannelOverrideTemplate() ChannelOverrideTemplateResolver {
 	return &channelOverrideTemplateResolver{r}
 }
 
-// ChannelPerformance returns ChannelPerformanceResolver implementation.
-func (r *Resolver) ChannelPerformance() ChannelPerformanceResolver {
-	return &channelPerformanceResolver{r}
-}
-
 // ChannelProbe returns ChannelProbeResolver implementation.
 func (r *Resolver) ChannelProbe() ChannelProbeResolver { return &channelProbeResolver{r} }
 
@@ -869,7 +887,6 @@ type channelResolver struct{ *Resolver }
 type channelModelPriceResolver struct{ *Resolver }
 type channelModelPriceVersionResolver struct{ *Resolver }
 type channelOverrideTemplateResolver struct{ *Resolver }
-type channelPerformanceResolver struct{ *Resolver }
 type channelProbeResolver struct{ *Resolver }
 type dataStorageResolver struct{ *Resolver }
 type modelResolver struct{ *Resolver }

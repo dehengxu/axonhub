@@ -20,6 +20,15 @@
 
 ---
 
+## 💖 Support Me
+
+| Provider | Plan | Description | Links |
+|----------|------|-------------|-------|
+| Zhipu AI | GLM CODING PLAN | You've been invited to join the GLM Coding Plan! Enjoy full support for Claude Code, Cline, and 10+ top coding tools — starting at just $3/month. Subscribe now and grab the limited-time deal! | [English](https://z.ai/subscribe?ic=OKAF5UFZOM) / [中文](https://www.bigmodel.cn/glm-coding?ic=WIDLV0OOTJ) |
+| Volcengine | CODING PLAN | Ark Coding Plan supports Doubao, GLM, DeepSeek, Kimi and other models. Compatible with unlimited tools. Subscribe now for an extra 10% off — as low as $1.2/month. The more you subscribe, the more you save! | [Link](https://volcengine.com/L/1Q-HZr5Uvk8/) / Code: LXKDZK3W |
+
+---
+
 ## 📖 Project Introduction
 
 ### All-in-one AI Development Platform
@@ -319,6 +328,36 @@ docker-compose up -d
 # Check status
 docker-compose ps
 ```
+
+#### Helm Kubernetes Deployment
+
+Deploy AxonHub on Kubernetes using the official Helm chart:
+
+```bash
+# Quick installation
+git clone https://github.com/looplj/axonhub.git
+cd axonhub
+helm install axonhub ./deploy/helm
+
+# Production deployment
+helm install axonhub ./deploy/helm -f ./deploy/helm/values-production.yaml
+
+# Access AxonHub
+kubectl port-forward svc/axonhub 8090:8090
+# Visit http://localhost:8090
+```
+
+**Key Configuration Options:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `axonhub.replicaCount` | Replicas | `1` |
+| `axonhub.dbPassword` | DB password | `axonhub_password` |
+| `postgresql.enabled` | Embedded PostgreSQL | `true` |
+| `ingress.enabled` | Enable ingress | `false` |
+| `persistence.enabled` | Data persistence | `false` |
+
+For detailed configuration and troubleshooting, see [Helm Chart Documentation](deploy/helm/README.md).
 
 #### Virtual Machine Deployment
 

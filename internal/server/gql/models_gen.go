@@ -14,7 +14,26 @@ import (
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/shopspring/decimal"
 )
+
+type APIKeyProfileQuotaUsage struct {
+	ProfileName string               `json:"profileName"`
+	Quota       *objects.APIKeyQuota `json:"quota"`
+	Window      *APIKeyQuotaWindow   `json:"window"`
+	Usage       *APIKeyQuotaUsage    `json:"usage"`
+}
+
+type APIKeyQuotaUsage struct {
+	RequestCount int             `json:"requestCount"`
+	TotalTokens  int             `json:"totalTokens"`
+	TotalCost    decimal.Decimal `json:"totalCost"`
+}
+
+type APIKeyQuotaWindow struct {
+	Start *time.Time `json:"start,omitempty"`
+	End   *time.Time `json:"end,omitempty"`
+}
 
 type AddUserToProjectInput struct {
 	ProjectID objects.GUID    `json:"projectId"`
@@ -34,6 +53,21 @@ type ApplyChannelOverrideTemplatePayload struct {
 	Success  bool           `json:"success"`
 	Updated  int            `json:"updated"`
 	Channels []*ent.Channel `json:"channels"`
+}
+
+type AutoDisableAPIKey struct {
+	Enabled  bool                       `json:"enabled"`
+	Statuses []*AutoDisableAPIKeyStatus `json:"statuses"`
+}
+
+type AutoDisableAPIKeyStatus struct {
+	Status int `json:"status"`
+	Times  int `json:"times"`
+}
+
+type AutoDisableChannelOnboarding struct {
+	Onboarded   bool       `json:"onboarded"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
 }
 
 type BackupPayload struct {
@@ -74,6 +108,10 @@ type ChannelSuccessRate struct {
 type ChannelTypeCount struct {
 	Type  string `json:"type"`
 	Count int    `json:"count"`
+}
+
+type CompleteAutoDisableChannelOnboardingInput struct {
+	Dummy *string `json:"dummy,omitempty"`
 }
 
 type CompleteOnboardingInput struct {
@@ -162,15 +200,16 @@ type ModelTokenTrendData struct {
 
 type OnboardingInfo struct {
 	Onboarded          bool                          `json:"onboarded"`
-	Version            string                        `json:"version"`
 	CompletedAt        *time.Time                    `json:"completedAt,omitempty"`
 	SystemModelSetting *SystemModelSettingOnboarding `json:"systemModelSetting,omitempty"`
+	AutoDisableChannel *AutoDisableChannelOnboarding `json:"autoDisableChannel,omitempty"`
 }
 
 type QueryModelsInput struct {
-	StatusIn       []channel.Status `json:"statusIn,omitempty"`
-	IncludeMapping *bool            `json:"includeMapping,omitempty"`
-	IncludePrefix  *bool            `json:"includePrefix,omitempty"`
+	StatusIn                []channel.Status `json:"statusIn,omitempty"`
+	IncludeMapping          *bool            `json:"includeMapping,omitempty"`
+	IncludePrefix           *bool            `json:"includePrefix,omitempty"`
+	IncludeAllChannelModels *bool            `json:"includeAllChannelModels,omitempty"`
 }
 
 type RemoveUserFromProjectInput struct {

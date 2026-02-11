@@ -78,7 +78,7 @@ func NewAPIKeyService(params APIKeyServiceParams) *APIKeyService {
 
 	svc.apiKeyNotifier = notifier
 	svc.APIKeyCache = live.NewIndexedCache(live.IndexedOptions[string, *ent.APIKey]{
-		Name:            "api_keys",
+		Name:            "axonhub:api_keys",
 		TTL:             ttl,
 		RefreshInterval: 30 * time.Second,
 		DebounceDelay:   500 * time.Millisecond,
@@ -401,7 +401,7 @@ func validateProfileQuota(profiles []objects.APIKeyProfile) error {
 			}
 
 			switch q.Period.PastDuration.Unit {
-			case objects.APIKeyQuotaPastDurationUnitHour, objects.APIKeyQuotaPastDurationUnitDay:
+			case objects.APIKeyQuotaPastDurationUnitMinute, objects.APIKeyQuotaPastDurationUnitHour, objects.APIKeyQuotaPastDurationUnitDay:
 			default:
 				return fmt.Errorf("profile '%s' quota.period.pastDuration.unit is invalid", profile.Name)
 			}

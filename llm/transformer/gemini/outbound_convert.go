@@ -288,6 +288,20 @@ func convertLLMToGeminiRequestWithConfig(chatReq *llm.Request, config *Config) *
 		req.ToolConfig = convertLLMToolChoiceToGeminiToolConfig(chatReq.ToolChoice)
 	}
 
+	// Convert safety settings from TransformerMetadata
+	if safetySettings := extractSafetySettingsFromMetadata(chatReq.TransformerMetadata); len(safetySettings) > 0 {
+		req.SafetySettings = safetySettings
+	}
+
+	// Convert image config from TransformerMetadata
+	if imageConfig := extractImageConfigFromMetadata(chatReq.TransformerMetadata); imageConfig != nil {
+		if req.GenerationConfig == nil {
+			req.GenerationConfig = &GenerationConfig{}
+		}
+
+		req.GenerationConfig.ImageConfig = imageConfig
+	}
+
 	return req
 }
 
@@ -403,9 +417,9 @@ func convertLLMMessageToGeminiContent(msg *llm.Message) *Content {
 	// https://ai.google.dev/gemini-api/docs/gemini-3#migrating_from_other_models
 	// If there are tool calls but no thought signature, use a default one.
 	// This field is not compatible with OpenAI sdk, so we use the default value.
-	// We try the best to support this fields to keep this fields in the chat conversions, so we use the RedactedReasoningContent to hold the field,
+	// We try the best to support this fields to keep this fields in the chat conversions, so we use the ReasoningSignature to hold the field,
 	// And this field will be preserved during claude code trace, will not degrade the gemini model performance.
-	msgThoughtSignature := shared.DecodeGeminiThoughtSignature(msg.RedactedReasoningContent)
+	msgThoughtSignature := shared.DecodeGeminiThoughtSignature(msg.ReasoningSignature)
 	if len(msg.ToolCalls) > 0 && msgThoughtSignature == nil {
 		msgThoughtSignature = lo.ToPtr("context_engineering_is_the_way_to_go")
 	}
@@ -556,8 +570,8 @@ func convertGeminiCandidateToLLMChoiceWithState(candidate *Candidate, isStream b
 		)
 
 		for _, part := range candidate.Content.Parts {
-			if msg.RedactedReasoningContent == nil && part.ThoughtSignature != "" {
-				msg.RedactedReasoningContent = shared.EncodeGeminiThoughtSignature(&part.ThoughtSignature)
+			if msg.ReasoningSignature == nil && part.ThoughtSignature != "" {
+				msg.ReasoningSignature = shared.EncodeGeminiThoughtSignature(&part.ThoughtSignature)
 			}
 
 			switch {

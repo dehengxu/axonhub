@@ -83,7 +83,7 @@ type CreateChannelInput struct {
 	Type                    channel.Type
 	BaseURL                 *string
 	Name                    string
-	Credentials             *objects.ChannelCredentials
+	Credentials             objects.ChannelCredentials
 	SupportedModels         []string
 	AutoSyncSupportedModels *bool
 	Tags                    []string
@@ -101,9 +101,7 @@ func (i *CreateChannelInput) Mutate(m *ChannelMutation) {
 		m.SetBaseURL(*v)
 	}
 	m.SetName(i.Name)
-	if v := i.Credentials; v != nil {
-		m.SetCredentials(v)
-	}
+	m.SetCredentials(i.Credentials)
 	if v := i.SupportedModels; v != nil {
 		m.SetSupportedModels(v)
 	}
@@ -174,7 +172,7 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 		m.SetStatus(*v)
 	}
 	if v := i.Credentials; v != nil {
-		m.SetCredentials(v)
+		m.SetCredentials(*v)
 	}
 	if v := i.SupportedModels; v != nil {
 		m.SetSupportedModels(v)
@@ -240,11 +238,10 @@ func (c *ChannelUpdateOne) SetInput(i UpdateChannelInput) *ChannelUpdateOne {
 
 // CreateChannelOverrideTemplateInput represents a mutation input for creating channeloverridetemplates.
 type CreateChannelOverrideTemplateInput struct {
-	Name               string
-	Description        *string
-	ChannelType        string
-	OverrideParameters *string
-	OverrideHeaders    []objects.HeaderEntry
+	Name                     string
+	Description              *string
+	HeaderOverrideOperations []objects.OverrideOperation
+	BodyOverrideOperations   []objects.OverrideOperation
 }
 
 // Mutate applies the CreateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
@@ -253,12 +250,11 @@ func (i *CreateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMu
 	if v := i.Description; v != nil {
 		m.SetDescription(*v)
 	}
-	m.SetChannelType(i.ChannelType)
-	if v := i.OverrideParameters; v != nil {
-		m.SetOverrideParameters(*v)
+	if v := i.HeaderOverrideOperations; v != nil {
+		m.SetHeaderOverrideOperations(v)
 	}
-	if v := i.OverrideHeaders; v != nil {
-		m.SetOverrideHeaders(v)
+	if v := i.BodyOverrideOperations; v != nil {
+		m.SetBodyOverrideOperations(v)
 	}
 }
 
@@ -270,13 +266,15 @@ func (c *ChannelOverrideTemplateCreate) SetInput(i CreateChannelOverrideTemplate
 
 // UpdateChannelOverrideTemplateInput represents a mutation input for updating channeloverridetemplates.
 type UpdateChannelOverrideTemplateInput struct {
-	Name                  *string
-	ClearDescription      bool
-	Description           *string
-	ChannelType           *string
-	OverrideParameters    *string
-	OverrideHeaders       []objects.HeaderEntry
-	AppendOverrideHeaders []objects.HeaderEntry
+	Name                           *string
+	ClearDescription               bool
+	Description                    *string
+	ClearHeaderOverrideOperations  bool
+	HeaderOverrideOperations       []objects.OverrideOperation
+	AppendHeaderOverrideOperations []objects.OverrideOperation
+	ClearBodyOverrideOperations    bool
+	BodyOverrideOperations         []objects.OverrideOperation
+	AppendBodyOverrideOperations   []objects.OverrideOperation
 }
 
 // Mutate applies the UpdateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
@@ -290,17 +288,23 @@ func (i *UpdateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMu
 	if v := i.Description; v != nil {
 		m.SetDescription(*v)
 	}
-	if v := i.ChannelType; v != nil {
-		m.SetChannelType(*v)
+	if i.ClearHeaderOverrideOperations {
+		m.ClearHeaderOverrideOperations()
 	}
-	if v := i.OverrideParameters; v != nil {
-		m.SetOverrideParameters(*v)
+	if v := i.HeaderOverrideOperations; v != nil {
+		m.SetHeaderOverrideOperations(v)
 	}
-	if v := i.OverrideHeaders; v != nil {
-		m.SetOverrideHeaders(v)
+	if i.AppendHeaderOverrideOperations != nil {
+		m.AppendHeaderOverrideOperations(i.HeaderOverrideOperations)
 	}
-	if i.AppendOverrideHeaders != nil {
-		m.AppendOverrideHeaders(i.OverrideHeaders)
+	if i.ClearBodyOverrideOperations {
+		m.ClearBodyOverrideOperations()
+	}
+	if v := i.BodyOverrideOperations; v != nil {
+		m.SetBodyOverrideOperations(v)
+	}
+	if i.AppendBodyOverrideOperations != nil {
+		m.AppendBodyOverrideOperations(i.BodyOverrideOperations)
 	}
 }
 

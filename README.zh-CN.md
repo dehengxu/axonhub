@@ -20,6 +20,15 @@
 
 ---
 
+## 💖 支持我
+
+| 服务商 | 计划 | 描述 | 链接 |
+|--------|------|------|------|
+| 智谱 AI | GLM CODING PLAN | 🚀 速来拼好模，智谱 GLM Coding 超值订阅，邀你一起薅羊毛！Claude Code、Cline 等 20+ 大编程工具无缝支持，"码力"全开，越拼越爽！立即开拼，享限时惊喜价！ | [English](https://z.ai/subscribe?ic=OKAF5UFZOM) / [中文](https://www.bigmodel.cn/glm-coding?ic=WIDLV0OOTJ) |
+| 火山引擎 | CODING PLAN | 方舟 Coding Plan 支持 Doubao、GLM、DeepSeek、Kimi 等模型，工具不限，现在订阅折上9折，低至8.9元，订阅越多越划算！立即订阅： | [链接](https://volcengine.com/L/1Q-HZr5Uvk8/) / 优惠码：LXKDZK3W |
+
+---
+
 ## 📖 项目介绍
 
 ### All-in-one AI 开发平台
@@ -306,6 +315,36 @@ docker-compose up -d
 # 查看状态
 docker-compose ps
 ```
+
+#### Helm Kubernetes 部署 | Helm Kubernetes Deployment
+
+使用官方 Helm Chart 在 Kubernetes 上部署 AxonHub：
+
+```bash
+# Quick installation
+git clone https://github.com/looplj/axonhub.git
+cd axonhub
+helm install axonhub ./deploy/helm
+
+# Production deployment
+helm install axonhub ./deploy/helm -f ./deploy/helm/values-production.yaml
+
+# Access AxonHub
+kubectl port-forward svc/axonhub 8090:8090
+# Visit http://localhost:8090
+```
+
+**关键配置选项：**
+
+| 参数 | 描述 | 默认 |
+|-----------|-------------|---------|
+| `axonhub.replicaCount` | 副本数 | `1` |
+| `axonhub.dbPassword` | 数据库密码 | `axonhub_password` |
+| `postgresql.enabled` | 是否启用内嵌 PostgreSQL | `true` |
+| `ingress.enabled` | 是否启用 Ingress | `false` |
+| `persistence.enabled` | 是否启用持久化存储 | `false` |
+
+有关详细配置和故障排查，请参阅 [Helm Chart 文档](deploy/helm/README.md)。
 
 #### 虚拟机部署 | Virtual Machine Deployment
 

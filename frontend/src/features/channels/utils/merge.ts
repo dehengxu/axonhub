@@ -1,38 +1,73 @@
 // Utility functions for merging channel override configurations
 // Mirrors backend merge logic in internal/server/biz/channel_merge.go
-import type { ChannelSettings, HeaderEntry } from '../data/schema';
-
-const CLEAR_HEADER_DIRECTIVE = '__AXONHUB_CLEAR__';
+import type { ChannelSettings, OverrideOperation } from '../data/schema';
 
 /**
- * Normalizes empty or whitespace-only parameter strings to "{}".
+ * Normalizes empty or whitespace-only parameter strings to "[]".
  * This ensures consistent representation across the system.
  */
 export function normalizeOverrideParameters(params: string): string {
   if (!params || params.trim() === '') {
-    return '{}';
+    return '[]';
   }
   return params;
 }
 
 /**
- * Merges override headers with template headers.
- * - Template entries override existing ones with the same key (case-insensitive)
- * - Existing headers not mentioned in template are preserved
+ * Merges override header operations with template header operations.
+ * - For `set` ops: match by `path` (case-insensitive), template overrides existing
+ * - Other ops (delete, rename, copy): always appended from template
+ * - Existing ops not matched by template are preserved
  */
-export function mergeOverrideHeaders(existing: HeaderEntry[], template: HeaderEntry[]): HeaderEntry[] {
+export function mergeOverrideHeaders(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
   const result = [...existing];
 
-  for (const templateHeader of template) {
-    // Find existing header with same key (case-insensitive)
-    const index = result.findIndex((h) => h.key.toLowerCase() === templateHeader.key.toLowerCase());
-
-    if (index >= 0) {
-      // Override existing header
-      result[index] = templateHeader;
+  for (const templateOp of template) {
+    if (templateOp.op === 'set' && templateOp.path) {
+      const index = result.findIndex(
+        (op) => op.op === 'set' && op.path?.toLowerCase() === templateOp.path?.toLowerCase()
+      );
+      if (index >= 0) {
+        result[index] = templateOp;
+      } else {
+        result.push(templateOp);
+      }
     } else {
-      // Add new header
-      result.push(templateHeader);
+      result.push(templateOp);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Merges override body operations with template body operations.
+ * - For `set` and `delete` ops: match by `path`, template overrides existing
+ * - For `rename` and `copy` ops: always appended from template
+ * - Existing ops not matched by template are preserved
+ */
+export function mergeOverrideOperations(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
+  const result = [...existing];
+
+  for (const templateOp of template) {
+    // For rename and copy ops, always append
+    if (templateOp.op === 'rename' || templateOp.op === 'copy') {
+      result.push(templateOp);
+      continue;
+    }
+
+    // For set and delete ops, match by path
+    if ((templateOp.op === 'set' || templateOp.op === 'delete') && templateOp.path) {
+      const index = result.findIndex(
+        (op) => (op.op === 'set' || op.op === 'delete') && op.path === templateOp.path
+      );
+      if (index >= 0) {
+        result[index] = templateOp;
+      } else {
+        result.push(templateOp);
+      }
+    } else {
+      result.push(templateOp);
     }
   }
 
@@ -58,8 +93,8 @@ export function mergeChannelSettingsForUpdate(
     autoTrimedModelPrefixes: pick('autoTrimedModelPrefixes', existing?.autoTrimedModelPrefixes ?? []),
     hideOriginalModels: pick('hideOriginalModels', existing?.hideOriginalModels ?? false),
     hideMappedModels: pick('hideMappedModels', existing?.hideMappedModels ?? false),
-    overrideParameters: pick('overrideParameters', existing?.overrideParameters ?? ''),
-    overrideHeaders: pick('overrideHeaders', existing?.overrideHeaders ?? []),
+    bodyOverrideOperations: pick('bodyOverrideOperations', existing?.bodyOverrideOperations ?? []),
+    headerOverrideOperations: pick('headerOverrideOperations', existing?.headerOverrideOperations ?? []),
     proxy: pick('proxy', existing?.proxy ?? null),
     transformOptions: pick('transformOptions', existing?.transformOptions ?? undefined),
   };

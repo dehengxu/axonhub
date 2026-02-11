@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AutoCompleteSelect } from '@/components/auto-complete-select';
 import { SelectDropdown } from '@/components/select-dropdown';
+import { antigravityOAuthExchange, antigravityOAuthStart } from '../data/antigravity';
 import {
   useCreateChannel,
   useUpdateChannel,
@@ -30,11 +31,10 @@ import {
   useBulkCreateChannels,
   useAllChannelNames,
   useAllChannelTags,
+  useChannelDisabledAPIKeys,
 } from '../data/channels';
 import { claudecodeOAuthExchange, claudecodeOAuthStart } from '../data/claudecode';
-import { antigravityOAuthExchange, antigravityOAuthStart } from '../data/antigravity';
 import { codexOAuthExchange, codexOAuthStart } from '../data/codex';
-import { useOAuthFlow } from '../hooks/use-oauth-flow';
 import {
   getDefaultBaseURL,
   getDefaultModels,
@@ -51,6 +51,7 @@ import {
   getChannelTypeForApiFormat,
 } from '../data/config_providers';
 import { Channel, ChannelType, ApiFormat, createChannelInputSchema, updateChannelInputSchema } from '../data/schema';
+import { useOAuthFlow } from '../hooks/use-oauth-flow';
 
 interface Props {
   currentRow?: Channel;
@@ -115,11 +116,17 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const [showClearAllPopover, setShowClearAllPopover] = useState(false);
   const hasAutoSetDuplicateNameRef = useRef(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showApiKeysPanel, setShowApiKeysPanel] = useState(false);
+  const [apiKeysSearch, setApiKeysSearch] = useState('');
+  const [selectedKeysToRemove, setSelectedKeysToRemove] = useState<Set<string>>(new Set());
+  const [confirmRemoveSelectedOpen, setConfirmRemoveSelectedOpen] = useState(false);
+  const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | null>(null);
   const [showGcpJsonData, setShowGcpJsonData] = useState(false);
   const [authMode, setAuthMode] = useState<'official' | 'third-party'>('official');
   const dialogContentRef = useRef<HTMLDivElement>(null);
 
   // OAuth flows using the reusable hook
+  // OAuth credentials are stored in apiKey field as JSON string, not in apiKeys array
   const codexOAuth = useOAuthFlow({
     startFn: codexOAuthStart,
     exchangeFn: codexOAuthExchange,
@@ -218,6 +225,17 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   }, [open, codexOAuth, claudecodeOAuth, antigravityOAuth]);
 
   useEffect(() => {
+    if (!open) {
+      setShowApiKey(false);
+      setShowApiKeysPanel(false);
+      setApiKeysSearch('');
+      setSelectedKeysToRemove(new Set());
+      setConfirmRemoveSelectedOpen(false);
+      setConfirmRemoveKey(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
 
     const timer = setTimeout(() => {
@@ -242,6 +260,8 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   useEffect(() => {
     if (open && showModelsPanel && initialRow && initialRow.supportedModels.length > 0) {
       setShowSupportedModelsPanel(true);
+      setShowFetchedModelsPanel(false);
+      setShowApiKeysPanel(false);
     }
   }, [open, showModelsPanel, initialRow]);
 
@@ -311,12 +331,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             tags: currentRow.tags || [],
             remark: currentRow.remark || '',
             credentials: {
-              apiKey: currentRow.credentials?.apiKey || '',
-              aws: {
-                accessKeyID: currentRow.credentials?.aws?.accessKeyID || '',
-                secretAccessKey: currentRow.credentials?.aws?.secretAccessKey || '',
-                region: currentRow.credentials?.aws?.region || '',
-              },
+              // OAuth 类型 (codex/claudecode/antigravity) 的凭据存储在 apiKey 字段，不放入 apiKeys
+              apiKey: currentRow.credentials?.apiKey || undefined,
+              apiKeys: currentRow.credentials?.apiKeys || [],
               gcp: {
                 region: currentRow.credentials?.gcp?.region || '',
                 projectID: currentRow.credentials?.gcp?.projectID || '',
@@ -337,12 +354,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               remark: duplicateFromRow.remark || '',
               settings: duplicateFromRow.settings ?? undefined,
               credentials: {
-                apiKey: duplicateFromRow.credentials?.apiKey || '',
-                aws: {
-                  accessKeyID: duplicateFromRow.credentials?.aws?.accessKeyID || '',
-                  secretAccessKey: duplicateFromRow.credentials?.aws?.secretAccessKey || '',
-                  region: duplicateFromRow.credentials?.aws?.region || '',
-                },
+                // OAuth 类型 (codex/claudecode/antigravity) 的凭据存储在 apiKey 字段，不放入 apiKeys
+                apiKey: duplicateFromRow.credentials?.apiKey || undefined,
+                apiKeys: duplicateFromRow.credentials?.apiKeys || [],
                 gcp: {
                   region: duplicateFromRow.credentials?.gcp?.region || '',
                   projectID: duplicateFromRow.credentials?.gcp?.projectID || '',
@@ -356,12 +370,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               name: '',
               policies: { stream: 'unlimited' },
               credentials: {
-                apiKey: '',
-                aws: {
-                  accessKeyID: '',
-                  secretAccessKey: '',
-                  region: '',
-                },
+                apiKeys: [],
                 gcp: {
                   region: '',
                   projectID: '',
@@ -375,6 +384,15 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               settings: undefined,
             },
   });
+
+  const apiKeys = form.watch('credentials.apiKeys');
+  const apiKeysCount = useMemo(() => (apiKeys || []).filter((k) => k.trim().length > 0).length, [apiKeys]);
+
+  const { data: disabledKeys = [] } = useChannelDisabledAPIKeys(currentRow?.id || '', {
+    enabled: isEdit && !!currentRow?.id && showApiKeysPanel,
+  });
+
+  const disabledKeySet = useMemo(() => new Set(disabledKeys.map((dk) => dk.key)), [disabledKeys]);
 
   useEffect(() => {
     if (!open || !isDuplicate || !duplicateFromRow) return;
@@ -398,10 +416,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const isClaudeCodeType = (selectedType || derivedChannelType) === 'claudecode';
 
   useEffect(() => {
-    if (isCodexType) {
+    // Only force stream: 'require' for new Codex channels, not when editing existing ones
+    if (isCodexType && !isEdit) {
       form.setValue('policies.stream', 'require');
     }
-  }, [isCodexType, form]);
+  }, [isCodexType, isEdit, form]);
 
   const wrapUnsupported = useCallback(
     (enabled: boolean, children: React.ReactNode, wrapperClassName: string) => {
@@ -552,7 +571,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         }
       }
     },
-    [isEdit, selectedApiFormat, form]
+    [isEdit, selectedApiFormat, form, isDuplicate]
   );
 
   const handleAnthropicAwsChange = useCallback(
@@ -573,11 +592,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         }
       }
     },
-    [isEdit, selectedApiFormat, form]
+    [isEdit, selectedApiFormat, form, isDuplicate]
   );
 
   useEffect(() => {
-    if (isEdit) return;
+    if (isEdit || isDuplicate) return;
 
     if (!isCodexType) {
       codexOAuth.reset();
@@ -590,16 +609,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     }
 
     const providerToChannelType: Partial<Record<string, ChannelType>> = {
-      claudecode: 'claudecode',
+      claudecode: authMode === 'official' ? 'claudecode' : undefined,
+      codex: authMode === 'official' ? 'codex' : undefined,
       antigravity: 'antigravity',
     };
 
-    let channelTypeForURL: ChannelType | undefined;
-    if (isCodexType) {
-      channelTypeForURL = 'codex';
-    } else {
-      channelTypeForURL = providerToChannelType[selectedProvider];
-    }
+    let channelTypeForURL: ChannelType | undefined = providerToChannelType[selectedProvider];
 
     if (channelTypeForURL) {
       const baseURL = getDefaultBaseURL(channelTypeForURL);
@@ -611,7 +626,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         }
       }
     }
-  }, [isEdit, isCodexType, selectedProvider, form, codexOAuth, claudecodeOAuth, antigravityOAuth]);
+  }, [isEdit, isDuplicate, isCodexType, selectedProvider, authMode, form, codexOAuth, claudecodeOAuth, antigravityOAuth]);
 
   const renderOAuthSection = useCallback(
     (oauth: ReturnType<typeof useOAuthFlow>, description: string) => (
@@ -670,6 +685,10 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     }
 
     try {
+      if (values.credentials?.apiKeys) {
+        values.credentials.apiKeys = [...new Set(values.credentials.apiKeys.filter((k) => k.trim().length > 0))];
+      }
+
       const valuesForSubmit = isEdit
         ? values
         : {
@@ -682,7 +701,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         supportedModels,
       };
 
-      if ((isCodexType || isClaudeCodeType) && authMode === 'official') {
+      if ((isCodexType || isClaudeCodeType) && authMode === 'official' && !isDuplicate) {
         const currentType = selectedType || derivedChannelType;
         const baseURL = getDefaultBaseURL(currentType);
         if (baseURL) {
@@ -699,14 +718,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         };
 
         // Check if any credential fields have actual values
-        const hasApiKey = values.credentials?.apiKey && values.credentials.apiKey.trim() !== '';
-        const hasAwsCredentials =
-          values.credentials?.aws?.accessKeyID &&
-          values.credentials.aws.accessKeyID.trim() !== '' &&
-          values.credentials?.aws?.secretAccessKey &&
-          values.credentials.aws.secretAccessKey.trim() !== '' &&
-          values.credentials?.aws?.region &&
-          values.credentials.aws.region.trim() !== '';
+        // apiKey: OAuth 凭据 (codex/claudecode/antigravity)，不会出现在 apiKeys 中
+        const apiKey = values.credentials?.apiKey || '';
+        const hasApiKey = apiKey.trim().length > 0;
+        const apiKeys = values.credentials?.apiKeys || [];
+        const hasApiKeys = apiKeys.length > 0 && apiKeys.some((k) => k.trim() !== '');
         const hasGcpCredentials =
           values.credentials?.gcp?.region &&
           values.credentials.gcp.region.trim() !== '' &&
@@ -716,7 +732,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
           values.credentials.gcp.jsonData.trim() !== '';
 
         // Only include credentials if user provided new values
-        if (!hasApiKey && !hasAwsCredentials && !hasGcpCredentials) {
+        if (!hasApiKey && !hasApiKeys && !hasGcpCredentials) {
           delete updateInput.credentials;
         }
 
@@ -725,40 +741,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
           input: updateInput,
         });
       } else {
-        // For create mode, check if multiple API keys are provided
-        const apiKeys =
-          valuesForSubmit.credentials?.apiKey
-            ?.split('\n')
-            .map((key) => key.trim())
-            .filter((key) => key.length > 0) || [];
-
-        if (apiKeys.length > 1) {
-          if (isCodexType) {
-            toast.error(t('channels.dialogs.codex.errors.bulkCreateUnsupported'));
-            return;
-          }
-
-          const settings = values.settings ?? duplicateFromRow?.settings ?? undefined;
-          const policies = values.policies ?? duplicateFromRow?.policies ?? undefined;
-          // Bulk create: use bulk mutation
-          await bulkCreateChannels.mutateAsync({
-            type: valuesForSubmit.type as string,
-            name: valuesForSubmit.name as string,
-            baseURL: valuesForSubmit.baseURL,
-            tags: valuesForSubmit.tags,
-            apiKeys: apiKeys,
-            supportedModels: supportedModels,
-            defaultTestModel: valuesForSubmit.defaultTestModel as string,
-            settings,
-            policies,
-          });
-        } else {
-          // Single create: use existing mutation
-          await createChannel.mutateAsync({
-            ...(dataWithModels as z.infer<typeof createChannelInputSchema>),
-            settings: values.settings ?? duplicateFromRow?.settings ?? undefined,
-          });
-        }
+        // For create mode, always use createChannel mutation with apiKeys
+        // The backend will handle multiple API keys in a single channel
+        await createChannel.mutateAsync({
+          ...(dataWithModels as z.infer<typeof createChannelInputSchema>),
+          settings: values.settings ?? duplicateFromRow?.settings ?? undefined,
+        });
       }
 
       form.reset();
@@ -828,19 +816,15 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const handleFetchModels = useCallback(async () => {
     const channelType = form.getValues('type');
     const baseURL = form.getValues('baseURL');
-    const apiKey = form.getValues('credentials.apiKey');
+    const apiKeys = form.getValues('credentials.apiKeys');
 
     if (!channelType || !baseURL) {
       return;
     }
 
     try {
-      // Extract first API key from potentially multi-line input
-      const firstApiKey =
-        apiKey
-          ?.split('\n')
-          .map((key) => key.trim())
-          .filter((key) => key.length > 0)[0] || '';
+      // Extract first API key from the array
+      const firstApiKey = apiKeys?.find((key) => key.trim().length > 0) || '';
 
       const result = await fetchModels.mutateAsync({
         channelType,
@@ -859,6 +843,8 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         setFetchedModels(models);
         setUseFetchedModels(true);
         setShowFetchedModelsPanel(true);
+        setShowSupportedModelsPanel(false);
+        setShowApiKeysPanel(false);
         setSelectedFetchedModels([]);
         setFetchedModelsSearch('');
         setShowNotAddedModelsOnly(false);
@@ -870,7 +856,8 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
   const canFetchModels = () => {
     const baseURL = form.watch('baseURL');
-    const apiKey = form.watch('credentials.apiKey');
+    const apiKeys = form.watch('credentials.apiKeys');
+    const hasApiKey = apiKeys?.some((key) => key.trim().length > 0);
 
     if (isCodexType || isAntigravityType) {
       return !!baseURL;
@@ -880,7 +867,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       return !!baseURL;
     }
 
-    return !!baseURL && !!apiKey;
+    return !!baseURL && hasApiKey;
   };
 
   // Memoize quick models to avoid re-evaluating on every render
@@ -952,6 +939,33 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     setShowSupportedModelsPanel(false);
   }, []);
 
+  const closeApiKeysPanel = useCallback(() => {
+    setShowApiKeysPanel(false);
+    setApiKeysSearch('');
+    setSelectedKeysToRemove(new Set());
+    setConfirmRemoveSelectedOpen(false);
+    setConfirmRemoveKey(null);
+  }, []);
+
+  const removeApiKeys = useCallback(
+    (keysToRemove: string[]) => {
+      const currentKeys = form.getValues('credentials.apiKeys') || [];
+      const nextKeys = currentKeys.filter((k) => !keysToRemove.includes(k));
+      const validNextKeys = nextKeys.filter((k) => k.trim().length > 0);
+      if (validNextKeys.length === 0) {
+        toast.error(t('channels.dialogs.fields.apiKey.mustKeepOne'));
+        setConfirmRemoveSelectedOpen(false);
+        setConfirmRemoveKey(null);
+        return;
+      }
+      form.setValue('credentials.apiKeys', nextKeys, { shouldDirty: true, shouldTouch: true });
+      setSelectedKeysToRemove(new Set());
+      setConfirmRemoveSelectedOpen(false);
+      setConfirmRemoveKey(null);
+    },
+    [form, t]
+  );
+
   // Remove deprecated models (models in supportedModels but not in fetchedModels)
   const removeDeprecatedModels = useCallback(() => {
     const fetchedModelsSet = new Set(fetchedModels);
@@ -995,11 +1009,17 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             // Reset expandable panel states
             setShowFetchedModelsPanel(false);
             setShowSupportedModelsPanel(false);
+            setShowApiKeysPanel(false);
             setFetchedModelsSearch('');
             setSupportedModelsSearch('');
             setSelectedFetchedModels([]);
             setShowNotAddedModelsOnly(false);
             setSupportedModelsExpanded(false);
+            setApiKeysSearch('');
+            setSelectedKeysToRemove(new Set());
+            setConfirmRemoveSelectedOpen(false);
+            setConfirmRemoveKey(null);
+            setShowApiKey(false);
             // Reset provider and API format state
             if (initialRow) {
               setSelectedProvider(getProviderFromChannelType(initialRow.type) || 'openai');
@@ -1017,7 +1037,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         }}
       >
         <DialogContent
-          className={`flex max-h-[90vh] flex-col transition-all duration-300 ${showFetchedModelsPanel || showSupportedModelsPanel ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}
+          className={`flex max-h-[90vh] flex-col transition-all duration-300 ${showFetchedModelsPanel || showSupportedModelsPanel || showApiKeysPanel ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}
         >
           <DialogHeader className='flex-shrink-0 text-left'>
             <DialogTitle>{isEdit ? t('channels.dialogs.edit.title') : t('channels.dialogs.create.title')}</DialogTitle>
@@ -1025,16 +1045,16 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               {isEdit ? t('channels.dialogs.edit.description') : t('channels.dialogs.create.description')}
             </DialogDescription>
           </DialogHeader>
-          <div className='flex min-h-0 flex-1 gap-4 overflow-hidden'>
+          <div className='flex min-h-0 flex-1 overflow-hidden md:gap-4'>
             {/* Main Form Section */}
             <div
-              className={`flex min-h-0 flex-1 flex-col overflow-hidden py-1 transition-all duration-300 ${showFetchedModelsPanel || showSupportedModelsPanel ? 'pr-2' : 'pr-0'}`}
+              className={`flex min-h-0 flex-1 flex-col overflow-hidden py-1 transition-all duration-300 ${showFetchedModelsPanel || showSupportedModelsPanel || showApiKeysPanel ? 'pr-2' : 'pr-0'}`}
             >
               <Form {...form}>
                 <form id='channel-form' onSubmit={form.handleSubmit(onSubmit)} className='flex min-h-0 flex-1 flex-col space-y-6 p-0.5'>
                   {/* Provider Selection - Left Side */}
-                  <div className='flex min-h-0 flex-1 gap-6 overflow-hidden'>
-                    <div className='flex min-h-0 w-60 flex-shrink-0 flex-col'>
+                  <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden md:flex-row md:gap-6'>
+                    <div className='flex max-h-48 min-h-0 w-full flex-shrink-0 flex-col md:max-h-none md:w-60'>
                       <FormItem className='flex min-h-0 flex-1 flex-col space-y-2'>
                         <FormLabel className='text-base font-semibold'>{t('channels.dialogs.fields.provider.label')}</FormLabel>
                         <div
@@ -1080,14 +1100,15 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                     </div>
 
                     {/* Right Side - Form Fields */}
-                    <div className='flex-1 space-y-6 overflow-y-auto pr-4'>
+                    <div className='flex-1 space-y-6 overflow-y-auto md:pr-4'>
                       {selectedProvider !== 'jina' && selectedProvider !== 'codex' && selectedProvider !== 'claudecode' && (
-                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                        <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                          <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                             {t('channels.dialogs.fields.apiFormat.label')}
                           </FormLabel>
-                          <div className='col-span-6 space-y-1'>
+                          <div className='max-w-64 space-y-1 md:col-span-6 md:max-w-none'>
                             <SelectDropdown
+                              key={selectedProvider}
                               defaultValue={selectedApiFormat}
                               onValueChange={(value) => handleApiFormatChange(value as ApiFormat)}
                               disabled={isEdit}
@@ -1134,11 +1155,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         </FormItem>
                       )}
                       {selectedProvider === 'codex' && (
-                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                        <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                          <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                             {t('channels.dialogs.fields.apiFormat.label')}
                           </FormLabel>
-                          <div className='col-span-6 space-y-1'>
+                          <div className='space-y-1 md:col-span-6'>
                             <div className='text-sm'>{getApiFormatLabel(OPENAI_RESPONSES)}</div>
                             <p className='text-muted-foreground mt-1 text-xs'>{t('channels.dialogs.fields.apiFormat.editDisabled')}</p>
                           </div>
@@ -1146,11 +1167,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       )}
 
                       {selectedProvider === 'claudecode' && (
-                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                        <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                          <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                             {t('channels.dialogs.fields.apiFormat.label')}
                           </FormLabel>
-                          <div className='col-span-6 space-y-1'>
+                          <div className='space-y-1 md:col-span-6'>
                             <div className='text-sm'>{getApiFormatLabel(ANTHROPIC_MESSAGES)}</div>
                             <p className='text-muted-foreground mt-1 text-xs'>{t('channels.dialogs.fields.apiFormat.editDisabled')}</p>
                           </div>
@@ -1158,18 +1179,23 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       )}
 
                       {selectedProvider === 'antigravity' && (
-                        <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                          <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                        <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                          <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                             {t('channels.dialogs.fields.apiFormat.label')}
                           </FormLabel>
-                          <div className='col-span-6 space-y-1'>
+                          <div className='space-y-1 md:col-span-6'>
                             <div className='text-sm'>{getApiFormatLabel(GEMINI_CONTENTS)}</div>
                             <p className='text-muted-foreground mt-1 text-xs'>{t('channels.dialogs.fields.apiFormat.editDisabled')}</p>
 
                             <div className='mt-3 space-y-2'>
                               <div className='rounded-md border p-3'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                  <Button type='button' variant='secondary' onClick={() => antigravityOAuth.start()} disabled={antigravityOAuth.isStarting}>
+                                  <Button
+                                    type='button'
+                                    variant='secondary'
+                                    onClick={() => antigravityOAuth.start()}
+                                    disabled={antigravityOAuth.isStarting}
+                                  >
                                     {antigravityOAuth.isStarting
                                       ? t('channels.dialogs.antigravity.buttons.starting')
                                       : t('channels.dialogs.antigravity.buttons.startOAuth')}
@@ -1200,14 +1226,20 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                                 )}
 
                                 <div className='mt-3 space-y-2'>
-                                  <FormLabel className='text-sm font-medium'>{t('channels.dialogs.antigravity.labels.callbackUrl')}</FormLabel>
+                                  <FormLabel className='text-sm font-medium'>
+                                    {t('channels.dialogs.antigravity.labels.callbackUrl')}
+                                  </FormLabel>
                                   <Textarea
                                     value={antigravityOAuth.callbackUrl}
                                     onChange={(e) => antigravityOAuth.setCallbackUrl(e.target.value)}
                                     placeholder={t('channels.dialogs.antigravity.placeholders.callbackUrl')}
                                     className='min-h-[80px] resize-y font-mono text-xs'
                                   />
-                                  <Button type='button' onClick={() => antigravityOAuth.exchange()} disabled={antigravityOAuth.isExchanging || !antigravityOAuth.sessionId}>
+                                  <Button
+                                    type='button'
+                                    onClick={() => antigravityOAuth.exchange()}
+                                    disabled={antigravityOAuth.isExchanging || !antigravityOAuth.sessionId}
+                                  >
                                     {antigravityOAuth.isExchanging
                                       ? t('channels.dialogs.antigravity.buttons.exchanging')
                                       : t('channels.dialogs.antigravity.buttons.exchangeAndFillApiKey')}
@@ -1227,11 +1259,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         control={form.control}
                         name='name'
                         render={({ field, fieldState }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.name.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               <Input
                                 placeholder={t('channels.dialogs.fields.name.placeholder')}
                                 autoComplete='off'
@@ -1246,9 +1278,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       />
 
                       {(isCodexType || isClaudeCodeType) && (
-                        <div className='grid grid-cols-8 items-start gap-x-6'>
+                        <div className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
                           <div className='col-span-2' />
-                          <div className='col-span-6 space-y-4'>
+                          <div className='space-y-4 md:col-span-6'>
                             <Tabs
                               value={authMode}
                               onValueChange={(value) => {
@@ -1289,18 +1321,20 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         control={form.control}
                         name='baseURL'
                         render={({ field, fieldState }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.baseURL.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               <Input
                                 placeholder={baseURLPlaceholder}
                                 autoComplete='new-password'
                                 data-form-type='other'
                                 aria-invalid={!!fieldState.error}
                                 data-testid='channel-base-url-input'
-                                disabled={((isCodexType || isClaudeCodeType) && authMode === 'official') || selectedProvider === 'antigravity'}
+                                disabled={
+                                  ((isCodexType || isClaudeCodeType) && authMode === 'official') || selectedProvider === 'antigravity'
+                                }
                                 {...field}
                               />
                               <FormMessage />
@@ -1312,158 +1346,81 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       {(!(isCodexType || isClaudeCodeType) || authMode === 'third-party') &&
                         selectedProvider !== 'antigravity' &&
                         selectedType !== 'anthropic_gcp' && (
-                        <FormField
-                          control={form.control}
-                          name='credentials.apiKey'
-                          render={({ field, fieldState }) => (
-                            <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                              <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                {t('channels.dialogs.fields.apiKey.label')}
-                              </FormLabel>
-                              <div className='col-span-6 space-y-1'>
-                                {isEdit ? (
-                                  <div className='relative'>
-                                    <Input
-                                      type={showApiKey ? 'text' : 'password'}
-                                      placeholder={t('channels.dialogs.fields.apiKey.editPlaceholder')}
-                                      className='col-span-6 pr-20'
-                                      autoComplete='new-password'
-                                      data-form-type='other'
-                                      aria-invalid={!!fieldState.error}
-                                      data-testid='channel-api-key-input'
-                                      {...field}
-                                    />
-                                    <div className='absolute top-1/2 right-1 flex -translate-y-1/2 gap-1'>
-                                      <Button
-                                        type='button'
-                                        variant='ghost'
-                                        size='sm'
-                                        className='h-7 w-7 p-0'
-                                        onClick={() => setShowApiKey(!showApiKey)}
-                                      >
-                                        {showApiKey ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
-                                      </Button>
-                                      <Button
-                                        type='button'
-                                        variant='ghost'
-                                        size='sm'
-                                        className='h-7 w-7 p-0'
-                                        onClick={() => {
-                                          if (field.value) {
-                                            navigator.clipboard.writeText(field.value);
-                                            toast.success(t('channels.messages.credentialsCopied'));
-                                          }
-                                        }}
-                                      >
-                                        <Copy className='h-4 w-4' />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <Textarea
-                                      placeholder={t('channels.dialogs.fields.apiKey.placeholder')}
-                                      className='col-span-6 min-h-[80px] resize-y font-mono text-sm'
-                                      autoComplete='new-password'
-                                      data-form-type='other'
-                                      aria-invalid={!!fieldState.error}
-                                      data-testid='channel-api-key-input'
-                                      {...field}
-                                    />
-                                    <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.apiKey.multiLineHint')}</p>
-                                  </>
-                                )}
-                                <FormMessage />
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-                      )}
-
-                      {selectedType === 'anthropic_gcp' && (
-                        <>
                           <FormField
                             control={form.control}
-                            name='credentials.gcp.region'
+                            name='credentials.apiKeys'
                             render={({ field, fieldState }) => (
-                              <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                                <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                  {t('channels.dialogs.fields.gcpRegion.label')}
+                              <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                                <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
+                                  {t('channels.dialogs.fields.apiKey.label')}
                                 </FormLabel>
-                                <div className='col-span-6 space-y-1'>
-                                  <Input
-                                    placeholder={t('channels.dialogs.fields.gcpRegion.placeholder')}
-                                    className='col-span-6'
-                                    autoComplete='off'
-                                    aria-invalid={!!fieldState.error}
-                                    {...field}
-                                  />
-                                  <FormMessage />
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name='credentials.gcp.projectID'
-                            render={({ field, fieldState }) => (
-                              <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                                <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                  {t('channels.dialogs.fields.gcpProjectID.label')}
-                                </FormLabel>
-                                <div className='col-span-6 space-y-1'>
-                                  <Input
-                                    placeholder={t('channels.dialogs.fields.gcpProjectID.placeholder')}
-                                    className='col-span-6'
-                                    autoComplete='off'
-                                    aria-invalid={!!fieldState.error}
-                                    {...field}
-                                  />
-                                  <FormMessage />
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name='credentials.gcp.jsonData'
-                            render={({ field, fieldState }) => (
-                              <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                                <FormLabel className='col-span-2 pt-2 text-right font-medium'>
-                                  {t('channels.dialogs.fields.gcpJsonData.label')}
-                                </FormLabel>
-                                <div className='col-span-6 space-y-1'>
-                                  <div className='relative'>
-                                    <Textarea
-                                      placeholder={`{
-  "type": "service_account",
-  "project_id": "project-123",
-  "private_key_id": "fdfd",
-  "private_key": "-----BEGIN PRIVATE KEY-----\n-----END PRIVATE KEY-----\n",
-  "client_email": "xxx@developer.gserviceaccount.com",
-  "client_id": "client_213123123",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/xxx-compute%40developer.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}`}
-                                      className='col-span-6 min-h-[200px] resize-y pr-10 font-mono text-xs'
-                                      aria-invalid={!!fieldState.error}
-                                      {...field}
-                                    />
-                                    {isEdit && field.value && (
-                                      <div className='absolute top-1 right-1 flex flex-col gap-1'>
+                                <div className='space-y-1 md:col-span-6'>
+                                  {isEdit ? (
+                                    <div className='relative'>
+                                      <Tooltip open={!showApiKey ? undefined : false}>
+                                        <TooltipTrigger asChild>
+                                          <Textarea
+                                            value={
+                                              showApiKey
+                                                ? field.value?.join('\n') || ''
+                                                : (field.value || [])
+                                                    .map((k) => (k.length > 8 ? k.slice(0, 4) + '****' + k.slice(-4) : '****'))
+                                                    .join('\n')
+                                            }
+                                            onChange={(e) => {
+                                              if (!showApiKey) return;
+                                              const keys = e.target.value.split('\n');
+                                              field.onChange(keys);
+                                            }}
+                                            onBlur={(e) => {
+                                              if (!showApiKey) return;
+                                              const keys = [
+                                                ...new Set(
+                                                  e.target.value
+                                                    .split('\n')
+                                                    .map((k) => k.trim())
+                                                    .filter((k) => k.length > 0)
+                                                ),
+                                              ];
+                                              field.onChange(keys);
+                                              field.onBlur();
+                                            }}
+                                            readOnly={!showApiKey}
+                                            placeholder={t('channels.dialogs.fields.apiKey.editPlaceholder')}
+                                            className='min-h-[80px] resize-y pr-10 font-mono text-sm md:col-span-6'
+                                            autoComplete='new-password'
+                                            data-form-type='other'
+                                            aria-invalid={!!fieldState.error}
+                                            data-testid='channel-api-key-input'
+                                          />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>{t('channels.dialogs.fields.apiKey.revealToEditHint')}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                      <div className='absolute top-2 right-2 flex flex-col gap-1'>
                                         <Button
                                           type='button'
                                           variant='ghost'
                                           size='sm'
                                           className='h-7 w-7 p-0'
-                                          onClick={() => setShowGcpJsonData(!showGcpJsonData)}
+                                          onClick={() => {
+                                            const next = !showApiKey;
+                                            setShowApiKey(next);
+
+                                            if (!next) {
+                                              setShowApiKeysPanel(false);
+                                              return;
+                                            }
+
+                                            if (next) {
+                                              setShowApiKeysPanel(true);
+                                              setShowFetchedModelsPanel(false);
+                                              setShowSupportedModelsPanel(false);
+                                            }
+                                          }}
                                         >
-                                          {showGcpJsonData ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
+                                          {showApiKey ? <EyeOff className='h-4 w-4' /> : <Eye className='h-4 w-4' />}
                                         </Button>
                                         <Button
                                           type='button'
@@ -1471,34 +1428,66 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                                           size='sm'
                                           className='h-7 w-7 p-0'
                                           onClick={() => {
-                                            if (field.value) {
-                                              navigator.clipboard.writeText(field.value);
-                                              toast.success(t('common.copied'));
+                                            const keys = field.value || [];
+                                            if (keys.length > 0) {
+                                              navigator.clipboard.writeText(keys.join('\n'));
+                                              toast.success(t('channels.messages.credentialsCopied'));
                                             }
                                           }}
                                         >
                                           <Copy className='h-4 w-4' />
                                         </Button>
                                       </div>
-                                    )}
-                                  </div>
+                                      <p className='text-muted-foreground mt-1 text-xs'>
+                                        {t('channels.dialogs.fields.apiKey.multiLineHint')}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Textarea
+                                        value={field.value?.join('\n') || ''}
+                                        onChange={(e) => {
+                                          const keys = e.target.value.split('\n');
+                                          field.onChange(keys);
+                                        }}
+                                        onBlur={(e) => {
+                                          const keys = [
+                                            ...new Set(
+                                              e.target.value
+                                                .split('\n')
+                                                .map((k) => k.trim())
+                                                .filter((k) => k.length > 0)
+                                            ),
+                                          ];
+                                          field.onChange(keys);
+                                          field.onBlur();
+                                        }}
+                                        placeholder={t('channels.dialogs.fields.apiKey.placeholder')}
+                                        className='min-h-[80px] resize-y font-mono text-sm md:col-span-6'
+                                        autoComplete='new-password'
+                                        data-form-type='other'
+                                        aria-invalid={!!fieldState.error}
+                                        data-testid='channel-api-key-input'
+                                      />
+                                      <p className='text-muted-foreground text-xs'>{t('channels.dialogs.fields.apiKey.multiLineHint')}</p>
+                                    </>
+                                  )}
                                   <FormMessage />
                                 </div>
                               </FormItem>
                             )}
                           />
-                        </>
-                      )}
+                        )}
 
                       <FormField
                         control={form.control}
                         name='policies.stream'
                         render={({ field }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.streamPolicy.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               {wrapUnsupported(
                                 isCodexType,
                                 <SelectDropdown
@@ -1522,11 +1511,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         )}
                       />
 
-                      <div className='grid grid-cols-8 items-start gap-x-6'>
-                        <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                      <div className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                        <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                           {t('channels.dialogs.fields.supportedModels.label')}
                         </FormLabel>
-                        <div className='col-span-6 space-y-2'>
+                        <div className='space-y-2 md:col-span-6'>
                           <div className='flex gap-2'>
                             {useFetchedModels && fetchedModels.length > 20 ? (
                               <AutoCompleteSelect
@@ -1579,7 +1568,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                                 variant='ghost'
                                 size='sm'
                                 className='h-6 px-2 text-xs'
-                                onClick={() => setShowSupportedModelsPanel(true)}
+                                onClick={() => {
+                                  setShowSupportedModelsPanel(true)
+                                  setShowFetchedModelsPanel(false)
+                                  setShowApiKeysPanel(false)
+                                }}
                               >
                                 <ChevronRight className='mr-1 h-3 w-3' />
                                 {t('channels.dialogs.fields.supportedModels.showMore', {
@@ -1670,17 +1663,17 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         control={form.control}
                         name='defaultTestModel'
                         render={({ field }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.defaultTestModel.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               <SelectDropdown
                                 defaultValue={field.value}
                                 onValueChange={field.onChange}
                                 items={supportedModels.map((model) => ({ value: model, label: model }))}
                                 placeholder={t('channels.dialogs.fields.defaultTestModel.description')}
-                                className='col-span-6'
+                                className='md:col-span-6'
                                 disabled={supportedModels.length === 0}
                                 isControlled={true}
                                 data-testid='default-test-model-select'
@@ -1695,11 +1688,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         control={form.control}
                         name='tags'
                         render={({ field }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.tags.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               <TagsAutocompleteInput
                                 value={field.value || []}
                                 onChange={field.onChange}
@@ -1718,11 +1711,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                         control={form.control}
                         name='remark'
                         render={({ field }) => (
-                          <FormItem className='grid grid-cols-8 items-start gap-x-6'>
-                            <FormLabel className='col-span-2 pt-2 text-right font-medium'>
+                          <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                            <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
                               {t('channels.dialogs.fields.remark.label')}
                             </FormLabel>
-                            <div className='col-span-6 space-y-1'>
+                            <div className='space-y-1 md:col-span-6'>
                               <Textarea
                                 placeholder={t('channels.dialogs.fields.remark.placeholder')}
                                 className='min-h-[80px] resize-y'
@@ -1745,9 +1738,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             <div
               className='border-border flex min-h-0 flex-col overflow-hidden border-l pl-4 transition-all duration-300 ease-out'
               style={{
-                width: showFetchedModelsPanel || showSupportedModelsPanel ? '400px' : '0px',
-                opacity: showFetchedModelsPanel || showSupportedModelsPanel ? 1 : 0,
-                paddingLeft: showFetchedModelsPanel || showSupportedModelsPanel ? '16px' : '0px',
+                width: showFetchedModelsPanel || showSupportedModelsPanel || showApiKeysPanel ? '400px' : '0px',
+                opacity: showFetchedModelsPanel || showSupportedModelsPanel || showApiKeysPanel ? 1 : 0,
+                paddingLeft: showFetchedModelsPanel || showSupportedModelsPanel || showApiKeysPanel ? '16px' : '0px',
               }}
             >
               {/* Fetched Models Panel Content */}
@@ -1864,6 +1857,167 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
               {showFetchedModelsPanel && showSupportedModelsPanel && <div className='border-border my-2 border-t' />}
 
+              {/* API Keys Panel Content */}
+              <div
+                className={`flex h-full min-h-0 flex-col transition-opacity duration-200 ${showApiKeysPanel ? 'opacity-100' : 'pointer-events-none absolute opacity-0'}`}
+              >
+                <div className='mb-3 flex items-center justify-between'>
+                  <h3 className='text-sm font-semibold'>{t('channels.dialogs.fields.apiKey.panelTitle', { count: apiKeysCount })}</h3>
+                  <Button type='button' variant='ghost' size='sm' onClick={closeApiKeysPanel}>
+                    <ChevronLeft className='h-4 w-4' />
+                  </Button>
+                </div>
+
+                <p className='text-muted-foreground mb-3 text-xs'>{t('channels.dialogs.fields.apiKey.panelDescription')}</p>
+
+                {/* Search */}
+                <div className='relative mb-3'>
+                  <Search className='text-muted-foreground absolute top-1/2 left-2 h-4 w-4 -translate-y-1/2' />
+                  <Input
+                    placeholder={t('channels.dialogs.fields.apiKey.searchPlaceholder')}
+                    value={apiKeysSearch}
+                    onChange={(e) => setApiKeysSearch(e.target.value)}
+                    className='h-8 pl-8 text-sm'
+                  />
+                </div>
+
+                {/* Keys List */}
+                <ScrollArea className='min-h-0 flex-1' type='always'>
+                  <div className='space-y-1 pr-3'>
+                    {(() => {
+                      const validKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
+                      const isLastKey = validKeys.length <= 1;
+                      return validKeys
+                      .filter((k) => {
+                        if (!apiKeysSearch.trim()) return true;
+                        const search = apiKeysSearch.trim().toLowerCase();
+                        return k.toLowerCase().includes(search) || k.slice(-4).toLowerCase().includes(search);
+                      })
+                      .map((key) => {
+                        const isSelected = selectedKeysToRemove.has(key);
+                        const isDisabled = disabledKeySet.has(key);
+                        const masked = key.length > 8 ? `${key.slice(0, 4)}****${key.slice(-4)}` : `****${key.slice(-4)}`;
+
+                        return (
+                          <div key={key} className='hover:bg-accent flex items-center justify-between gap-2 rounded-md p-2 text-sm'>
+                            <div className='flex min-w-0 items-center gap-2'>
+                              <Checkbox
+                                checked={isSelected}
+                                disabled={isLastKey}
+                                onCheckedChange={(checked) => {
+                                  setSelectedKeysToRemove((prev) => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                      next.add(key);
+                                    } else {
+                                      next.delete(key);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                aria-label={t('common.columns.selectRow')}
+                              />
+
+                              <div className='min-w-0'>
+                                <div className='flex min-w-0 items-center gap-2'>
+                                  <code className='bg-muted shrink-0 rounded px-2 py-0.5 font-mono text-xs'>{masked}</code>
+                                  {isDisabled && (
+                                    <Badge variant='destructive' className='h-5 px-2 text-[10px]'>
+                                      {t('channels.dialogs.fields.apiKey.disabled')}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {isDisabled && (
+                                  <p className='text-muted-foreground mt-1 text-xs'>{t('channels.dialogs.fields.apiKey.disabledHint')}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {isLastKey ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className='inline-flex'>
+                                    <Button type='button' variant='ghost' size='sm' className='text-muted-foreground h-7 w-7 p-0' disabled>
+                                      <Trash2 className='h-4 w-4' />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{t('channels.dialogs.fields.apiKey.mustKeepOne')}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Popover open={confirmRemoveKey === key} onOpenChange={(isOpen) => setConfirmRemoveKey(isOpen ? key : null)}>
+                                <PopoverTrigger asChild>
+                                  <Button type='button' variant='ghost' size='sm' className='text-destructive h-7 w-7 p-0'>
+                                    <Trash2 className='h-4 w-4' />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className='w-72'>
+                                  <div className='flex flex-col gap-3'>
+                                    <p className='text-sm'>{t('channels.dialogs.fields.apiKey.confirmRemoveSingle')}</p>
+                                    <div className='flex justify-end gap-2'>
+                                      <Button size='sm' variant='outline' onClick={() => setConfirmRemoveKey(null)}>
+                                        {t('common.buttons.cancel')}
+                                      </Button>
+                                      <Button size='sm' variant='destructive' onClick={() => removeApiKeys([key])}>
+                                        {t('common.buttons.confirm')}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </ScrollArea>
+
+                {/* Action Buttons */}
+                <div className='mt-2 flex gap-2 border-t pt-2'>
+                  <Popover open={confirmRemoveSelectedOpen} onOpenChange={setConfirmRemoveSelectedOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type='button' variant='destructive' size='sm' className='flex-1' disabled={selectedKeysToRemove.size === 0}>
+                        <Trash2 className='mr-1 h-4 w-4' />
+                        {t('channels.dialogs.fields.apiKey.removeSelected', { count: selectedKeysToRemove.size })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className='w-80' align='end'>
+                      <div className='flex flex-col gap-3'>
+                        <p className='text-sm'>
+                          {t('channels.dialogs.fields.apiKey.confirmRemoveSelected', { count: selectedKeysToRemove.size })}
+                        </p>
+                        <div className='flex justify-end gap-2'>
+                          <Button size='sm' variant='outline' onClick={() => setConfirmRemoveSelectedOpen(false)}>
+                            {t('common.buttons.cancel')}
+                          </Button>
+                          <Button size='sm' variant='destructive' onClick={() => removeApiKeys(Array.from(selectedKeysToRemove))}>
+                            {t('common.buttons.confirm')}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    className='flex-1'
+                    onClick={() => {
+                      setSelectedKeysToRemove(new Set());
+                      setConfirmRemoveSelectedOpen(false);
+                      setConfirmRemoveKey(null);
+                    }}
+                    disabled={selectedKeysToRemove.size === 0}
+                  >
+                    {t('channels.dialogs.fields.apiKey.clearSelection')}
+                  </Button>
+                </div>
+              </div>
+
               {/* Supported Models Panel Content */}
               <div
                 className={`flex h-full min-h-0 flex-col transition-opacity duration-200 ${showSupportedModelsPanel ? 'opacity-100' : 'pointer-events-none absolute opacity-0'}`}
@@ -1953,11 +2107,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             </div>
           </div>
           <DialogFooter className='flex-shrink-0'>
-            <Button
-              type='button'
-              variant='outline'
-              onClick={() => onOpenChange(false)}
-            >
+            <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>
               {t('common.buttons.cancel')}
             </Button>
             <Button

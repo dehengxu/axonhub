@@ -1475,9 +1475,9 @@ func TestConvertGeminiToLLMResponse_ThoughtSignature(t *testing.T) {
 				t.Helper()
 				require.Len(t, result.Choices, 1)
 				require.NotNil(t, result.Choices[0].Message)
-				require.NotNil(t, result.Choices[0].Message.RedactedReasoningContent)
-				require.True(t, shared.IsGeminiThoughtSignature(result.Choices[0].Message.RedactedReasoningContent))
-				decoded := shared.DecodeGeminiThoughtSignature(result.Choices[0].Message.RedactedReasoningContent)
+				require.NotNil(t, result.Choices[0].Message.ReasoningSignature)
+				require.True(t, shared.IsGeminiThoughtSignature(result.Choices[0].Message.ReasoningSignature))
+				decoded := shared.DecodeGeminiThoughtSignature(result.Choices[0].Message.ReasoningSignature)
 				require.NotNil(t, decoded)
 				require.Equal(t, "signature_A", *decoded)
 				require.Len(t, result.Choices[0].Message.ToolCalls, 1)
@@ -1522,9 +1522,9 @@ func TestConvertGeminiToLLMResponse_ThoughtSignature(t *testing.T) {
 			validate: func(t *testing.T, result *llm.Response) {
 				t.Helper()
 				require.NotNil(t, result.Choices[0].Message)
-				require.NotNil(t, result.Choices[0].Message.RedactedReasoningContent)
-				require.True(t, shared.IsGeminiThoughtSignature(result.Choices[0].Message.RedactedReasoningContent))
-				decoded := shared.DecodeGeminiThoughtSignature(result.Choices[0].Message.RedactedReasoningContent)
+				require.NotNil(t, result.Choices[0].Message.ReasoningSignature)
+				require.True(t, shared.IsGeminiThoughtSignature(result.Choices[0].Message.ReasoningSignature))
+				decoded := shared.DecodeGeminiThoughtSignature(result.Choices[0].Message.ReasoningSignature)
 				require.NotNil(t, decoded)
 				require.Equal(t, "signature_parallel", *decoded)
 				require.Len(t, result.Choices[0].Message.ToolCalls, 2)
@@ -1566,7 +1566,7 @@ func TestConvertGeminiToLLMResponse_ThoughtSignature(t *testing.T) {
 			validate: func(t *testing.T, result *llm.Response) {
 				t.Helper()
 				require.NotNil(t, result.Choices[0].Message)
-				require.Nil(t, result.Choices[0].Message.RedactedReasoningContent)
+				require.Nil(t, result.Choices[0].Message.ReasoningSignature)
 				require.Len(t, result.Choices[0].Message.ToolCalls, 1)
 				tc := result.Choices[0].Message.ToolCalls[0]
 				require.Equal(t, "call_002", tc.ID)
@@ -1592,8 +1592,8 @@ func TestConvertLLMMessageToGeminiContent_ThoughtSignature(t *testing.T) {
 		{
 			name: "tool call with thought signature",
 			input: &llm.Message{
-				Role:                     "assistant",
-				RedactedReasoningContent: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
+				Role:               "assistant",
+				ReasoningSignature: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
 				ToolCalls: []llm.ToolCall{
 					{
 						ID:   "call_001",
@@ -1618,8 +1618,8 @@ func TestConvertLLMMessageToGeminiContent_ThoughtSignature(t *testing.T) {
 		{
 			name: "multiple tool calls - only first has signature",
 			input: &llm.Message{
-				Role:                     "assistant",
-				RedactedReasoningContent: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
+				Role:               "assistant",
+				ReasoningSignature: shared.EncodeGeminiThoughtSignature(lo.ToPtr("signature_A")),
 				ToolCalls: []llm.ToolCall{
 					{
 						ID:   "call_001",
@@ -2804,6 +2804,365 @@ func TestConvertGeminiToLLMResponse_GroundingMetadata(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := convertGeminiToLLMResponse(tt.input, tt.isStream)
+			tt.validate(t, result)
+		})
+	}
+}
+
+// =============================================================================
+// SafetySettings Tests
+// =============================================================================
+
+func TestConvertLLMToGeminiRequest_SafetySettings(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *llm.Request
+		validate func(t *testing.T, result *GenerateContentRequest)
+	}{
+		{
+			name: "request with safety settings",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeySafetySettings: []*SafetySetting{
+						{
+							Category:  "HARM_CATEGORY_HARASSMENT",
+							Threshold: "BLOCK_LOW_AND_ABOVE",
+						},
+						{
+							Category:  "HARM_CATEGORY_HATE_SPEECH",
+							Threshold: "BLOCK_MEDIUM_AND_ABOVE",
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.NotNil(t, result.SafetySettings)
+				require.Len(t, result.SafetySettings, 2)
+				require.Equal(t, "HARM_CATEGORY_HARASSMENT", result.SafetySettings[0].Category)
+				require.Equal(t, "BLOCK_LOW_AND_ABOVE", result.SafetySettings[0].Threshold)
+				require.Equal(t, "HARM_CATEGORY_HATE_SPEECH", result.SafetySettings[1].Category)
+				require.Equal(t, "BLOCK_MEDIUM_AND_ABOVE", result.SafetySettings[1].Threshold)
+			},
+		},
+		{
+			name: "request without safety settings",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.Nil(t, result.SafetySettings)
+			},
+		},
+		{
+			name: "request with empty safety settings",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeySafetySettings: []*SafetySetting{},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.Nil(t, result.SafetySettings)
+			},
+		},
+		{
+			name: "request with all safety categories",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeySafetySettings: []*SafetySetting{
+						{
+							Category:  "HARM_CATEGORY_HARASSMENT",
+							Threshold: "BLOCK_NONE",
+						},
+						{
+							Category:  "HARM_CATEGORY_HATE_SPEECH",
+							Threshold: "BLOCK_LOW_AND_ABOVE",
+						},
+						{
+							Category:  "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+							Threshold: "BLOCK_MEDIUM_AND_ABOVE",
+						},
+						{
+							Category:  "HARM_CATEGORY_DANGEROUS_CONTENT",
+							Threshold: "BLOCK_HIGH_AND_ABOVE",
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.NotNil(t, result.SafetySettings)
+				require.Len(t, result.SafetySettings, 4)
+				require.Equal(t, "HARM_CATEGORY_HARASSMENT", result.SafetySettings[0].Category)
+				require.Equal(t, "BLOCK_NONE", result.SafetySettings[0].Threshold)
+				require.Equal(t, "HARM_CATEGORY_HATE_SPEECH", result.SafetySettings[1].Category)
+				require.Equal(t, "BLOCK_LOW_AND_ABOVE", result.SafetySettings[1].Threshold)
+				require.Equal(t, "HARM_CATEGORY_SEXUALLY_EXPLICIT", result.SafetySettings[2].Category)
+				require.Equal(t, "BLOCK_MEDIUM_AND_ABOVE", result.SafetySettings[2].Threshold)
+				require.Equal(t, "HARM_CATEGORY_DANGEROUS_CONTENT", result.SafetySettings[3].Category)
+				require.Equal(t, "BLOCK_HIGH_AND_ABOVE", result.SafetySettings[3].Threshold)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertLLMToGeminiRequest(tt.input)
+			tt.validate(t, result)
+		})
+	}
+}
+
+func TestExtractSafetySettingsFromMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]any
+		validate func(t *testing.T, result []*SafetySetting)
+	}{
+		{
+			name: "extract multiple safety settings",
+			input: map[string]any{
+				TransformerMetadataKeySafetySettings: []*SafetySetting{
+					{
+						Category:  "HARM_CATEGORY_HARASSMENT",
+						Threshold: "BLOCK_LOW_AND_ABOVE",
+					},
+					{
+						Category:  "HARM_CATEGORY_HATE_SPEECH",
+						Threshold: "BLOCK_MEDIUM_AND_ABOVE",
+					},
+				},
+			},
+			validate: func(t *testing.T, result []*SafetySetting) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.Len(t, result, 2)
+				require.Equal(t, "HARM_CATEGORY_HARASSMENT", result[0].Category)
+				require.Equal(t, "BLOCK_LOW_AND_ABOVE", result[0].Threshold)
+				require.Equal(t, "HARM_CATEGORY_HATE_SPEECH", result[1].Category)
+				require.Equal(t, "BLOCK_MEDIUM_AND_ABOVE", result[1].Threshold)
+			},
+		},
+		{
+			name:  "extract nil safety settings",
+			input: nil,
+			validate: func(t *testing.T, result []*SafetySetting) {
+				t.Helper()
+				require.Nil(t, result)
+			},
+		},
+		{
+			name: "extract empty safety settings",
+			input: map[string]any{
+				TransformerMetadataKeySafetySettings: []*SafetySetting{},
+			},
+			validate: func(t *testing.T, result []*SafetySetting) {
+				t.Helper()
+				require.Nil(t, result)
+			},
+		},
+		{
+			name: "extract single safety setting",
+			input: map[string]any{
+				TransformerMetadataKeySafetySettings: []*SafetySetting{
+					{
+						Category:  "HARM_CATEGORY_DANGEROUS_CONTENT",
+						Threshold: "BLOCK_NONE",
+					},
+				},
+			},
+			validate: func(t *testing.T, result []*SafetySetting) {
+				t.Helper()
+				require.NotNil(t, result)
+				require.Len(t, result, 1)
+				require.Equal(t, "HARM_CATEGORY_DANGEROUS_CONTENT", result[0].Category)
+				require.Equal(t, "BLOCK_NONE", result[0].Threshold)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractSafetySettingsFromMetadata(tt.input)
+			tt.validate(t, result)
+		})
+	}
+}
+
+// =============================================================================
+// ImageConfig Tests
+// =============================================================================
+
+func TestConvertLLMToGeminiRequest_ImageConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *llm.Request
+		validate func(t *testing.T, result *GenerateContentRequest)
+	}{
+		{
+			name: "request with image config",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Generate an image"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeyImageConfig: &ImageConfig{
+						AspectRatio: "16:9",
+						ImageSize:   "2K",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.NotNil(t, result.GenerationConfig)
+				require.NotNil(t, result.GenerationConfig.ImageConfig)
+				require.Equal(t, "16:9", result.GenerationConfig.ImageConfig.AspectRatio)
+				require.Equal(t, "2K", result.GenerationConfig.ImageConfig.ImageSize)
+			},
+		},
+		{
+			name: "request without image config",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.Nil(t, result.GenerationConfig)
+			},
+		},
+		{
+			name: "request with nil image config",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello, Gemini!"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeyImageConfig: nil,
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.Nil(t, result.GenerationConfig)
+			},
+		},
+		{
+			name: "request with only aspect ratio",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Generate an image"),
+						},
+					},
+				},
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeyImageConfig: &ImageConfig{
+						AspectRatio: "1:1",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.NotNil(t, result.GenerationConfig)
+				require.NotNil(t, result.GenerationConfig.ImageConfig)
+				require.Equal(t, "1:1", result.GenerationConfig.ImageConfig.AspectRatio)
+				require.Empty(t, result.GenerationConfig.ImageConfig.ImageSize)
+			},
+		},
+		{
+			name: "request with image config and other generation config",
+			input: &llm.Request{
+				Model: "gemini-2.5-flash",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Generate an image"),
+						},
+					},
+				},
+				Temperature: lo.ToPtr(0.7),
+				TransformerMetadata: map[string]any{
+					TransformerMetadataKeyImageConfig: &ImageConfig{
+						AspectRatio: "9:16",
+						ImageSize:   "4K",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *GenerateContentRequest) {
+				t.Helper()
+				require.NotNil(t, result.GenerationConfig)
+				require.NotNil(t, result.GenerationConfig.ImageConfig)
+				require.Equal(t, "9:16", result.GenerationConfig.ImageConfig.AspectRatio)
+				require.Equal(t, "4K", result.GenerationConfig.ImageConfig.ImageSize)
+				require.NotNil(t, result.GenerationConfig.Temperature)
+				require.Equal(t, 0.7, *result.GenerationConfig.Temperature)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertLLMToGeminiRequestWithConfig(tt.input, nil)
 			tt.validate(t, result)
 		})
 	}
