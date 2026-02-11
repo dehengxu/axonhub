@@ -66,7 +66,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeInt, Default: 0},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "codex", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "deepinfra", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian", "jina", "github", "claudecode", "cerebras"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"openai", "openai_responses", "codex", "vercel", "anthropic", "anthropic_aws", "anthropic_gcp", "gemini_openai", "gemini", "gemini_vertex", "deepseek", "deepseek_anthropic", "deepinfra", "doubao", "doubao_anthropic", "moonshot", "moonshot_anthropic", "zhipu", "zai", "zhipu_anthropic", "zai_anthropic", "anthropic_fake", "openai_fake", "openrouter", "xai", "ppio", "siliconflow", "volcengine", "longcat", "longcat_anthropic", "minimax", "minimax_anthropic", "aihubmix", "burncloud", "modelscope", "bailian", "jina", "github", "claudecode", "cerebras", "antigravity"}},
 		{Name: "base_url", Type: field.TypeString, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"enabled", "disabled", "archived"}, Default: "disabled"},
@@ -240,6 +240,8 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "total_request_count", Type: field.TypeInt},
 		{Name: "success_request_count", Type: field.TypeInt},
+		{Name: "avg_tokens_per_second", Type: field.TypeFloat64, Nullable: true},
+		{Name: "avg_time_to_first_token_ms", Type: field.TypeFloat64, Nullable: true},
 		{Name: "timestamp", Type: field.TypeInt64},
 		{Name: "channel_id", Type: field.TypeInt},
 	}
@@ -251,7 +253,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "channel_probes_channels_channel_probes",
-				Columns:    []*schema.Column{ChannelProbesColumns[4]},
+				Columns:    []*schema.Column{ChannelProbesColumns[6]},
 				RefColumns: []*schema.Column{ChannelsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -260,7 +262,7 @@ var (
 			{
 				Name:    "channel_probes_by_channel_id_timestamp",
 				Unique:  false,
-				Columns: []*schema.Column{ChannelProbesColumns[4], ChannelProbesColumns[3]},
+				Columns: []*schema.Column{ChannelProbesColumns[6], ChannelProbesColumns[5]},
 			},
 		},
 	}
@@ -273,7 +275,7 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "description", Type: field.TypeString},
 		{Name: "primary", Type: field.TypeBool, Default: false},
-		{Name: "type", Type: field.TypeEnum, Enums: []string{"database", "fs", "s3", "gcs"}},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"database", "fs", "s3", "gcs", "webdav"}},
 		{Name: "settings", Type: field.TypeJSON},
 		{Name: "status", Type: field.TypeEnum, Enums: []string{"active", "archived"}, Default: "active"},
 	}

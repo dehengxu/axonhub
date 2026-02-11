@@ -30,6 +30,7 @@ type Handlers struct {
 	Jina           *api.JinaHandlers
 	Codex          *api.CodexHandlers
 	ClaudeCode     *api.ClaudeCodeHandlers
+	Antigravity    *api.AntigravityHandlers
 }
 
 type Services struct {
@@ -97,6 +98,9 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		adminGroup.POST("/claudecode/oauth/start", handlers.ClaudeCode.StartOAuth)
 		adminGroup.POST("/claudecode/oauth/exchange", handlers.ClaudeCode.Exchange)
 
+		adminGroup.POST("/antigravity/oauth/start", handlers.Antigravity.StartOAuth)
+		adminGroup.POST("/antigravity/oauth/exchange", handlers.Antigravity.Exchange)
+
 		// Playground API with channel specification support
 		adminGroup.POST(
 			"/playground/chat",
@@ -130,6 +134,10 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
 		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
+		openaiGroup.POST("/images/generations", handlers.OpenAI.CreateImage)
+		openaiGroup.POST("/images/edits", handlers.OpenAI.CreateImageEdit)
+		// DO NOT SUPPORT IMAGE VARIATION
+		// openaiGroup.POST("/images/variations", handlers.OpenAI.CreateImageVariation)
 
 		// OpenAI-compatible Anthropic endpoint
 		openaiGroup.POST("/messages", handlers.Anthropic.CreateMessage)

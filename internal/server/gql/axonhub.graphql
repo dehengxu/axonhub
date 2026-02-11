@@ -376,6 +376,15 @@ input DataStorageSettingsInput {
   directory: String
   s3: S3Input
   gcs: GCSInput
+  webdav: WebDAVInput
+}
+
+input WebDAVInput {
+  url: String!
+  username: String
+  password: String
+  insecure_skip_tls: Boolean
+  path: String
 }
 
 input S3Input {
@@ -384,6 +393,7 @@ input S3Input {
   region: String
   accessKey: String
   secretKey: String
+  pathStyle: Boolean
 }
 
 input GCSInput {
@@ -396,12 +406,22 @@ type DataStorageSettings {
   directory: String
   s3: S3
   gcs: GCS
+  webdav: WebDAV
+}
+
+type WebDAV {
+  url: String!
+  username: String
+  password: String
+  insecure_skip_tls: Boolean
+  path: String
 }
 
 type S3 {
   bucketName: String!
   endpoint: String!
   region: String!
+  pathStyle: Boolean!
 }
 
 type GCS {
@@ -535,38 +555,6 @@ type ApplyChannelOverrideTemplatePayload {
   channels: [Channel!]!
 }
 
-input QueryChannelOverrideTemplatesInput {
-  """
-  Returns the elements in the list that come after the specified cursor.
-  """
-  after: Cursor
-
-  """
-  Returns the first _n_ elements from the list.
-  """
-  first: Int
-
-  """
-  Returns the elements in the list that come before the specified cursor.
-  """
-  before: Cursor
-
-  """
-  Returns the last _n_ elements from the list.
-  """
-  last: Int
-
-  """
-  Filter by channel type
-  """
-  channelType: ChannelType
-
-  """
-  Search by template name
-  """
-  search: String
-}
-
 type Mutation {
   createChannel(input: CreateChannelInput!): Channel!
   bulkCreateChannels(input: BulkCreateChannelsInput!): [Channel!]!
@@ -682,9 +670,4 @@ extend type Query {
   hasTag: String
   """
   queryChannels(input: QueryChannelInput!): ChannelConnection!
-
-  # Channel Override Template Queries
-  queryChannelOverrideTemplates(
-    input: QueryChannelOverrideTemplatesInput!
-  ): ChannelOverrideTemplateConnection!
 }

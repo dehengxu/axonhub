@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DateRange } from 'react-day-picker';
+import { buildDateRangeWhereClause, type DateTimeRangeValue } from '@/utils/date-range';
 import { usePaginationSearch } from '@/hooks/use-pagination-search';
 import useInterval from '@/hooks/useInterval';
 import { Header } from '@/components/layout/header';
@@ -9,7 +9,6 @@ import { RequestsTable } from './components';
 import { RequestsProvider } from './context';
 import { useRequests } from './data';
 import { Badge } from '@/components/ui/badge';
-import { buildDateRangeWhereClause } from '@/utils/date-range';
 
 function RequestsContent() {
   const { t } = useTranslation();
@@ -21,7 +20,7 @@ function RequestsContent() {
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [channelFilter, setChannelFilter] = useState<string[]>([]);
   const [apiKeyFilter, setApiKeyFilter] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DateTimeRangeValue | undefined>();
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   // Build where clause with filters
@@ -131,7 +130,7 @@ function RequestsContent() {
   );
 
   const handleDateRangeChange = useCallback(
-    (range: DateRange | undefined) => {
+    (range: DateTimeRangeValue | undefined) => {
       setDateRange(range);
       resetCursor();
     },
