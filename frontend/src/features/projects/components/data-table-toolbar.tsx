@@ -1,18 +1,16 @@
-import { Cross2Icon } from '@radix-ui/react-icons'
-import { Table } from '@tanstack/react-table'
-import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Cross2Icon } from '@radix-ui/react-icons';
+import { Table } from '@tanstack/react-table';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface DataTableToolbarProps<TData> {
-  table: Table<TData>
+  table: Table<TData>;
 }
 
-export function DataTableToolbar<TData>({
-  table,
-}: DataTableToolbarProps<TData>) {
-  const { t } = useTranslation()
-  const isFiltered = table.getState().columnFilters.length > 0
+export function DataTableToolbar<TData>({ table }: DataTableToolbarProps<TData>) {
+  const { t } = useTranslation();
+  const isFiltered = table.getState().columnFilters.length > 0;
 
   return (
     <div className='flex items-center justify-between'>
@@ -20,9 +18,7 @@ export function DataTableToolbar<TData>({
         <Input
           placeholder={t('projects.searchProjects')}
           value={(table.getColumn('search')?.getFilterValue() as string) ?? ''}
-          onChange={(event) =>
-            table.getColumn('search')?.setFilterValue(event.target.value)
-          }
+          onChange={(event) => table.getColumn('search')?.setFilterValue(event.target.value)}
           className='h-8 w-[150px] lg:w-[300px]'
         />
         {isFiltered && (
@@ -37,5 +33,5 @@ export function DataTableToolbar<TData>({
         )}
       </div>
     </div>
-  )
+  );
 }

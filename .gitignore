@@ -91,6 +91,7 @@ dev-debug.log
 node_modules/
 # Lock files - project uses pnpm
 package-lock.json
+bun.lock
 # Environment variables
 .env
 # Editor directories and files
@@ -113,11 +114,13 @@ openspec
 .vercel
 .tanstack
 .trae/tasks
+.trae/summary
+.trae/documents
 playwright-report/
 test-results
-.trae
 .claude
 .qoder
+.codebuddy
 dumps
 .builds
 .pnpm-store
@@ -132,16 +135,16 @@ internal/server/static/dist
 coverage.out
 
 # E2E testing artifacts
-scripts/.e2e-backend.pid
-scripts/axonhub-e2e.db
-scripts/e2e-backend.log
-scripts/axonhub-e2e
-scripts/.e2e-backend-db-type
-
+scripts/e2e/.e2e-backend.pid
+scripts/e2e/axonhub-e2e.db
+scripts/e2e/e2e-backend.log
+scripts/e2e/axonhub-e2e
+scripts/e2e/.e2e-backend-db-type
+scripts/migration/migration-test/
 # Migration testing artifacts
-scripts/migration-test/
-
-.serena/
-.roo/
+scripts/migration/migration-test/
 tools
 
+mise.toml
+locales_backup
+.sisyphus

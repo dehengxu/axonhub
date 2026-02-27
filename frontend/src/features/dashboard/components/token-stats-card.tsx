@@ -1,16 +1,16 @@
-import { useState, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { BarChart4, TrendingUp, ArrowUpDown } from 'lucide-react'
+import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { BarChart4, TrendingUp } from 'lucide-react';
 
-import { formatNumber } from '@/utils/format-number'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertTitle } from '@/components/ui/alert'
-import { useTokenStats, useModelTokenStats, useRequestsByModel } from '../data/dashboard'
-import { ModelTokenChart } from './model-token-chart'
-import { ModelTokenTable } from './model-token-table'
-import { ModelTokenStatsCard } from './model-token-stats-card'
+import { formatNumber } from '@/utils/format-number';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { useTokenStats, useModelTokenStats, useRequestsByModel } from '../data/dashboard';
+import { ModelTokenChart } from './model-token-chart';
+import { ModelTokenTable } from './model-token-table';
+import { ModelTokenStatsCard } from './model-token-stats-card';
 import {
   Dialog,
   DialogContent,
@@ -18,24 +18,24 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
 
 export function TokenStatsCard() {
-  const { t } = useTranslation()
-  const { data: stats, isLoading, error } = useTokenStats()
-  const { data: modelStats } = useRequestsByModel()
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
-  const [showModelDetails, setShowModelDetails] = useState(false)
-  const [modelSortOrder, setModelSortOrder] = useState<'asc' | 'desc'>('desc')
+  const { t } = useTranslation();
+  const { data: stats, isLoading, error } = useTokenStats();
+  const { data: modelStats } = useRequestsByModel();
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [showModelDetails, setShowModelDetails] = useState(false);
+  const [modelSortOrder, setModelSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Get available models from model stats
-  const availableModels = modelStats?.map(stat => stat.modelId) || []
+  const availableModels = modelStats?.map((stat) => stat.modelId) || [];
 
   // Get detailed model stats for all available models
   const { data: detailedModelStats, isLoading: isLoadingModelStats } = useModelTokenStats(
     selectedModels.length > 0 ? selectedModels : availableModels,
     'day'
-  )
+  );
 
   // Calculate total consumption across all models
   const totals = useMemo(() => {
@@ -47,11 +47,11 @@ export function TokenStatsCard() {
         totalRequests: acc.totalRequests + curr.count,
         totalPromptTokens: acc.totalPromptTokens + curr.promptTokens,
         totalCompletionTokens: acc.totalCompletionTokens + curr.completionTokens,
-        totalTokens: acc.totalTokens + curr.totalTokens
+        totalTokens: acc.totalTokens + curr.totalTokens,
       }),
       { totalRequests: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0 }
     );
-  }, [detailedModelStats])
+  }, [detailedModelStats]);
 
   if (isLoading) {
     return (
@@ -61,28 +61,39 @@ export function TokenStatsCard() {
           <Skeleton className='h-4 w-4' />
         </CardHeader>
         <CardContent>
-          <Skeleton className='mb-2 h-8 w-[80px]' />
-          <Skeleton className='h-4 w-[140px]' />
+          <div className='space-y-2'>
+            <Skeleton className='h-8 w-[80px]' />
+            <Skeleton className='mt-1 h-4 w-[140px]' />
+          </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (error) {
     return (
       <Card>
         <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-          <CardTitle className='text-sm font-medium'>{t('dashboard.cards.tokenStats')}</CardTitle>
+          <div className='flex items-center gap-2'>
+            <div className='bg-primary/10 text-primary dark:bg-primary/20 rounded-lg p-1.5'>
+              <BarChart4 className='h-4 w-4' />
+            </div>
+            <CardTitle className='text-sm font-medium'>{t('dashboard.cards.tokenStats')}</CardTitle>
+          </div>
+          <div className='flex items-center gap-1'>
+            {/* <span className='text-xs text-muted-foreground'>{t('dashboard.stats.this')}</span> */}
+            <span className='bg-primary/10 text-primary dark:bg-primary/20 rounded-md px-2 py-1 text-xs'>{t('dashboard.stats.month')}</span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className='text-sm text-red-500'>{t('common.loadError')}</div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
-    <Card>
+    <Card className='hover-card'>
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
         <div className='flex items-center gap-2'>
           <div className='bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-full dark:bg-primary/20'>
@@ -102,9 +113,7 @@ export function TokenStatsCard() {
             <DialogContent className='sm:max-w-[90vw] max-w-[95vw] max-h-[90vh] overflow-y-auto'>
               <DialogHeader>
                 <DialogTitle>{t('dashboard.stats.modelTokenStats')}</DialogTitle>
-                <DialogDescription>
-                  {t('dashboard.stats.detailedModelTokenConsumption')}
-                </DialogDescription>
+                <DialogDescription>{t('dashboard.stats.detailedModelTokenConsumption')}</DialogDescription>
               </DialogHeader>
 
               {isLoadingModelStats ? null : totals ? (
@@ -134,74 +143,30 @@ export function TokenStatsCard() {
               ) : detailedModelStats ? (
                 <ModelTokenStatsCard defaultModels={availableModels} />
               ) : (
-                <div className='text-center py-8 text-muted-foreground'>
-                  {t('dashboard.stats.noModelData')}
-                </div>
+                <div className='text-center py-8 text-muted-foreground'>{t('dashboard.stats.noModelData')}</div>
               )}
             </DialogContent>
           </Dialog>
         )}
       </CardHeader>
       <CardContent>
-        <div className='space-y-3'>
-          {/* This month row */}
-          <div className='flex items-center justify-between'>
-            <span className='text-sm'>{t('dashboard.stats.thisMonth')}:</span>
-            <div className='grid grid-cols-3 gap-3 text-xs'>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.input')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalInputTokensThisMonth || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.output')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalOutputTokensThisMonth || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.cached')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalCachedTokensThisMonth || 0)}</span>
-              </div>
-            </div>
+        <div className='flex items-end justify-between'>
+          <div className='text-center'>
+            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.input')}</div>
+            <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalInputTokensThisMonth || 0)}</div>
           </div>
-
-          {/* This week row */}
-          <div className='flex items-center justify-between'>
-            <span className='text-sm'>{t('dashboard.stats.thisWeek')}:</span>
-            <div className='grid grid-cols-3 gap-3 text-xs'>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.input')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalInputTokensThisWeek || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.output')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalOutputTokensThisWeek || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.cached')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalCachedTokensThisWeek || 0)}</span>
-              </div>
-            </div>
+          <div className='bg-border h-8 w-px'></div>
+          <div className='text-center'>
+            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.output')}</div>
+            <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalOutputTokensThisMonth || 0)}</div>
           </div>
-
-          {/* Today row */}
-          <div className='flex items-center justify-between'>
-            <span className='text-sm'>{t('dashboard.stats.today')}:</span>
-            <div className='grid grid-cols-3 gap-3 text-xs'>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.input')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalInputTokensToday || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.output')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalOutputTokensToday || 0)}</span>
-              </div>
-              <div className='flex flex-col items-center min-w-[3rem]'>
-                <span className='text-muted-foreground text-center'>{t('dashboard.stats.cached')}</span>
-                <span className='font-semibold text-center'>{formatNumber(stats?.totalCachedTokensToday || 0)}</span>
-              </div>
-            </div>
+          <div className='bg-border h-8 w-px'></div>
+          <div className='text-center'>
+            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.cached')}</div>
+            <div className='text-lg font-bold font-mono text-muted-foreground'>{formatNumber(stats?.totalCachedTokensThisMonth || 0)}</div>
           </div>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

@@ -55,6 +55,16 @@ func (r *mutationResolver) UpdateRetryPolicy(ctx context.Context, input biz.Retr
 	return true, nil
 }
 
+// UpdateSystemModelSettings is the resolver for the updateSystemModelSettings field.
+func (r *mutationResolver) UpdateSystemModelSettings(ctx context.Context, input biz.SystemModelSettings) (bool, error) {
+	err := r.systemService.SetModelSettings(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update system model settings: %w", err)
+	}
+
+	return true, nil
+}
+
 // UpdateDefaultDataStorage is the resolver for the updateDefaultDataStorage field.
 func (r *mutationResolver) UpdateDefaultDataStorage(ctx context.Context, input UpdateDefaultDataStorageInput) (bool, error) {
 	err := r.systemService.SetDefaultDataStorageID(ctx, input.DataStorageID.ID)
@@ -71,6 +81,58 @@ func (r *mutationResolver) CompleteOnboarding(ctx context.Context, input Complet
 	if err != nil {
 		return false, fmt.Errorf("failed to complete onboarding: %w", err)
 	}
+
+	return true, nil
+}
+
+// CompleteSystemModelSettingOnboarding is the resolver for the completeSystemModelSettingOnboarding field.
+func (r *mutationResolver) CompleteSystemModelSettingOnboarding(ctx context.Context, input CompleteSystemModelSettingOnboardingInput) (bool, error) {
+	err := r.systemService.CompleteSystemModelSettingOnboarding(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to complete system model setting onboarding: %w", err)
+	}
+
+	return true, nil
+}
+
+// CompleteAutoDisableChannelOnboarding is the resolver for the completeAutoDisableChannelOnboarding field.
+func (r *mutationResolver) CompleteAutoDisableChannelOnboarding(ctx context.Context, input CompleteAutoDisableChannelOnboardingInput) (bool, error) {
+	err := r.systemService.CompleteAutoDisableChannelOnboarding(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to complete auto disable channel onboarding: %w", err)
+	}
+
+	return true, nil
+}
+
+// UpdateSystemChannelSettings is the resolver for the updateSystemChannelSettings field.
+func (r *mutationResolver) UpdateSystemChannelSettings(ctx context.Context, input biz.SystemChannelSettings) (bool, error) {
+	err := r.systemService.SetChannelSetting(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update channel setting: %w", err)
+	}
+
+	return true, nil
+}
+
+// UpdateSystemGeneralSettings is the resolver for the updateSystemGeneralSettings field.
+func (r *mutationResolver) UpdateSystemGeneralSettings(ctx context.Context, input biz.SystemGeneralSettings) (bool, error) {
+	err := r.systemService.SetGeneralSettings(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update general settings: %w", err)
+	}
+
+	return true, nil
+}
+
+// CheckProviderQuotas is the resolver for the checkProviderQuotas field.
+func (r *mutationResolver) CheckProviderQuotas(ctx context.Context) (bool, error) {
+	if r.providerQuotaService == nil {
+		return false, fmt.Errorf("provider quota service is not available")
+	}
+
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	r.providerQuotaService.ManualCheck(ctx)
 
 	return true, nil
 }
@@ -117,6 +179,16 @@ func (r *queryResolver) RetryPolicy(ctx context.Context) (*biz.RetryPolicy, erro
 	return r.systemService.RetryPolicy(ctx)
 }
 
+// SystemModelSettings is the resolver for the systemModelSettings field.
+func (r *queryResolver) SystemModelSettings(ctx context.Context) (*biz.SystemModelSettings, error) {
+	settings, err := r.systemService.ModelSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system model settings: %w", err)
+	}
+
+	return settings, nil
+}
+
 // DefaultDataStorageID is the resolver for the defaultDataStorageID field.
 func (r *queryResolver) DefaultDataStorageID(ctx context.Context) (*objects.GUID, error) {
 	id, err := r.systemService.DefaultDataStorageID(ctx)
@@ -135,13 +207,36 @@ func (r *queryResolver) DefaultDataStorageID(ctx context.Context) (*objects.GUID
 }
 
 // OnboardingInfo is the resolver for the onboardingInfo field.
-func (r *queryResolver) OnboardingInfo(ctx context.Context) (*biz.OnboardingInfo, error) {
+func (r *queryResolver) OnboardingInfo(ctx context.Context) (*OnboardingInfo, error) {
 	info, err := r.systemService.OnboardingInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get onboarding info: %w", err)
 	}
 
-	return info, nil
+	if info == nil {
+		return nil, nil
+	}
+
+	result := &OnboardingInfo{
+		Onboarded:   info.Onboarded,
+		CompletedAt: info.CompletedAt,
+	}
+
+	if info.SystemModelSetting != nil {
+		result.SystemModelSetting = &SystemModelSettingOnboarding{
+			Onboarded:   info.SystemModelSetting.Onboarded,
+			CompletedAt: info.SystemModelSetting.CompletedAt,
+		}
+	}
+
+	if info.AutoDisableChannel != nil {
+		result.AutoDisableChannel = &AutoDisableChannelOnboarding{
+			Onboarded:   info.AutoDisableChannel.Onboarded,
+			CompletedAt: info.AutoDisableChannel.CompletedAt,
+		}
+	}
+
+	return result, nil
 }
 
 // SystemVersion is the resolver for the systemVersion field.
@@ -162,4 +257,19 @@ func (r *queryResolver) CheckForUpdate(ctx context.Context) (*VersionCheck, erro
 		HasUpdate:      result.HasUpdate,
 		ReleaseURL:     result.ReleaseURL,
 	}, nil
+}
+
+// SystemChannelSettings is the resolver for the systemChannelSettings field.
+func (r *queryResolver) SystemChannelSettings(ctx context.Context) (*biz.SystemChannelSettings, error) {
+	setting, err := r.systemService.ChannelSetting(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel setting: %w", err)
+	}
+
+	return setting, nil
+}
+
+// SystemGeneralSettings is the resolver for the systemGeneralSettings field.
+func (r *queryResolver) SystemGeneralSettings(ctx context.Context) (*biz.SystemGeneralSettings, error) {
+	return r.systemService.GeneralSettings(ctx)
 }

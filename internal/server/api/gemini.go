@@ -1,29 +1,37 @@
 package api
 
 import (
+	"fmt"
+	"net/http"
+
 	"github.com/gin-contrib/sse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/fx"
 
-	"github.com/looplj/axonhub/internal/llm/transformer/gemini"
 	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/streams"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/streams"
+	"github.com/looplj/axonhub/llm/transformer/gemini"
 )
 
 type GeminiHandlersParams struct {
 	fx.In
 
 	ChannelService  *biz.ChannelService
+	ModelService    *biz.ModelService
 	RequestService  *biz.RequestService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
+	PromptService   *biz.PromptService
+	QuotaService    *biz.QuotaService
 	HttpClient      *httpclient.HttpClient
 }
 
 type GeminiHandlers struct {
+	ChannelService         *biz.ChannelService
+	ModelService           *biz.ModelService
 	ChatCompletionHandlers *ChatCompletionHandlers
 }
 
@@ -32,13 +40,18 @@ func NewGeminiHandlers(params GeminiHandlersParams) *GeminiHandlers {
 		ChatCompletionHandlers: NewChatCompletionHandlers(
 			orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
+				params.ModelService,
 				params.RequestService,
 				params.HttpClient,
 				gemini.NewInboundTransformer(),
 				params.SystemService,
 				params.UsageLogService,
+				params.PromptService,
+				params.QuotaService,
 			),
 		),
+		ChannelService: params.ChannelService,
+		ModelService:   params.ModelService,
 	}
 }
 
@@ -132,6 +145,7 @@ func WriteGeminiSSEStream(c *gin.Context, stream streams.Stream[*httpclient.Stre
 				cur := stream.Current()
 				c.SSEvent(cur.Type, prependSpace(cur.Data))
 				log.Debug(ctx, "write stream event", log.Any("event", cur))
+				c.Writer.Flush()
 			} else {
 				if stream.Err() != nil {
 					log.Error(ctx, "Error in stream", log.Cause(stream.Err()))
@@ -153,4 +167,50 @@ func prependSpace(b []byte) []byte {
 	copy(result[1:], b)
 
 	return result
+}
+
+// GeminiModel represents a model in the list models response.
+type GeminiModel struct {
+	Name                       string   `json:"name"`
+	BaseModelID                string   `json:"baseModelId"`
+	Version                    string   `json:"version"`
+	DisplayName                string   `json:"displayName"`
+	Description                string   `json:"description"`
+	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
+}
+
+// ListModels returns all available Gemini models.
+// This endpoint is compatible with Gemini's /v1/models API.
+// It uses QueryAllChannelModels setting from system config to determine model source.
+func (handlers *GeminiHandlers) ListModels(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	models, err := handlers.ModelService.ListEnabledModels(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gemini.GeminiError{
+			Error: gemini.ErrorDetail{
+				Message: err.Error(),
+				Code:    http.StatusInternalServerError,
+				Status:  "internal_server_error",
+			},
+		})
+
+		return
+	}
+
+	geminiModels := make([]GeminiModel, 0, len(models))
+	for i, model := range models {
+		geminiModels = append(geminiModels, GeminiModel{
+			Name:                       "models/" + model.ID,
+			BaseModelID:                model.ID,
+			Version:                    fmt.Sprintf("%s-%d", model.ID, i),
+			DisplayName:                model.DisplayName,
+			Description:                model.DisplayName,
+			SupportedGenerationMethods: []string{"generateContent", "streamGenerateContent"},
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"models": geminiModels,
+	})
 }

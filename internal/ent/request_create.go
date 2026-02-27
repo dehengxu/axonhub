@@ -148,6 +148,12 @@ func (_c *RequestCreate) SetNillableFormat(v *string) *RequestCreate {
 	return _c
 }
 
+// SetRequestHeaders sets the "request_headers" field.
+func (_c *RequestCreate) SetRequestHeaders(v objects.JSONRawMessage) *RequestCreate {
+	_c.mutation.SetRequestHeaders(v)
+	return _c
+}
+
 // SetRequestBody sets the "request_body" field.
 func (_c *RequestCreate) SetRequestBody(v objects.JSONRawMessage) *RequestCreate {
 	_c.mutation.SetRequestBody(v)
@@ -210,6 +216,20 @@ func (_c *RequestCreate) SetStream(v bool) *RequestCreate {
 func (_c *RequestCreate) SetNillableStream(v *bool) *RequestCreate {
 	if v != nil {
 		_c.SetStream(*v)
+	}
+	return _c
+}
+
+// SetClientIP sets the "client_ip" field.
+func (_c *RequestCreate) SetClientIP(v string) *RequestCreate {
+	_c.mutation.SetClientIP(v)
+	return _c
+}
+
+// SetNillableClientIP sets the "client_ip" field if the given value is not nil.
+func (_c *RequestCreate) SetNillableClientIP(v *string) *RequestCreate {
+	if v != nil {
+		_c.SetClientIP(*v)
 	}
 	return _c
 }
@@ -364,6 +384,10 @@ func (_c *RequestCreate) defaults() error {
 		v := request.DefaultStream
 		_c.mutation.SetStream(v)
 	}
+	if _, ok := _c.mutation.ClientIP(); !ok {
+		v := request.DefaultClientIP
+		_c.mutation.SetClientIP(v)
+	}
 	return nil
 }
 
@@ -405,6 +429,9 @@ func (_c *RequestCreate) check() error {
 	}
 	if _, ok := _c.mutation.Stream(); !ok {
 		return &ValidationError{Name: "stream", err: errors.New(`ent: missing required field "Request.stream"`)}
+	}
+	if _, ok := _c.mutation.ClientIP(); !ok {
+		return &ValidationError{Name: "client_ip", err: errors.New(`ent: missing required field "Request.client_ip"`)}
 	}
 	if len(_c.mutation.ProjectIDs()) == 0 {
 		return &ValidationError{Name: "project", err: errors.New(`ent: missing required edge "Request.project"`)}
@@ -456,6 +483,10 @@ func (_c *RequestCreate) createSpec() (*Request, *sqlgraph.CreateSpec) {
 		_spec.SetField(request.FieldFormat, field.TypeString, value)
 		_node.Format = value
 	}
+	if value, ok := _c.mutation.RequestHeaders(); ok {
+		_spec.SetField(request.FieldRequestHeaders, field.TypeJSON, value)
+		_node.RequestHeaders = value
+	}
 	if value, ok := _c.mutation.RequestBody(); ok {
 		_spec.SetField(request.FieldRequestBody, field.TypeJSON, value)
 		_node.RequestBody = value
@@ -479,6 +510,10 @@ func (_c *RequestCreate) createSpec() (*Request, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Stream(); ok {
 		_spec.SetField(request.FieldStream, field.TypeBool, value)
 		_node.Stream = value
+	}
+	if value, ok := _c.mutation.ClientIP(); ok {
+		_spec.SetField(request.FieldClientIP, field.TypeString, value)
+		_node.ClientIP = value
 	}
 	if value, ok := _c.mutation.MetricsLatencyMs(); ok {
 		_spec.SetField(request.FieldMetricsLatencyMs, field.TypeInt64, value)
@@ -669,6 +704,24 @@ func (u *RequestUpsert) UpdateUpdatedAt() *RequestUpsert {
 	return u
 }
 
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestUpsert) SetRequestHeaders(v objects.JSONRawMessage) *RequestUpsert {
+	u.Set(request.FieldRequestHeaders, v)
+	return u
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestUpsert) UpdateRequestHeaders() *RequestUpsert {
+	u.SetExcluded(request.FieldRequestHeaders)
+	return u
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestUpsert) ClearRequestHeaders() *RequestUpsert {
+	u.SetNull(request.FieldRequestHeaders)
+	return u
+}
+
 // SetResponseBody sets the "response_body" field.
 func (u *RequestUpsert) SetResponseBody(v objects.JSONRawMessage) *RequestUpsert {
 	u.Set(request.FieldResponseBody, v)
@@ -842,6 +895,9 @@ func (u *RequestUpsertOne) UpdateNewValues() *RequestUpsertOne {
 		if _, exists := u.create.mutation.Stream(); exists {
 			s.SetIgnore(request.FieldStream)
 		}
+		if _, exists := u.create.mutation.ClientIP(); exists {
+			s.SetIgnore(request.FieldClientIP)
+		}
 	}))
 	return u
 }
@@ -884,6 +940,27 @@ func (u *RequestUpsertOne) SetUpdatedAt(v time.Time) *RequestUpsertOne {
 func (u *RequestUpsertOne) UpdateUpdatedAt() *RequestUpsertOne {
 	return u.Update(func(s *RequestUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestUpsertOne) SetRequestHeaders(v objects.JSONRawMessage) *RequestUpsertOne {
+	return u.Update(func(s *RequestUpsert) {
+		s.SetRequestHeaders(v)
+	})
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestUpsertOne) UpdateRequestHeaders() *RequestUpsertOne {
+	return u.Update(func(s *RequestUpsert) {
+		s.UpdateRequestHeaders()
+	})
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestUpsertOne) ClearRequestHeaders() *RequestUpsertOne {
+	return u.Update(func(s *RequestUpsert) {
+		s.ClearRequestHeaders()
 	})
 }
 
@@ -1247,6 +1324,9 @@ func (u *RequestUpsertBulk) UpdateNewValues() *RequestUpsertBulk {
 			if _, exists := b.mutation.Stream(); exists {
 				s.SetIgnore(request.FieldStream)
 			}
+			if _, exists := b.mutation.ClientIP(); exists {
+				s.SetIgnore(request.FieldClientIP)
+			}
 		}
 	}))
 	return u
@@ -1290,6 +1370,27 @@ func (u *RequestUpsertBulk) SetUpdatedAt(v time.Time) *RequestUpsertBulk {
 func (u *RequestUpsertBulk) UpdateUpdatedAt() *RequestUpsertBulk {
 	return u.Update(func(s *RequestUpsert) {
 		s.UpdateUpdatedAt()
+	})
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestUpsertBulk) SetRequestHeaders(v objects.JSONRawMessage) *RequestUpsertBulk {
+	return u.Update(func(s *RequestUpsert) {
+		s.SetRequestHeaders(v)
+	})
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestUpsertBulk) UpdateRequestHeaders() *RequestUpsertBulk {
+	return u.Update(func(s *RequestUpsert) {
+		s.UpdateRequestHeaders()
+	})
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestUpsertBulk) ClearRequestHeaders() *RequestUpsertBulk {
+	return u.Update(func(s *RequestUpsert) {
+		s.ClearRequestHeaders()
 	})
 }
 

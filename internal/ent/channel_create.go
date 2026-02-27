@@ -12,7 +12,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelprobe"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -110,14 +112,34 @@ func (_c *ChannelCreate) SetNillableStatus(v *channel.Status) *ChannelCreate {
 }
 
 // SetCredentials sets the "credentials" field.
-func (_c *ChannelCreate) SetCredentials(v *objects.ChannelCredentials) *ChannelCreate {
+func (_c *ChannelCreate) SetCredentials(v objects.ChannelCredentials) *ChannelCreate {
 	_c.mutation.SetCredentials(v)
+	return _c
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (_c *ChannelCreate) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelCreate {
+	_c.mutation.SetDisabledAPIKeys(v)
 	return _c
 }
 
 // SetSupportedModels sets the "supported_models" field.
 func (_c *ChannelCreate) SetSupportedModels(v []string) *ChannelCreate {
 	_c.mutation.SetSupportedModels(v)
+	return _c
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (_c *ChannelCreate) SetAutoSyncSupportedModels(v bool) *ChannelCreate {
+	_c.mutation.SetAutoSyncSupportedModels(v)
+	return _c
+}
+
+// SetNillableAutoSyncSupportedModels sets the "auto_sync_supported_models" field if the given value is not nil.
+func (_c *ChannelCreate) SetNillableAutoSyncSupportedModels(v *bool) *ChannelCreate {
+	if v != nil {
+		_c.SetAutoSyncSupportedModels(*v)
+	}
 	return _c
 }
 
@@ -130,6 +152,20 @@ func (_c *ChannelCreate) SetTags(v []string) *ChannelCreate {
 // SetDefaultTestModel sets the "default_test_model" field.
 func (_c *ChannelCreate) SetDefaultTestModel(v string) *ChannelCreate {
 	_c.mutation.SetDefaultTestModel(v)
+	return _c
+}
+
+// SetPolicies sets the "policies" field.
+func (_c *ChannelCreate) SetPolicies(v objects.ChannelPolicies) *ChannelCreate {
+	_c.mutation.SetPolicies(v)
+	return _c
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_c *ChannelCreate) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelCreate {
+	if v != nil {
+		_c.SetPolicies(*v)
+	}
 	return _c
 }
 
@@ -226,23 +262,53 @@ func (_c *ChannelCreate) AddUsageLogs(v ...*UsageLog) *ChannelCreate {
 	return _c.AddUsageLogIDs(ids...)
 }
 
-// SetChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID.
-func (_c *ChannelCreate) SetChannelPerformanceID(id int) *ChannelCreate {
-	_c.mutation.SetChannelPerformanceID(id)
+// AddChannelProbeIDs adds the "channel_probes" edge to the ChannelProbe entity by IDs.
+func (_c *ChannelCreate) AddChannelProbeIDs(ids ...int) *ChannelCreate {
+	_c.mutation.AddChannelProbeIDs(ids...)
 	return _c
 }
 
-// SetNillableChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID if the given value is not nil.
-func (_c *ChannelCreate) SetNillableChannelPerformanceID(id *int) *ChannelCreate {
+// AddChannelProbes adds the "channel_probes" edges to the ChannelProbe entity.
+func (_c *ChannelCreate) AddChannelProbes(v ...*ChannelProbe) *ChannelCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddChannelProbeIDs(ids...)
+}
+
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_c *ChannelCreate) AddChannelModelPriceIDs(ids ...int) *ChannelCreate {
+	_c.mutation.AddChannelModelPriceIDs(ids...)
+	return _c
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_c *ChannelCreate) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_c *ChannelCreate) SetProviderQuotaStatusID(id int) *ChannelCreate {
+	_c.mutation.SetProviderQuotaStatusID(id)
+	return _c
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_c *ChannelCreate) SetNillableProviderQuotaStatusID(id *int) *ChannelCreate {
 	if id != nil {
-		_c = _c.SetChannelPerformanceID(*id)
+		_c = _c.SetProviderQuotaStatusID(*id)
 	}
 	return _c
 }
 
-// SetChannelPerformance sets the "channel_performance" edge to the ChannelPerformance entity.
-func (_c *ChannelCreate) SetChannelPerformance(v *ChannelPerformance) *ChannelCreate {
-	return _c.SetChannelPerformanceID(v.ID)
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_c *ChannelCreate) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelCreate {
+	return _c.SetProviderQuotaStatusID(v.ID)
 }
 
 // Mutation returns the ChannelMutation object of the builder.
@@ -304,13 +370,21 @@ func (_c *ChannelCreate) defaults() error {
 		v := channel.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	if _, ok := _c.mutation.Credentials(); !ok {
-		v := channel.DefaultCredentials
-		_c.mutation.SetCredentials(v)
+	if _, ok := _c.mutation.DisabledAPIKeys(); !ok {
+		v := channel.DefaultDisabledAPIKeys
+		_c.mutation.SetDisabledAPIKeys(v)
+	}
+	if _, ok := _c.mutation.AutoSyncSupportedModels(); !ok {
+		v := channel.DefaultAutoSyncSupportedModels
+		_c.mutation.SetAutoSyncSupportedModels(v)
 	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := channel.DefaultTags
 		_c.mutation.SetTags(v)
+	}
+	if _, ok := _c.mutation.Policies(); !ok {
+		v := channel.DefaultPolicies
+		_c.mutation.SetPolicies(v)
 	}
 	if _, ok := _c.mutation.Settings(); !ok {
 		v := channel.DefaultSettings
@@ -358,6 +432,9 @@ func (_c *ChannelCreate) check() error {
 	}
 	if _, ok := _c.mutation.SupportedModels(); !ok {
 		return &ValidationError{Name: "supported_models", err: errors.New(`ent: missing required field "Channel.supported_models"`)}
+	}
+	if _, ok := _c.mutation.AutoSyncSupportedModels(); !ok {
+		return &ValidationError{Name: "auto_sync_supported_models", err: errors.New(`ent: missing required field "Channel.auto_sync_supported_models"`)}
 	}
 	if _, ok := _c.mutation.DefaultTestModel(); !ok {
 		return &ValidationError{Name: "default_test_model", err: errors.New(`ent: missing required field "Channel.default_test_model"`)}
@@ -424,9 +501,17 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 		_spec.SetField(channel.FieldCredentials, field.TypeJSON, value)
 		_node.Credentials = value
 	}
+	if value, ok := _c.mutation.DisabledAPIKeys(); ok {
+		_spec.SetField(channel.FieldDisabledAPIKeys, field.TypeJSON, value)
+		_node.DisabledAPIKeys = value
+	}
 	if value, ok := _c.mutation.SupportedModels(); ok {
 		_spec.SetField(channel.FieldSupportedModels, field.TypeJSON, value)
 		_node.SupportedModels = value
+	}
+	if value, ok := _c.mutation.AutoSyncSupportedModels(); ok {
+		_spec.SetField(channel.FieldAutoSyncSupportedModels, field.TypeBool, value)
+		_node.AutoSyncSupportedModels = value
 	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(channel.FieldTags, field.TypeJSON, value)
@@ -435,6 +520,10 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DefaultTestModel(); ok {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
 		_node.DefaultTestModel = value
+	}
+	if value, ok := _c.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+		_node.Policies = value
 	}
 	if value, ok := _c.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
@@ -500,15 +589,47 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.ChannelPerformanceIDs(); len(nodes) > 0 {
+	if nodes := _c.mutation.ChannelProbesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
 			Inverse: false,
-			Table:   channel.ChannelPerformanceTable,
-			Columns: []string{channel.ChannelPerformanceColumn},
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channelperformance.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -641,7 +762,7 @@ func (u *ChannelUpsert) UpdateStatus() *ChannelUpsert {
 }
 
 // SetCredentials sets the "credentials" field.
-func (u *ChannelUpsert) SetCredentials(v *objects.ChannelCredentials) *ChannelUpsert {
+func (u *ChannelUpsert) SetCredentials(v objects.ChannelCredentials) *ChannelUpsert {
 	u.Set(channel.FieldCredentials, v)
 	return u
 }
@@ -649,6 +770,24 @@ func (u *ChannelUpsert) SetCredentials(v *objects.ChannelCredentials) *ChannelUp
 // UpdateCredentials sets the "credentials" field to the value that was provided on create.
 func (u *ChannelUpsert) UpdateCredentials() *ChannelUpsert {
 	u.SetExcluded(channel.FieldCredentials)
+	return u
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (u *ChannelUpsert) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpsert {
+	u.Set(channel.FieldDisabledAPIKeys, v)
+	return u
+}
+
+// UpdateDisabledAPIKeys sets the "disabled_api_keys" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdateDisabledAPIKeys() *ChannelUpsert {
+	u.SetExcluded(channel.FieldDisabledAPIKeys)
+	return u
+}
+
+// ClearDisabledAPIKeys clears the value of the "disabled_api_keys" field.
+func (u *ChannelUpsert) ClearDisabledAPIKeys() *ChannelUpsert {
+	u.SetNull(channel.FieldDisabledAPIKeys)
 	return u
 }
 
@@ -661,6 +800,18 @@ func (u *ChannelUpsert) SetSupportedModels(v []string) *ChannelUpsert {
 // UpdateSupportedModels sets the "supported_models" field to the value that was provided on create.
 func (u *ChannelUpsert) UpdateSupportedModels() *ChannelUpsert {
 	u.SetExcluded(channel.FieldSupportedModels)
+	return u
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (u *ChannelUpsert) SetAutoSyncSupportedModels(v bool) *ChannelUpsert {
+	u.Set(channel.FieldAutoSyncSupportedModels, v)
+	return u
+}
+
+// UpdateAutoSyncSupportedModels sets the "auto_sync_supported_models" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdateAutoSyncSupportedModels() *ChannelUpsert {
+	u.SetExcluded(channel.FieldAutoSyncSupportedModels)
 	return u
 }
 
@@ -691,6 +842,24 @@ func (u *ChannelUpsert) SetDefaultTestModel(v string) *ChannelUpsert {
 // UpdateDefaultTestModel sets the "default_test_model" field to the value that was provided on create.
 func (u *ChannelUpsert) UpdateDefaultTestModel() *ChannelUpsert {
 	u.SetExcluded(channel.FieldDefaultTestModel)
+	return u
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsert) SetPolicies(v objects.ChannelPolicies) *ChannelUpsert {
+	u.Set(channel.FieldPolicies, v)
+	return u
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdatePolicies() *ChannelUpsert {
+	u.SetExcluded(channel.FieldPolicies)
+	return u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsert) ClearPolicies() *ChannelUpsert {
+	u.SetNull(channel.FieldPolicies)
 	return u
 }
 
@@ -899,7 +1068,7 @@ func (u *ChannelUpsertOne) UpdateStatus() *ChannelUpsertOne {
 }
 
 // SetCredentials sets the "credentials" field.
-func (u *ChannelUpsertOne) SetCredentials(v *objects.ChannelCredentials) *ChannelUpsertOne {
+func (u *ChannelUpsertOne) SetCredentials(v objects.ChannelCredentials) *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.SetCredentials(v)
 	})
@@ -909,6 +1078,27 @@ func (u *ChannelUpsertOne) SetCredentials(v *objects.ChannelCredentials) *Channe
 func (u *ChannelUpsertOne) UpdateCredentials() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateCredentials()
+	})
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (u *ChannelUpsertOne) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetDisabledAPIKeys(v)
+	})
+}
+
+// UpdateDisabledAPIKeys sets the "disabled_api_keys" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdateDisabledAPIKeys() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateDisabledAPIKeys()
+	})
+}
+
+// ClearDisabledAPIKeys clears the value of the "disabled_api_keys" field.
+func (u *ChannelUpsertOne) ClearDisabledAPIKeys() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearDisabledAPIKeys()
 	})
 }
 
@@ -923,6 +1113,20 @@ func (u *ChannelUpsertOne) SetSupportedModels(v []string) *ChannelUpsertOne {
 func (u *ChannelUpsertOne) UpdateSupportedModels() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateSupportedModels()
+	})
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (u *ChannelUpsertOne) SetAutoSyncSupportedModels(v bool) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetAutoSyncSupportedModels(v)
+	})
+}
+
+// UpdateAutoSyncSupportedModels sets the "auto_sync_supported_models" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdateAutoSyncSupportedModels() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateAutoSyncSupportedModels()
 	})
 }
 
@@ -958,6 +1162,27 @@ func (u *ChannelUpsertOne) SetDefaultTestModel(v string) *ChannelUpsertOne {
 func (u *ChannelUpsertOne) UpdateDefaultTestModel() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDefaultTestModel()
+	})
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsertOne) SetPolicies(v objects.ChannelPolicies) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetPolicies(v)
+	})
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdatePolicies() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdatePolicies()
+	})
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsertOne) ClearPolicies() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearPolicies()
 	})
 }
 
@@ -1344,7 +1569,7 @@ func (u *ChannelUpsertBulk) UpdateStatus() *ChannelUpsertBulk {
 }
 
 // SetCredentials sets the "credentials" field.
-func (u *ChannelUpsertBulk) SetCredentials(v *objects.ChannelCredentials) *ChannelUpsertBulk {
+func (u *ChannelUpsertBulk) SetCredentials(v objects.ChannelCredentials) *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.SetCredentials(v)
 	})
@@ -1354,6 +1579,27 @@ func (u *ChannelUpsertBulk) SetCredentials(v *objects.ChannelCredentials) *Chann
 func (u *ChannelUpsertBulk) UpdateCredentials() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateCredentials()
+	})
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (u *ChannelUpsertBulk) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetDisabledAPIKeys(v)
+	})
+}
+
+// UpdateDisabledAPIKeys sets the "disabled_api_keys" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdateDisabledAPIKeys() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateDisabledAPIKeys()
+	})
+}
+
+// ClearDisabledAPIKeys clears the value of the "disabled_api_keys" field.
+func (u *ChannelUpsertBulk) ClearDisabledAPIKeys() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearDisabledAPIKeys()
 	})
 }
 
@@ -1368,6 +1614,20 @@ func (u *ChannelUpsertBulk) SetSupportedModels(v []string) *ChannelUpsertBulk {
 func (u *ChannelUpsertBulk) UpdateSupportedModels() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateSupportedModels()
+	})
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (u *ChannelUpsertBulk) SetAutoSyncSupportedModels(v bool) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetAutoSyncSupportedModels(v)
+	})
+}
+
+// UpdateAutoSyncSupportedModels sets the "auto_sync_supported_models" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdateAutoSyncSupportedModels() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateAutoSyncSupportedModels()
 	})
 }
 
@@ -1403,6 +1663,27 @@ func (u *ChannelUpsertBulk) SetDefaultTestModel(v string) *ChannelUpsertBulk {
 func (u *ChannelUpsertBulk) UpdateDefaultTestModel() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDefaultTestModel()
+	})
+}
+
+// SetPolicies sets the "policies" field.
+func (u *ChannelUpsertBulk) SetPolicies(v objects.ChannelPolicies) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetPolicies(v)
+	})
+}
+
+// UpdatePolicies sets the "policies" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdatePolicies() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdatePolicies()
+	})
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (u *ChannelUpsertBulk) ClearPolicies() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearPolicies()
 	})
 }
 

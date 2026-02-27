@@ -7,12 +7,33 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"time"
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/shopspring/decimal"
 )
+
+type APIKeyProfileQuotaUsage struct {
+	ProfileName string               `json:"profileName"`
+	Quota       *objects.APIKeyQuota `json:"quota"`
+	Window      *APIKeyQuotaWindow   `json:"window"`
+	Usage       *APIKeyQuotaUsage    `json:"usage"`
+}
+
+type APIKeyQuotaUsage struct {
+	RequestCount int             `json:"requestCount"`
+	TotalTokens  int             `json:"totalTokens"`
+	TotalCost    decimal.Decimal `json:"totalCost"`
+}
+
+type APIKeyQuotaWindow struct {
+	Start *time.Time `json:"start,omitempty"`
+	End   *time.Time `json:"end,omitempty"`
+}
 
 type AddUserToProjectInput struct {
 	ProjectID objects.GUID    `json:"projectId"`
@@ -34,6 +55,27 @@ type ApplyChannelOverrideTemplatePayload struct {
 	Channels []*ent.Channel `json:"channels"`
 }
 
+type AutoDisableAPIKey struct {
+	Enabled  bool                       `json:"enabled"`
+	Statuses []*AutoDisableAPIKeyStatus `json:"statuses"`
+}
+
+type AutoDisableAPIKeyStatus struct {
+	Status int `json:"status"`
+	Times  int `json:"times"`
+}
+
+type AutoDisableChannelOnboarding struct {
+	Onboarded   bool       `json:"onboarded"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+}
+
+type BackupPayload struct {
+	Success bool    `json:"success"`
+	Data    *string `json:"data,omitempty"`
+	Message *string `json:"message,omitempty"`
+}
+
 type BrandSettings struct {
 	BrandName *string `json:"brandName,omitempty"`
 	BrandLogo *string `json:"brandLogo,omitempty"`
@@ -53,12 +95,30 @@ type BulkUpdateChannelOrderingResult struct {
 	Channels []*ent.Channel `json:"channels"`
 }
 
+type ChannelSuccessRate struct {
+	ChannelID    objects.GUID `json:"channelId"`
+	ChannelName  string       `json:"channelName"`
+	ChannelType  string       `json:"channelType"`
+	SuccessCount int          `json:"successCount"`
+	FailedCount  int          `json:"failedCount"`
+	TotalCount   int          `json:"totalCount"`
+	SuccessRate  float64      `json:"successRate"`
+}
+
 type ChannelTypeCount struct {
 	Type  string `json:"type"`
 	Count int    `json:"count"`
 }
 
+type CompleteAutoDisableChannelOnboardingInput struct {
+	Dummy *string `json:"dummy,omitempty"`
+}
+
 type CompleteOnboardingInput struct {
+	Dummy *string `json:"dummy,omitempty"`
+}
+
+type CompleteSystemModelSettingOnboardingInput struct {
 	Dummy *string `json:"dummy,omitempty"`
 }
 
@@ -68,12 +128,13 @@ type CountChannelsByTypeInput struct {
 }
 
 type DailyRequestStats struct {
-	Date  string `json:"date"`
-	Count int    `json:"count"`
+	Date   string  `json:"date"`
+	Count  int     `json:"count"`
+	Tokens int     `json:"tokens"`
+	Cost   float64 `json:"cost"`
 }
 
 type DashboardOverview struct {
-	TotalUsers          int           `json:"totalUsers"`
 	TotalRequests       int           `json:"totalRequests"`
 	RequestStats        *RequestStats `json:"requestStats"`
 	FailedRequests      int           `json:"failedRequests"`
@@ -81,8 +142,8 @@ type DashboardOverview struct {
 }
 
 type FetchModelsPayload struct {
-	Models []*objects.ModelIdentify `json:"models"`
-	Error  *string                  `json:"error,omitempty"`
+	Models []*biz.ModelIdentify `json:"models"`
+	Error  *string              `json:"error,omitempty"`
 }
 
 type HourlyRequestStats struct {
@@ -137,10 +198,18 @@ type ModelTokenTrendData struct {
 	Dates  []string           `json:"dates"`
 }
 
-type ModelsInput struct {
-	StatusIn       []channel.Status `json:"statusIn,omitempty"`
-	IncludeMapping *bool            `json:"includeMapping,omitempty"`
-	IncludePrefix  *bool            `json:"includePrefix,omitempty"`
+type OnboardingInfo struct {
+	Onboarded          bool                          `json:"onboarded"`
+	CompletedAt        *time.Time                    `json:"completedAt,omitempty"`
+	SystemModelSetting *SystemModelSettingOnboarding `json:"systemModelSetting,omitempty"`
+	AutoDisableChannel *AutoDisableChannelOnboarding `json:"autoDisableChannel,omitempty"`
+}
+
+type QueryModelsInput struct {
+	StatusIn                []channel.Status `json:"statusIn,omitempty"`
+	IncludeMapping          *bool            `json:"includeMapping,omitempty"`
+	IncludePrefix           *bool            `json:"includePrefix,omitempty"`
+	IncludeAllChannelModels *bool            `json:"includeAllChannelModels,omitempty"`
 }
 
 type RemoveUserFromProjectInput struct {
@@ -151,18 +220,29 @@ type RemoveUserFromProjectInput struct {
 type RequestStats struct {
 	RequestsToday     int `json:"requestsToday"`
 	RequestsThisWeek  int `json:"requestsThisWeek"`
+	RequestsLastWeek  int `json:"requestsLastWeek"`
 	RequestsThisMonth int `json:"requestsThisMonth"`
+}
+
+type RequestStatsByAPIKey struct {
+	APIKeyID   objects.GUID `json:"apiKeyId"`
+	APIKeyName string       `json:"apiKeyName"`
+	Count      int          `json:"count"`
 }
 
 type RequestStatsByChannel struct {
 	ChannelName string `json:"channelName"`
-	ChannelType string `json:"channelType"`
 	Count       int    `json:"count"`
 }
 
 type RequestStatsByModel struct {
 	ModelID string `json:"modelId"`
 	Count   int    `json:"count"`
+}
+
+type RestorePayload struct {
+	Success bool    `json:"success"`
+	Message *string `json:"message,omitempty"`
 }
 
 type ScopeInfo struct {
@@ -181,14 +261,19 @@ type SignInPayload struct {
 	Token string    `json:"token"`
 }
 
+type SystemModelSettingOnboarding struct {
+	Onboarded   bool       `json:"onboarded"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+}
+
 type SystemStatus struct {
 	IsInitialized bool `json:"isInitialized"`
 }
 
 type TestChannelInput struct {
-	ChannelID objects.GUID         `json:"channelID"`
-	ModelID   *string              `json:"modelID,omitempty"`
-	Proxy     *objects.ProxyConfig `json:"proxy,omitempty"`
+	ChannelID objects.GUID            `json:"channelID"`
+	ModelID   *string                 `json:"modelID,omitempty"`
+	Proxy     *httpclient.ProxyConfig `json:"proxy,omitempty"`
 }
 
 type TestChannelPayload struct {
@@ -210,11 +295,41 @@ type TokenStats struct {
 	TotalCachedTokensThisMonth int `json:"totalCachedTokensThisMonth"`
 }
 
+type TokenStatsByAPIKey struct {
+	APIKeyID        objects.GUID `json:"apiKeyId"`
+	APIKeyName      string       `json:"apiKeyName"`
+	InputTokens     int          `json:"inputTokens"`
+	OutputTokens    int          `json:"outputTokens"`
+	CachedTokens    int          `json:"cachedTokens"`
+	ReasoningTokens int          `json:"reasoningTokens"`
+	TotalTokens     int          `json:"totalTokens"`
+}
+
 type TopRequestsProjects struct {
 	ProjectID          objects.GUID `json:"projectId"`
 	ProjectName        string       `json:"projectName"`
 	ProjectDescription string       `json:"projectDescription"`
 	RequestCount       int          `json:"requestCount"`
+}
+
+type TriggerBackupPayload struct {
+	Success bool    `json:"success"`
+	Message *string `json:"message,omitempty"`
+}
+
+type UpdateAPIKeyScopesInput struct {
+	Scopes []string `json:"scopes"`
+}
+
+type UpdateAutoBackupSettingsInput struct {
+	Enabled            *bool                `json:"enabled,omitempty"`
+	Frequency          *biz.BackupFrequency `json:"frequency,omitempty"`
+	DataStorageID      *int                 `json:"dataStorageID,omitempty"`
+	IncludeChannels    *bool                `json:"includeChannels,omitempty"`
+	IncludeModels      *bool                `json:"includeModels,omitempty"`
+	IncludeAPIKeys     *bool                `json:"includeAPIKeys,omitempty"`
+	IncludeModelPrices *bool                `json:"includeModelPrices,omitempty"`
+	RetentionDays      *int                 `json:"retentionDays,omitempty"`
 }
 
 type UpdateBrandSettingsInput struct {
@@ -227,7 +342,6 @@ type UpdateDefaultDataStorageInput struct {
 }
 
 type UpdateMeInput struct {
-	Email          *string `json:"email,omitempty"`
 	FirstName      *string `json:"firstName,omitempty"`
 	LastName       *string `json:"lastName,omitempty"`
 	PreferLanguage *string `json:"preferLanguage,omitempty"`

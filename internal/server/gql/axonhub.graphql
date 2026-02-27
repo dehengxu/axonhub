@@ -1,5 +1,7 @@
 scalar JSONRawMessage
 scalar JSONRawMessageInput
+scalar Decimal
+scalar DecimalInput
 
 type ModelMapping {
   from: String!
@@ -14,6 +16,36 @@ type HeaderEntry {
 input HeaderEntryInput {
   key: String!
   value: String!
+}
+
+type OverrideOperation {
+  op: String!
+  path: String
+  from: String
+  to: String
+  value: String
+  condition: String
+}
+
+input OverrideOperationInput {
+  op: String!
+  path: String
+  from: String
+  to: String
+  value: String
+  condition: String
+}
+
+type TransformOptions {
+  forceArrayInstructions: Boolean!
+  forceArrayInputs: Boolean!
+  replaceDeveloperRoleWithSystem: Boolean!
+}
+
+input TransformOptionsInput {
+  forceArrayInstructions: Boolean
+  forceArrayInputs: Boolean
+  replaceDeveloperRoleWithSystem: Boolean
 }
 
 enum ProxyType {
@@ -40,9 +72,26 @@ type ChannelSettings {
   extraModelPrefix: String
   modelMappings: [ModelMapping!]
   autoTrimedModelPrefixes: [String!]
-  overrideParameters: String
-  overrideHeaders: [HeaderEntry!]
+  hideOriginalModels: Boolean
+  hideMappedModels: Boolean
   proxy: ProxyConfig
+  transformOptions: TransformOptions
+  headerOverrideOperations: [OverrideOperation!]! @goField(forceResolver: true)
+  bodyOverrideOperations: [OverrideOperation!]! @goField(forceResolver: true)
+}
+
+enum CapabilityPolicy {
+  unlimited
+  require
+  forbid
+}
+
+type ChannelPolicies {
+  stream: CapabilityPolicy
+}
+
+input ChannelPoliciesInput {
+  stream: CapabilityPolicy
 }
 
 input ModelMappingInput {
@@ -54,15 +103,35 @@ input ChannelSettingsInput {
   extraModelPrefix: String
   modelMappings: [ModelMappingInput!]
   autoTrimedModelPrefixes: [String!]
-  overrideParameters: String
-  overrideHeaders: [HeaderEntryInput!]
+  hideOriginalModels: Boolean
+  hideMappedModels: Boolean
   proxy: ProxyConfigInput
+  transformOptions: TransformOptionsInput
+  headerOverrideOperations: [OverrideOperationInput!]
+  bodyOverrideOperations: [OverrideOperationInput!]
 }
 
 type ChannelCredentials {
   apiKey: String
-  aws: AWSCredential
+  apiKeys: [String!]
   gcp: GCPCredential
+  oauth: OAuthCredentials
+}
+
+type DisabledAPIKey {
+  key: String!
+  disabledAt: Time!
+  errorCode: Int!
+  reason: String
+}
+
+type OAuthCredentials {
+  accessToken: String
+  refreshToken: String
+  clientID: String
+  expiresAt: Time
+  tokenType: String
+  scopes: [String!]
 }
 
 type GCPCredential {
@@ -71,22 +140,20 @@ type GCPCredential {
   jsonData: String!
 }
 
-type AWSCredential {
-  accessKeyID: String!
-  secretAccessKey: String!
-  region: String!
-}
-
 input ChannelCredentialsInput {
   apiKey: String
-  aws: AWSCredentialInput
+  apiKeys: [String!]
   gcp: GCPCredentialInput
+  oauth: OAuthCredentialsInput
 }
 
-input AWSCredentialInput {
-  accessKeyID: String!
-  secretAccessKey: String!
-  region: String!
+input OAuthCredentialsInput {
+  accessToken: String
+  refreshToken: String
+  clientID: String
+  expiresAt: Time
+  tokenType: String
+  scopes: [String!]
 }
 
 input GCPCredentialInput {
@@ -140,14 +207,18 @@ type BulkImportChannelsResult {
 }
 
 input BulkCreateChannelsInput {
-  type: String!
+  type: ChannelType!
   name: String!
   tags: [String!]
   baseURL: String
   apiKeys: [String!]!
   supportedModels: [String!]!
+  autoSyncSupportedModels: Boolean
   defaultTestModel: String!
   settings: ChannelSettingsInput
+  policies: ChannelPoliciesInput
+  orderingWeight: Int
+  remark: String
 }
 
 input ChannelOrderingItem {
@@ -175,6 +246,13 @@ input APIKeyProfileInput {
   modelMappings: [ModelMappingInput!]
   channelIDs: [Int!]
   channelTags: [String!]
+  modelIDs: [String!]
+  quota: APIKeyQuotaInput
+  loadBalanceStrategy: String
+}
+
+input UpdateAPIKeyScopesInput {
+  scopes: [String!]!
 }
 
 type APIKeyProfiles {
@@ -187,6 +265,88 @@ type APIKeyProfile {
   modelMappings: [ModelMapping!]
   channelIDs: [Int!]
   channelTags: [String!]
+  modelIDs: [String!]
+  quota: APIKeyQuota
+  loadBalanceStrategy: String
+}
+
+input APIKeyQuotaInput {
+  requests: Int
+  totalTokens: Int
+  cost: DecimalInput
+  period: APIKeyQuotaPeriodInput!
+}
+
+input APIKeyQuotaPeriodInput {
+  type: APIKeyQuotaPeriodType!
+  pastDuration: APIKeyQuotaPastDurationInput
+  calendarDuration: APIKeyQuotaCalendarDurationInput
+}
+
+enum APIKeyQuotaPeriodType {
+  all_time
+  past_duration
+  calendar_duration
+}
+
+input APIKeyQuotaPastDurationInput {
+  value: Int!
+  unit: APIKeyQuotaPastDurationUnit!
+}
+
+enum APIKeyQuotaPastDurationUnit {
+  minute
+  hour
+  day
+}
+
+input APIKeyQuotaCalendarDurationInput {
+  unit: APIKeyQuotaCalendarDurationUnit!
+}
+
+enum APIKeyQuotaCalendarDurationUnit {
+  day
+  month
+}
+
+type APIKeyQuota {
+  requests: Int
+  totalTokens: Int
+  cost: Decimal
+  period: APIKeyQuotaPeriod!
+}
+
+type APIKeyQuotaPeriod {
+  type: APIKeyQuotaPeriodType!
+  pastDuration: APIKeyQuotaPastDuration
+  calendarDuration: APIKeyQuotaCalendarDuration
+}
+
+type APIKeyQuotaPastDuration {
+  value: Int!
+  unit: APIKeyQuotaPastDurationUnit!
+}
+
+type APIKeyQuotaCalendarDuration {
+  unit: APIKeyQuotaCalendarDurationUnit!
+}
+
+type APIKeyQuotaUsage {
+  requestCount: Int!
+  totalTokens: Int!
+  totalCost: Decimal!
+}
+
+type APIKeyQuotaWindow {
+  start: Time
+  end: Time
+}
+
+type APIKeyProfileQuotaUsage {
+  profileName: String!
+  quota: APIKeyQuota!
+  window: APIKeyQuotaWindow!
+  usage: APIKeyQuotaUsage!
 }
 
 input FetchModelsInput {
@@ -205,15 +365,16 @@ type ModelIdentify {
   id: String!
 }
 
-type Model {
+type ModelIdentityWithStatus {
   id: String!
   status: ChannelStatus!
 }
 
-input ModelsInput {
+input QueryModelsInput {
   statusIn: [ChannelStatus!]
   includeMapping: Boolean
   includePrefix: Boolean
+  includeAllChannelModels: Boolean
 }
 
 type ChannelTypeCount {
@@ -248,6 +409,15 @@ input DataStorageSettingsInput {
   directory: String
   s3: S3Input
   gcs: GCSInput
+  webdav: WebDAVInput
+}
+
+input WebDAVInput {
+  url: String!
+  username: String
+  password: String
+  insecure_skip_tls: Boolean
+  path: String
 }
 
 input S3Input {
@@ -256,6 +426,7 @@ input S3Input {
   region: String
   accessKey: String
   secretKey: String
+  pathStyle: Boolean
 }
 
 input GCSInput {
@@ -268,16 +439,35 @@ type DataStorageSettings {
   directory: String
   s3: S3
   gcs: GCS
+  webdav: WebDAV
+}
+
+type WebDAV {
+  url: String!
+  username: String
+  password: String
+  insecure_skip_tls: Boolean
+  path: String
 }
 
 type S3 {
   bucketName: String!
   endpoint: String!
   region: String!
+  pathStyle: Boolean!
 }
 
 type GCS {
   bucketName: String!
+}
+
+type UsageMetadata {
+  totalInputTokens: Int!
+  totalOutputTokens: Int!
+  totalTokens: Int!
+  totalCachedTokens: Int!
+  totalCachedWriteTokens: Int!
+  totalCost: Decimal!
 }
 
 extend type Trace {
@@ -285,10 +475,29 @@ extend type Trace {
   rawRootSegment: JSONRawMessage
   firstUserQuery: String @goField(forceResolver: true)
   firstText: String @goField(forceResolver: true)
+  usageMetadata: UsageMetadata @goField(forceResolver: true)
 }
 
 extend type Thread {
   firstUserQuery: String @goField(forceResolver: true)
+  usageMetadata: UsageMetadata @goField(forceResolver: true)
+}
+
+extend type Channel {
+  """
+  All model entries this channel can handle, including direct models, prefixed models, auto-trimmed models, and mapped models
+  """
+  allModelEntries: [ChannelModelEntry!]! @goField(forceResolver: true)
+
+  """
+  Channel credentials, will be null if user can not access the the credentials
+  """
+  credentials: ChannelCredentials @goField(forceResolver: true)
+
+  """
+  Disabled API keys for this channel. Sensitive: will be null if user can not access.
+  """
+  disabledAPIKeys: [DisabledAPIKey!] @goField(forceResolver: true)
 }
 
 type Segment {
@@ -384,36 +593,9 @@ type ApplyChannelOverrideTemplatePayload {
   channels: [Channel!]!
 }
 
-input QueryChannelOverrideTemplatesInput {
-  """
-  Returns the elements in the list that come after the specified cursor.
-  """
-  after: Cursor
-
-  """
-  Returns the first _n_ elements from the list.
-  """
-  first: Int
-
-  """
-  Returns the elements in the list that come before the specified cursor.
-  """
-  before: Cursor
-
-  """
-  Returns the last _n_ elements from the list.
-  """
-  last: Int
-
-  """
-  Filter by channel type
-  """
-  channelType: ChannelType
-
-  """
-  Search by template name
-  """
-  search: String
+type DeleteDisabledAPIKeysPayload {
+  success: Boolean!
+  message: String
 }
 
 type Mutation {
@@ -432,11 +614,22 @@ type Mutation {
     input: BulkUpdateChannelOrderingInput!
   ): BulkUpdateChannelOrderingResult!
 
+  # Channel API Key Management
+  disableChannelAPIKey(channelID: ID!, key: String!): Boolean!
+  enableChannelAPIKey(channelID: ID!, key: String!): Boolean!
+  enableAllChannelAPIKeys(channelID: ID!): Boolean!
+  enableSelectedChannelAPIKeys(channelID: ID!, keys: [String!]!): Boolean!
+  deleteDisabledChannelAPIKeys(
+    channelID: ID!
+    keys: [String!]!
+  ): DeleteDisabledAPIKeysPayload!
+
   createAPIKey(input: CreateAPIKeyInput!): APIKey!
   updateAPIKey(id: ID!, input: UpdateAPIKeyInput!): APIKey!
   updateAPIKeyStatus(id: ID!, status: APIKeyStatus!): APIKey!
   updateAPIKeyProfiles(id: ID!, input: UpdateAPIKeyProfilesInput!): APIKey!
   bulkDisableAPIKeys(ids: [ID!]!): Boolean!
+  bulkEnableAPIKeys(ids: [ID!]!): Boolean!
   bulkArchiveAPIKeys(ids: [ID!]!): Boolean!
 
   createUser(input: CreateUserInput!): User!
@@ -523,8 +716,6 @@ input CountChannelsByTypeInput {
 }
 
 extend type Query {
-  fetchModels(input: FetchModelsInput!): FetchModelsPayload!
-  models(input: ModelsInput!): [Model!]!
   allChannelTags: [String!]!
   countChannelsByType(input: CountChannelsByTypeInput!): [ChannelTypeCount!]!
   """
@@ -533,8 +724,8 @@ extend type Query {
   """
   queryChannels(input: QueryChannelInput!): ChannelConnection!
 
-  # Channel Override Template Queries
-  queryChannelOverrideTemplates(
-    input: QueryChannelOverrideTemplatesInput!
-  ): ChannelOverrideTemplateConnection!
+  """
+  Returns quota usage for profiles that have quota enabled for an API key.
+  """
+  apiKeyQuotaUsages(apiKeyId: ID!): [APIKeyProfileQuotaUsage!]!
 }

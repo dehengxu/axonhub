@@ -12,11 +12,14 @@ import (
 
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/server/api"
+	"github.com/looplj/axonhub/internal/server/backup"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/dependencies"
 	"github.com/looplj/axonhub/internal/server/gc"
 	"github.com/looplj/axonhub/internal/server/gql"
+	"github.com/looplj/axonhub/internal/server/gql/openapi"
 	"github.com/looplj/axonhub/internal/server/middleware"
+	"github.com/looplj/axonhub/internal/tracing"
 )
 
 func New(config Config) *Server {
@@ -42,13 +45,12 @@ type Server struct {
 }
 
 func (srv *Server) Run() error {
-	log.Info(
-		context.Background(),
-		"run server",
+	log.Info(context.Background(), "run server",
 		log.String("name", srv.Config.Name),
+		log.String("host", srv.Config.Host),
 		log.Int("port", srv.Config.Port),
 	)
-	addr := fmt.Sprintf("0.0.0.0:%d", srv.Config.Port)
+	addr := fmt.Sprintf("%s:%d", srv.Config.Host, srv.Config.Port)
 	srv.server = &http.Server{
 		Addr:         addr,
 		Handler:      srv.Engine,
@@ -75,6 +77,7 @@ func (srv *Server) Shutdown(ctx context.Context) error {
 
 func Run(opts ...fx.Option) {
 	constructors := []any{
+		openapi.NewGraphqlHandlers,
 		gql.NewGraphqlHandlers,
 		gc.NewWorker,
 		New,
@@ -86,9 +89,11 @@ func Run(opts ...fx.Option) {
 			fx.Provide(constructors...),
 			dependencies.Module,
 			biz.Module,
+			backup.Module,
 			api.Module,
 			fx.Invoke(func(cfg log.Config) {
 				log.SetGlobalConfig(cfg)
+				tracing.SetupLogger(log.GetGlobalLogger())
 				slog.SetDefault(log.GetGlobalLogger().AsSlog())
 			}),
 			fx.Invoke(func(lc fx.Lifecycle, worker *gc.Worker) {

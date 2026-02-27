@@ -12,6 +12,9 @@ type DataStorageSettings struct {
 
 	// GCS is the gcs data storage.
 	GCS *GCS `json:"gcs"`
+
+	// WebDAV is the webdav data storage.
+	WebDAV *WebDAV `json:"webdav"`
 }
 
 type S3 struct {
@@ -20,9 +23,20 @@ type S3 struct {
 	Region     string `json:"region"`
 	AccessKey  string `json:"accessKey"`
 	SecretKey  string `json:"secretKey"`
+	// PathStyle enables Path Style access for S3 compatible storage services (e.g., MinIO, Ceph RGW).
+	// When enabled, uses https://s3.amazonaws.com/<bucket-name>/object format instead of Virtual Hosted Style.
+	PathStyle bool `json:"pathStyle"`
 }
 
 type GCS struct {
 	BucketName string `json:"bucketName"`
 	Credential string `json:"credential"`
+}
+
+type WebDAV struct {
+	URL             string `json:"url"`
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	InsecureSkipTLS bool   `json:"insecure_skip_tls"`
+	Path            string `json:"path"`
 }

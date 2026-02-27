@@ -1,38 +1,47 @@
-import { useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
-import { usePaginationSearch } from '@/hooks/use-pagination-search'
-import { Header } from '@/components/layout/header'
-import { Main } from '@/components/layout/main'
-import { RequestsTable } from './components'
-import { RequestsProvider } from './context'
-import { useRequests } from './data'
-import { Badge } from '@/components/ui/badge'
+import { useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { buildDateRangeWhereClause, type DateTimeRangeValue } from '@/utils/date-range';
+import { usePaginationSearch } from '@/hooks/use-pagination-search';
+import useInterval from '@/hooks/useInterval';
+import { Header } from '@/components/layout/header';
+import { Main } from '@/components/layout/main';
+import { RequestsTable } from './components';
+import { RequestsProvider } from './context';
+import { useRequests } from './data';
+import { Badge } from '@/components/ui/badge';
 
 function RequestsContent() {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
   const { pageSize, setCursors, setPageSize, resetCursor, paginationArgs, cursorHistory } = usePaginationSearch({
     defaultPageSize: 20,
-  })
-  const [statusFilter, setStatusFilter] = useState<string[]>([])
-  const [sourceFilter, setSourceFilter] = useState<string[]>([])
-  const [channelFilter, setChannelFilter] = useState<string[]>([])
+    pageSizeStorageKey: 'requests-table-page-size',
+  });
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [channelFilter, setChannelFilter] = useState<string[]>([]);
+  const [apiKeyFilter, setApiKeyFilter] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateTimeRangeValue | undefined>();
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   // Build where clause with filters
   const whereClause = (() => {
-    const where: any = {}
+    const where: { [key: string]: any } = {
+      ...buildDateRangeWhereClause(dateRange),
+    };
     if (statusFilter.length > 0) {
-      where.statusIn = statusFilter
+      where.statusIn = statusFilter;
     }
     if (sourceFilter.length > 0) {
-      where.sourceIn = sourceFilter
+      where.sourceIn = sourceFilter;
     }
     if (channelFilter.length > 0) {
-      // Add channel filter - assuming the backend supports filtering by channel IDs
-      // This might need to be adjusted based on the actual GraphQL schema
-      where.channelIDIn = channelFilter
+      where.channelIDIn = channelFilter;
     }
-    return Object.keys(where).length > 0 ? where : undefined
-  })()
+    if (apiKeyFilter.length > 0) {
+      where.apiKeyIDIn = apiKeyFilter;
+    }
+    return Object.keys(where).length > 0 ? where : undefined;
+  })();
 
   const { data, isLoading, refetch } = useRequests({
     ...paginationArgs,
@@ -41,67 +50,88 @@ function RequestsContent() {
       field: 'CREATED_AT',
       direction: 'DESC',
     },
-  })
+  });
 
-  const requests = data?.edges?.map((edge) => edge.node) || []
-  const pageInfo = data?.pageInfo
+  const requests = data?.edges?.map((edge) => edge.node) || [];
+  const pageInfo = data?.pageInfo;
 
   // Calculate token totals for all displayed requests
   const pageTokenTotals = useMemo(() => {
-    let totalTokens = 0
-    let promptTokens = 0
-    let completionTokens = 0
+    let totalTokens = 0;
+    let promptTokens = 0;
+    let completionTokens = 0;
 
     requests.forEach((request) => {
-      const usageLogs = (request as any).usageLogs
+      const usageLogs = (request as any).usageLogs;
       if (usageLogs && usageLogs.edges && usageLogs.edges.length > 0) {
-        const usage = usageLogs.edges[0].node
-        totalTokens += usage.totalTokens || 0
-        promptTokens += usage.promptTokens || 0
-        completionTokens += usage.completionTokens || 0
+        const usage = usageLogs.edges[0].node;
+        totalTokens += usage.totalTokens || 0;
+        promptTokens += usage.promptTokens || 0;
+        completionTokens += usage.completionTokens || 0;
       }
-    })
+    });
 
-    return { totalTokens, promptTokens, completionTokens }
-  }, [requests])
+    return { totalTokens, promptTokens, completionTokens };
+  }, [requests]);
 
-  const isFirstPage = !paginationArgs.after && cursorHistory.length === 0
+  const isFirstPage = !paginationArgs.after && cursorHistory.length === 0;
 
   const handleNextPage = () => {
     if (data?.pageInfo?.hasNextPage && data?.pageInfo?.endCursor) {
-      setCursors(data.pageInfo.startCursor ?? undefined, data.pageInfo.endCursor ?? undefined, 'after')
+      setCursors(data.pageInfo.startCursor ?? undefined, data.pageInfo.endCursor ?? undefined, 'after');
     }
-  }
+  };
 
   const handlePreviousPage = () => {
     if (data?.pageInfo?.hasPreviousPage) {
-      setCursors(data.pageInfo.startCursor ?? undefined, data.pageInfo.endCursor ?? undefined, 'before')
+      setCursors(data.pageInfo.startCursor ?? undefined, data.pageInfo.endCursor ?? undefined, 'before');
     }
-  }
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    resetCursor();
+  };
 
   const handleStatusFilterChange = useCallback(
     (filters: string[]) => {
-      setStatusFilter(filters)
-      resetCursor()
+      setStatusFilter(filters);
+      resetCursor();
     },
     [resetCursor]
-  )
+  );
 
   const handleSourceFilterChange = useCallback(
     (filters: string[]) => {
-      setSourceFilter(filters)
-      resetCursor()
+      setSourceFilter(filters);
+      resetCursor();
     },
     [resetCursor]
-  )
+  );
 
   const handleChannelFilterChange = useCallback(
     (filters: string[]) => {
-      setChannelFilter(filters)
-      resetCursor()
+      setChannelFilter(filters);
+      resetCursor();
     },
     [resetCursor]
-  )
+  );
+
+  const handleApiKeyFilterChange = useCallback(
+    (filters: string[]) => {
+      setApiKeyFilter(filters);
+      resetCursor();
+    },
+    [resetCursor]
+  );
+
+  const handleDateRangeChange = useCallback(
+    (range: DateTimeRangeValue | undefined) => {
+      setDateRange(range);
+      resetCursor();
+    },
+    [resetCursor]
+  );
 
   return (
     <div className='flex flex-1 flex-col overflow-hidden'>
@@ -144,29 +174,42 @@ function RequestsContent() {
         statusFilter={statusFilter}
         sourceFilter={sourceFilter}
         channelFilter={channelFilter}
+        apiKeyFilter={apiKeyFilter}
+        dateRange={dateRange}
         onNextPage={handleNextPage}
         onPreviousPage={handlePreviousPage}
-        onPageSizeChange={setPageSize}
+        onPageSizeChange={handlePageSizeChange}
         onStatusFilterChange={handleStatusFilterChange}
         onSourceFilterChange={handleSourceFilterChange}
         onChannelFilterChange={handleChannelFilterChange}
+        onApiKeyFilterChange={handleApiKeyFilterChange}
+        onDateRangeChange={handleDateRangeChange}
         onRefresh={refetch}
         showRefresh={isFirstPage}
+        autoRefresh={autoRefresh}
+        onAutoRefreshChange={setAutoRefresh}
       />
     </div>
-  )
+  );
 }
 
 export default function RequestsManagement() {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
   return (
     <RequestsProvider>
-      {/* <Header fixed></Header> */}
+      <Header fixed>
+        <div className='flex flex-1 items-center justify-between'>
+          <div>
+            <h2 className='text-xl font-bold tracking-tight'>{t('requests.title')}</h2>
+            <p className='text-sm text-muted-foreground'>{t('requests.description')}</p>
+          </div>
+        </div>
+      </Header>
 
       <Main fixed>
         <RequestsContent />
       </Main>
     </RequestsProvider>
-  )
+  );
 }

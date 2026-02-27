@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/fx"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/looplj/axonhub/internal/server/api"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/gql"
+	"github.com/looplj/axonhub/internal/server/gql/openapi"
 	"github.com/looplj/axonhub/internal/server/middleware"
 	"github.com/looplj/axonhub/internal/server/static"
 )
@@ -16,15 +18,19 @@ import (
 type Handlers struct {
 	fx.In
 
-	Graphql    *gql.GraphqlHandler
-	OpenAI     *api.OpenAIHandlers
-	Anthropic  *api.AnthropicHandlers
-	Gemini     *api.GeminiHandlers
-	AiSDK      *api.AiSDKHandlers
-	Playground *api.PlaygroundHandlers
-	System     *api.SystemHandlers
-	Auth       *api.AuthHandlers
-	Rerank     *api.RerankHandlers
+	Graphql        *gql.GraphqlHandler
+	OpenAPIGraphql *openapi.GraphqlHandler
+	OpenAI         *api.OpenAIHandlers
+	Anthropic      *api.AnthropicHandlers
+	Gemini         *api.GeminiHandlers
+	AiSDK          *api.AiSDKHandlers
+	Playground     *api.PlaygroundHandlers
+	System         *api.SystemHandlers
+	Auth           *api.AuthHandlers
+	Jina           *api.JinaHandlers
+	Codex          *api.CodexHandlers
+	ClaudeCode     *api.ClaudeCodeHandlers
+	Antigravity    *api.AntigravityHandlers
 }
 
 type Services struct {
@@ -44,6 +50,21 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 	server.Use(middleware.WithLoggingTracing(server.Config.Trace))
 	server.Use(middleware.WithMetrics())
 
+	// Setup CORS middleware at server level if enabled
+	if server.Config.CORS.Enabled {
+		corsConfig := cors.DefaultConfig()
+		corsConfig.AllowOrigins = server.Config.CORS.AllowedOrigins
+		corsConfig.AllowMethods = server.Config.CORS.AllowedMethods
+		corsConfig.AllowHeaders = server.Config.CORS.AllowedHeaders
+		corsConfig.ExposeHeaders = server.Config.CORS.ExposedHeaders
+		corsConfig.AllowCredentials = server.Config.CORS.AllowCredentials
+		corsConfig.MaxAge = server.Config.CORS.MaxAge
+
+		corsHandler := cors.New(corsConfig)
+		server.Use(corsHandler)
+		server.OPTIONS("*any", corsHandler)
+	}
+
 	publicGroup := server.Group("", middleware.WithTimeout(server.Config.RequestTimeout))
 	{
 		// Favicon API - DO NOT AUTH
@@ -52,9 +73,7 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		publicGroup.GET("/health", handlers.System.Health)
 	}
 
-	unSecureAdminGroup := server.Group("/admin",
-		middleware.WithTimeout(server.Config.RequestTimeout),
-	)
+	unSecureAdminGroup := server.Group("/admin", middleware.WithTimeout(server.Config.RequestTimeout))
 	{
 		// System Status and Initialize - DO NOT AUTH
 		unSecureAdminGroup.GET("/system/status", handlers.System.GetSystemStatus)
@@ -73,6 +92,15 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 			handlers.Graphql.Graphql.ServeHTTP(c.Writer, c.Request)
 		})
 
+		adminGroup.POST("/codex/oauth/start", handlers.Codex.StartOAuth)
+		adminGroup.POST("/codex/oauth/exchange", handlers.Codex.Exchange)
+
+		adminGroup.POST("/claudecode/oauth/start", handlers.ClaudeCode.StartOAuth)
+		adminGroup.POST("/claudecode/oauth/exchange", handlers.ClaudeCode.Exchange)
+
+		adminGroup.POST("/antigravity/oauth/start", handlers.Antigravity.StartOAuth)
+		adminGroup.POST("/antigravity/oauth/exchange", handlers.Antigravity.Exchange)
+
 		// Playground API with channel specification support
 		adminGroup.POST(
 			"/playground/chat",
@@ -80,6 +108,16 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 			middleware.WithSource(request.SourcePlayground),
 			handlers.Playground.ChatCompletion,
 		)
+	}
+
+	openAPIGroup := server.Group("/openapi", middleware.WithOpenAPIAuth(services.AuthService), middleware.WithTimeout(server.Config.RequestTimeout))
+	{
+		openAPIGroup.POST("/v1/graphql", func(c *gin.Context) {
+			handlers.OpenAPIGraphql.Graphql.ServeHTTP(c.Writer, c.Request)
+		})
+		openAPIGroup.GET("/v1/playground", func(c *gin.Context) {
+			handlers.OpenAPIGraphql.Playground.ServeHTTP(c.Writer, c.Request)
+		})
 	}
 
 	apiGroup := server.Group("/",
@@ -90,23 +128,61 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		middleware.WithTrace(server.Config.Trace, services.TraceService),
 	)
 
-	openaiGroup := apiGroup.Group("/v1")
 	{
+		openaiGroup := apiGroup.Group("/v1")
 		openaiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
 		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
-		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
-		openaiGroup.POST("/rerank", handlers.Rerank.Rerank)
+		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
+		openaiGroup.POST("/images/generations", handlers.OpenAI.CreateImage)
+		openaiGroup.POST("/images/edits", handlers.OpenAI.CreateImageEdit)
+		// DO NOT SUPPORT IMAGE VARIATION
+		// openaiGroup.POST("/images/variations", handlers.OpenAI.CreateImageVariation)
+
+		// OpenAI-compatible Anthropic endpoint
+		openaiGroup.POST("/messages", handlers.Anthropic.CreateMessage)
+
+		// Compatible with OpenAI API
+		openaiGroup.POST("/rerank", handlers.Jina.Rerank)
 	}
 
-	anthropicGroup := apiGroup.Group("/anthropic/v1")
 	{
+		jinaGroup := apiGroup.Group("/jina/v1")
+		jinaGroup.POST("/embeddings", handlers.Jina.CreateEmbedding)
+		jinaGroup.POST("/rerank", handlers.Jina.Rerank)
+	}
+
+	{
+		anthropicGroup := apiGroup.Group("/anthropic/v1")
 		anthropicGroup.POST("/messages", handlers.Anthropic.CreateMessage)
 		anthropicGroup.GET("/models", handlers.Anthropic.ListModels)
 	}
 
-	geminiGroup := apiGroup.Group("/gemini/:gemini-api-version")
 	{
-		geminiGroup.POST("/models/*action", handlers.Gemini.GenerateContent)
+		registerGeminiRoutes := func(group *gin.RouterGroup) {
+			group.POST("/models/*action", handlers.Gemini.GenerateContent)
+			group.GET("/models", handlers.Gemini.ListModels)
+		}
+
+		geminiGroup := server.Group("/gemini/:gemini-api-version",
+			middleware.WithTimeout(server.Config.LLMRequestTimeout),
+			middleware.WithGeminiKeyAuth(services.AuthService),
+			middleware.WithSource(request.SourceAPI),
+			middleware.WithThread(server.Config.Trace, services.ThreadService),
+			middleware.WithTrace(server.Config.Trace, services.TraceService),
+		)
+
+		registerGeminiRoutes(geminiGroup)
+
+		// Alias for Gemini API
+		geminiAliasGroup := server.Group("/v1beta",
+			middleware.WithTimeout(server.Config.LLMRequestTimeout),
+			middleware.WithGeminiKeyAuth(services.AuthService),
+			middleware.WithSource(request.SourceAPI),
+			middleware.WithThread(server.Config.Trace, services.ThreadService),
+			middleware.WithTrace(server.Config.Trace, services.TraceService),
+		)
+
+		registerGeminiRoutes(geminiAliasGroup)
 	}
 }

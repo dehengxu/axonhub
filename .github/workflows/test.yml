@@ -4,10 +4,10 @@ name: Test
 on:
   push:
     branches:
-      - 'unstable'
+      - "unstable"
   pull_request:
     branches:
-      - 'unstable'
+      - "unstable"
 env:
   GO111MODULE: on
 jobs:

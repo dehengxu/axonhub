@@ -38,6 +38,7 @@ func (Channel) Fields() []ent.Field {
 			Values(
 				"openai",
 				"openai_responses",
+				"codex",
 				"vercel",
 				"anthropic",
 				"anthropic_aws",
@@ -47,6 +48,7 @@ func (Channel) Fields() []ent.Field {
 				"gemini_vertex",
 				"deepseek",
 				"deepseek_anthropic",
+				"deepinfra",
 				"doubao",
 				"doubao_anthropic",
 				"moonshot",
@@ -58,6 +60,7 @@ func (Channel) Fields() []ent.Field {
 				"anthropic_fake",
 				"openai_fake",
 				"openrouter",
+				"xiaomi",
 				"xai",
 				"ppio",
 				"siliconflow",
@@ -70,26 +73,61 @@ func (Channel) Fields() []ent.Field {
 				"burncloud",
 				"modelscope",
 				"bailian",
+				"jina",
+				"github",
+				"claudecode",
+				"cerebras",
+				"antigravity",
+				"nanogpt",
 			).
-			Immutable(),
+			Immutable().
+			Annotations(
+				entgql.OrderField("TYPE"),
+			),
 		field.String("base_url").Optional(),
-		field.String("name"),
-		field.Enum("status").Values("enabled", "disabled", "archived").Default("disabled"),
-		field.JSON("credentials", &objects.ChannelCredentials{}).Sensitive().Default(&objects.ChannelCredentials{}),
+		field.String("name").
+			Annotations(
+				entgql.OrderField("NAME"),
+			),
+		field.Enum("status").Values("enabled", "disabled", "archived").Default("disabled").
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput),
+				entgql.OrderField("STATUS"),
+			),
+		field.JSON("credentials", objects.ChannelCredentials{}).Sensitive(),
+		field.JSON("disabled_api_keys", []objects.DisabledAPIKey{}).
+			Default([]objects.DisabledAPIKey{}).
+			Optional().
+			Sensitive().
+			Comment("Disabled API keys with metadata (sensitive; requires channel write permission)").
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
 		field.Strings("supported_models"),
+		field.Bool("auto_sync_supported_models").Default(false),
 		field.Strings("tags").Optional().Default([]string{}),
 		field.String("default_test_model"),
+		field.JSON("policies", objects.ChannelPolicies{}).
+			Default(objects.ChannelPolicies{
+				Stream: objects.CapabilityPolicyUnlimited,
+			}).
+			Annotations(
+				entgql.Directives(forceResolver()),
+			).
+			Optional(),
 		field.JSON("settings", &objects.ChannelSettings{}).
 			Default(&objects.ChannelSettings{
 				ModelMappings: []objects.ModelMapping{},
 			}).Optional().Annotations(),
-		field.Int("ordering_weight").Default(0).Comment("Ordering weight for display sorting").Annotations(
-			entgql.OrderField("ORDERING_WEIGHT"),
-		),
+		field.Int("ordering_weight").Default(0).Comment("Ordering weight for display sorting").
+			Annotations(
+				entgql.OrderField("ORDERING_WEIGHT"),
+			),
 		field.String("error_message").
-			Optional().Nillable().Annotations(
-			entgql.Skip(entgql.SkipMutationCreateInput),
-		),
+			Optional().Nillable().
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput),
+			),
 		field.String("remark").
 			Optional().Nillable().
 			Comment("User-defined remark or note for the channel"),
@@ -113,9 +151,18 @@ func (Channel) Edges() []ent.Edge {
 				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 				entgql.RelayConnection(),
 			),
-		edge.To("channel_performance", ChannelPerformance.Type).
+		edge.To("channel_probes", ChannelProbe.Type).
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
+		edge.To("channel_model_prices", ChannelModelPrice.Type).
+			Annotations(
+				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
+			),
+		edge.To("provider_quota_status", ProviderQuotaStatus.Type).
 			Unique().
 			Annotations(
+				entgql.Directives(forceResolver()),
 				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 			),
 	}

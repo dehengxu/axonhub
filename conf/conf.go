@@ -14,7 +14,6 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/looplj/axonhub/internal/dumper"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/metrics"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
@@ -26,13 +25,17 @@ import (
 type Config struct {
 	fx.Out `yaml:"-" json:"-"`
 
-	DB        db.Config      `conf:"db" yaml:"db" json:"db"`
-	Log       log.Config     `conf:"log" yaml:"log" json:"log"`
-	APIServer server.Config  `conf:"server" yaml:"server" json:"server"`
-	Metrics   metrics.Config `conf:"metrics" yaml:"metrics" json:"metrics"`
-	Dumper    dumper.Config  `conf:"dumper" yaml:"dumper" json:"dumper"`
-	GC        gc.Config      `conf:"gc" yaml:"gc" json:"gc"`
-	Cache     xcache.Config  `conf:"cache" yaml:"cache" json:"cache"`
+	DB            db.Config           `conf:"db" yaml:"db" json:"db"`
+	Log           log.Config          `conf:"log" yaml:"log" json:"log"`
+	APIServer     server.Config       `conf:"server" yaml:"server" json:"server"`
+	Metrics       metrics.Config      `conf:"metrics" yaml:"metrics" json:"metrics"`
+	GC            gc.Config           `conf:"gc" yaml:"gc" json:"gc"`
+	Cache         xcache.Config       `conf:"cache" yaml:"cache" json:"cache"`
+	ProviderQuota providerQuotaConfig `conf:"provider_quota" yaml:"provider_quota" json:"provider_quota"`
+}
+
+type providerQuotaConfig struct {
+	CheckInterval time.Duration `conf:"check_interval" yaml:"check_interval" json:"check_interval"`
 }
 
 // Load loads configuration from YAML file and environment variables.
@@ -89,11 +92,11 @@ func Load() (Config, error) {
 }
 
 var (
-	_TypeTextUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
-	_TypeDuration        = reflect.TypeOf(time.Duration(1))
+	_TypeTextUnmarshaler = reflect.TypeFor[encoding.TextUnmarshaler]()
+	_TypeDuration        = reflect.TypeFor[time.Duration]()
 )
 
-func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data interface{}) (interface{}, error) {
+func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data any) (any, error) {
 	str, ok := data.(string)
 	if !ok {
 		return data, nil
@@ -110,6 +113,9 @@ func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data inter
 
 		return u, nil
 	case dstType == _TypeDuration:
+		if strings.TrimSpace(str) == "" {
+			return time.Duration(0), nil
+		}
 		return time.ParseDuration(str)
 	default:
 		return data, nil
@@ -119,6 +125,7 @@ func customizedDecodeHook(srcType reflect.Type, dstType reflect.Type, data inter
 // setDefaults sets default configuration values.
 func setDefaults(v *viper.Viper) {
 	// Server defaults
+	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 8090)
 	v.SetDefault("server.name", "AxonHub")
 	v.SetDefault("server.base_path", "")
@@ -127,8 +134,20 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.trace.thread_header", "AH-Thread-Id")
 	v.SetDefault("server.trace.trace_header", "AH-Trace-Id")
 	v.SetDefault("server.trace.extra_trace_headers", []string{})
+	v.SetDefault("server.trace.extra_trace_body_fields", []string{})
 	v.SetDefault("server.trace.claude_code_trace_enabled", false)
+	v.SetDefault("server.trace.codex_trace_enabled", false)
 	v.SetDefault("server.debug", false)
+
+	// CORS defaults
+	v.SetDefault("server.cors.enabled", false)
+	v.SetDefault("server.cors.debug", false)
+	v.SetDefault("server.cors.allowed_origins", []string{"http://localhost:8090"})
+	v.SetDefault("server.cors.allowed_methods", []string{"GET", "POST", "DELETE", "PATCH", "PUT", "OPTIONS", "HEAD"})
+	v.SetDefault("server.cors.allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key", "X-Goog-Api-Key", "X-Project-ID", "X-Thread-ID", "X-Trace-ID"})
+	v.SetDefault("server.cors.exposed_headers", []string{})
+	v.SetDefault("server.cors.allow_credentials", false)
+	v.SetDefault("server.cors.max_age", "30m")
 
 	// Database defaults
 	v.SetDefault("db.dialect", "sqlite3")
@@ -158,15 +177,11 @@ func setDefaults(v *viper.Viper) {
 	// Metrics defaults
 	v.SetDefault("metrics.enabled", false)
 
-	// Dumper defaults
-	v.SetDefault("dumper.enabled", false)
-	v.SetDefault("dumper.dump_path", "./dumps")
-	v.SetDefault("dumper.max_size", 100)
-	v.SetDefault("dumper.max_age", "24h")
-	v.SetDefault("dumper.max_backups", 10)
-
 	// GC defaults
 	v.SetDefault("gc.cron", "0 2 * * *") // Daily at 2:00 AM
+
+	// Provider quota defaults
+	v.SetDefault("provider_quota.check_interval", "20m") // Check every 20 minutes
 
 	// Cache defaults
 	v.SetDefault("cache.mode", "memory")

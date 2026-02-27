@@ -5,10 +5,44 @@
 ### Overview
 AxonHub captures every inbound request in a thread-aware trace without forcing you to adopt a new SDK. If your client already speaks the OpenAI-compatible protocol, you can opt into observability simply by forwarding trace and thread headers—or rely on AxonHub to create them for you automatically.
 
+Key benefits of using tracing include:
+- **Observability**: Gain clear visibility into every user message and all associated agent requests.
+- **Performance Optimization**: AxonHub prioritizes routing requests within the same Trace to the same upstream channel. This significantly improves provider-side cache hit rates (e.g., Anthropic's Prompt Caching), reducing latency and lowering costs.
+- **Efficient Debugging**: Reconstruct the full conversation context using Thread IDs to quickly pinpoint issues in multi-turn interactions.
+
 ### Key Concepts
-- **Trace ID (`AH-Trace-Id`)** – Unique identifier that stitches multiple requests together. You must provide this header when you need multiple requests to be linked; omitting it causes AxonHub to record requests separately even though it can auto-generate IDs.
-- **Thread ID (`AH-Thread-Id`)** – Links a series of traces to the same conversation thread so you can follow user journeys end to end.
+- **Thread ID (`AH-Thread-Id`)** – Represents a complete user conversation session. Links multiple traces together so you can follow the entire user journey across multiple messages.
+- **Trace ID (`AH-Trace-Id`)** – Represents a single user message and all the agent requests it triggers. You must provide this header when you need multiple requests to be linked; omitting it causes AxonHub to record requests separately even though it can auto-generate IDs.
+- **Request** – The smallest unit of a single API call, containing complete request/response data, latency, token usage, and other details.
 - **Extra Trace Headers** – Configure fallbacks (e.g. `Sentry-Trace`) to reuse existing observability tooling.
+
+### Thread, Trace, and Request Relationship
+
+```
+Thread (complete user conversation session)
+  └── Trace 1 (user message 1 + all agent requests)
+        ├── Request 1 (agent call 1)
+        ├── Request 2 (agent call 2)
+        └── Request 3 (agent call 3)
+  └── Trace 2 (user message 2 + all agent requests)
+        ├── Request 4 (agent call 4)
+        └── Request 5 (agent call 5)
+```
+
+- **Thread**: Represents a complete user conversation session, containing multiple user messages (each message corresponds to a trace)
+- **Trace**: Represents a single user message and all the agent requests it triggers during processing
+- **Request**: Represents a single API call to an LLM or other service, containing detailed information such as request body, response body, and token usage
+
+**Hierarchy**:
+- 1 Thread can contain multiple Traces (one trace per user message)
+- 1 Trace can contain multiple Requests (all agent calls triggered by that message)
+- 1 Request can only belong to 1 Trace
+- 1 Trace can only belong to 1 Thread (optional association)
+
+**Practical Use Cases**:
+- **Single message with agent**: 1 Thread → 1 Trace → N Requests (user sends one message, agent makes multiple API calls)
+- **Multi-turn conversation**: 1 Thread → Multiple Traces (one trace per user message) → N Requests per trace
+- **Independent request**: No Thread → 1 Trace → 1 Request (single API call without conversation context)
 
 ### Configuration
 ```yaml
@@ -59,8 +93,6 @@ func sendTracedChat(ctx context.Context, apiKey string) (*openai.ChatCompletion,
     client := openai.NewClient(
         option.WithAPIKey(apiKey),
         option.WithBaseURL("https://your-axonhub-instance/v1"),
-        option.WithHeader("AH-Trace-Id", "trace-example-123"),
-        option.WithHeader("AH-Thread-Id", "thread-example-abc"),
     )
 
     params := openai.ChatCompletionNewParams{
@@ -70,10 +102,11 @@ func sendTracedChat(ctx context.Context, apiKey string) (*openai.ChatCompletion,
         },
     }
 
-    ctx = context.WithValue(ctx, "trace_id", "trace-example-123")
-    ctx = context.WithValue(ctx, "thread_id", "thread-example-abc")
-
-    return client.Chat.Completions.New(ctx, params)
+    // Pass trace and thread headers at request level
+    return client.Chat.Completions.New(ctx, params,
+        option.WithHeader("AH-Trace-Id", "trace-example-123"),
+        option.WithHeader("AH-Thread-Id", "thread-example-abc"),
+    )
 }
 ```
 
@@ -92,8 +125,6 @@ func sendTracedMessage(ctx context.Context, apiKey string) (*anthropic.Message, 
     client := anthropic.NewClient(
         option.WithAPIKey(apiKey),
         option.WithBaseURL("https://your-axonhub-instance/anthropic"),
-        option.WithHeader("AH-Trace-Id", "trace-example-123"),
-        option.WithHeader("AH-Thread-Id", "thread-example-abc"),
     )
 
     params := anthropic.MessageNewParams{
@@ -105,10 +136,11 @@ func sendTracedMessage(ctx context.Context, apiKey string) (*anthropic.Message, 
         },
     }
 
-    ctx = context.WithValue(ctx, "trace_id", "trace-example-123")
-    ctx = context.WithValue(ctx, "thread_id", "thread-example-abc")
-
-    return client.Messages.New(ctx, params)
+    // Pass trace and thread headers at request level
+    return client.Messages.New(ctx, params,
+        option.WithHeader("AH-Trace-Id", "trace-example-123"),
+        option.WithHeader("AH-Thread-Id", "thread-example-abc"),
+    )
 }
 ```
 
@@ -119,7 +151,11 @@ func sendTracedMessage(ctx context.Context, apiKey string) (*anthropic.Message, 
 
 ### Claude Code Trace Support
 - Turn on Claude Code extraction with `server.trace.claude_code_trace_enabled: true` so AxonHub can pick up trace IDs automatically.
-- The `/anthropic/v1/messages` endpoint will reuse the Claude Code `metadata.user_id` as the trace ID while keeping your payload untouched for downstream usage.
+- The `/anthropic/v1/messages` (and `/v1/messages`) endpoint will reuse the Claude Code `metadata.user_id` as the trace ID while keeping your payload untouched for downstream usage.
+- If you already send a trace header, AxonHub keeps your value—manual instrumentation and auto-extraction work together.
+
+### Codex Trace Support
+- Turn on Codex extraction with `server.trace.codex_trace_enabled: true` so AxonHub can reuse the `Session_id` header as the trace ID.
 - If you already send a trace header, AxonHub keeps your value—manual instrumentation and auto-extraction work together.
 
 ### Exploring Traces in the Console
@@ -127,6 +163,18 @@ func sendTracedMessage(ctx context.Context, apiKey string) (*anthropic.Message, 
 2. Filter by project, model, or time range to locate the trace of interest.
 3. Expand a trace to inspect spans, prompt/response payloads, timing, and channel metadata.
 4. Jump to the linked thread to review the overall conversation timeline alongside trace details.
+
+<table>
+  <tr align="center">
+    <td align="center">
+      <a href="../../screenshots/axonhub-trace.png">
+        <img src="../../screenshots/axonhub-trace.png" alt="Trace Details" width="600"/>
+      </a>
+      <br/>
+      The Trace details page displays the request timeline, token usage, and cache hit status
+    </td>
+  </tr>
+</table>
 
 ### Troubleshooting
 - **No trace recorded** – Ensure the request is authenticated and the project ID is resolved (API Key must belong to a project).

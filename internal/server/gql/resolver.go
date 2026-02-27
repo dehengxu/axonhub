@@ -1,17 +1,23 @@
 package gql
 
 import (
+	"errors"
+
 	"github.com/99designs/gqlgen/graphql"
 
 	"github.com/looplj/axonhub/internal/ent"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/server/backup"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
+	"github.com/looplj/axonhub/llm/httpclient"
 )
 
 // This file will not be regenerated automatically.
 //
 // It serves as dependency injection for your app, add any dependencies you require here.
+
+// ErrNotOwner is returned when a non-owner user attempts an owner-only operation.
+var ErrNotOwner = errors.New("permission denied: owner access required")
 
 // Resolver is the resolver root.
 type Resolver struct {
@@ -28,6 +34,11 @@ type Resolver struct {
 	traceService                   *biz.TraceService
 	threadService                  *biz.ThreadService
 	channelOverrideTemplateService *biz.ChannelOverrideTemplateService
+	modelService                   *biz.ModelService
+	backupService                  *backup.BackupService
+	channelProbeService            *biz.ChannelProbeService
+	promptService                  *biz.PromptService
+	providerQuotaService           *biz.ProviderQuotaService
 	httpClient                     *httpclient.HttpClient
 	modelFetcher                   *biz.ModelFetcher
 	TestChannelOrchestrator        *orchestrator.TestChannelOrchestrator
@@ -49,6 +60,11 @@ func NewSchema(
 	threadService *biz.ThreadService,
 	usageLogService *biz.UsageLogService,
 	channelOverrideTemplateService *biz.ChannelOverrideTemplateService,
+	modelService *biz.ModelService,
+	backupService *backup.BackupService,
+	channelProbeService *biz.ChannelProbeService,
+	promptService *biz.PromptService,
+	providerQuotaService *biz.ProviderQuotaService,
 ) graphql.ExecutableSchema {
 	httpClient := httpclient.NewHttpClient()
 	modelFetcher := biz.NewModelFetcher(httpClient, channelService)
@@ -68,6 +84,11 @@ func NewSchema(
 			traceService:                   traceService,
 			threadService:                  threadService,
 			channelOverrideTemplateService: channelOverrideTemplateService,
+			modelService:                   modelService,
+			backupService:                  backupService,
+			channelProbeService:            channelProbeService,
+			promptService:                  promptService,
+			providerQuotaService:           providerQuotaService,
 			httpClient:                     httpClient,
 			modelFetcher:                   modelFetcher,
 			TestChannelOrchestrator:        orchestrator.NewTestChannelOrchestrator(channelService, requestService, systemService, usageLogService, httpClient),

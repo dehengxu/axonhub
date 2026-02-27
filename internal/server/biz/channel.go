@@ -7,20 +7,34 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samber/lo"
 	"github.com/zhenzou/executors"
 	"go.uber.org/fx"
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/privacy"
-	"github.com/looplj/axonhub/internal/llm/transformer"
+	"github.com/looplj/axonhub/internal/ent/schema/schematype"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/pkg/watcher"
+	"github.com/looplj/axonhub/internal/pkg/xcache"
+	"github.com/looplj/axonhub/internal/pkg/xcache/live"
 	"github.com/looplj/axonhub/internal/pkg/xerrors"
-	"github.com/looplj/axonhub/internal/pkg/xmap"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/transformer"
 )
+
+// ChannelModelEntry represents a model that the channel can handle.
+type ChannelModelEntry struct {
+	// RequestModel is the model name that can be used in requests
+	RequestModel string
+
+	// ActualModel is the model that will be sent to the provider
+	ActualModel string
+
+	// Source indicates how this model is supported
+	Source string // "direct", "prefix", "auto_trim", "mapping"
+}
 
 type Channel struct {
 	*ent.Channel
@@ -31,30 +45,37 @@ type Channel struct {
 	// HTTPClient is the custom HTTP client for this channel with proxy support
 	HTTPClient *httpclient.HttpClient
 
-	// CachedOverrideParams stores the parsed override parameters to avoid repeated JSON parsing
-	CachedOverrideParams map[string]any
+	startTokenProvider func()
+	stopTokenProvider  func()
 
-	// CachedOverrideHeaders stores the parsed override headers to avoid repeated JSON parsing
-	CachedOverrideHeaders []objects.HeaderEntry
+	// cachedOverrideOps stores the parsed override operations to avoid repeated JSON parsing
+	cachedOverrideOps []objects.OverrideOperation
 
-	// modelSupportCache caches IsModelSupported results
-	modelSupportCache *xmap.Map[string, bool]
+	// cachedOverrideHeaders stores the parsed override headers to avoid repeated JSON parsing
+	cachedOverrideHeaders []objects.OverrideOperation
 
-	// chooseModelCache caches ChooseModel results
-	chooseModelCache *xmap.Map[string, chooseModelResult]
-}
+	// cachedModelEntries caches GetModelEntries results
+	// RequestModel -> Entry
+	cachedModelEntries map[string]ChannelModelEntry
 
-// chooseModelResult stores the cached result of ChooseModel.
-type chooseModelResult struct {
-	model string
-	err   error
+	// cachedModelPrices caches model prices per request model id
+	// RequestModel -> ChannelModelPrice entity (contains Price and ReferenceID)
+	cachedModelPrices map[string]*ent.ChannelModelPrice
+
+	// cachedEnabledAPIKeys caches enabled API keys (computed once when channel is loaded)
+	cachedEnabledAPIKeys []string
+
+	// cachedDisabledKeySet caches disabled key lookup set for O(1) check
+	cachedDisabledKeySet map[string]struct{}
 }
 
 type ChannelServiceParams struct {
 	fx.In
 
-	Executor executors.ScheduledExecutor
-	Ent      *ent.Client
+	CacheConfig   xcache.Config
+	Executor      executors.ScheduledExecutor
+	Ent           *ent.Client
+	SystemService *SystemService
 }
 
 func NewChannelService(params ChannelServiceParams) *ChannelService {
@@ -62,25 +83,57 @@ func NewChannelService(params ChannelServiceParams) *ChannelService {
 		AbstractService: &AbstractService{
 			db: params.Ent,
 		},
-		Executors: executors.NewPoolScheduleExecutor(
-			executors.WithMaxConcurrent(1),
-		),
+		Executors:          params.Executor,
+		SystemService:      params.SystemService,
 		channelPerfMetrics: make(map[int]*channelMetrics),
+		channelErrorCounts: make(map[int]map[int]int),
+		apiKeyErrorCounts:  make(map[int]map[string]map[int]int),
 		perfCh:             make(chan *PerformanceRecord, 1024),
 	}
 
-	xerrors.NoErr(svc.InitializeAllChannelPerformances(context.Background()))
 	// Load channel performance metrics after channels are loaded
 	if err := svc.LoadChannelPerformances(context.Background()); err != nil {
 		log.Error(context.Background(), "failed to load channel performances", log.Cause(err))
 		// Continue loading channels even if metrics loading fails
 	}
 
-	xerrors.NoErr(svc.loadChannels(context.Background()))
+	watcherMode := params.CacheConfig.Mode
+	if watcherMode == "" {
+		watcherMode = xcache.ModeMemory
+	}
+
+	if watcherMode == xcache.ModeTwoLevel {
+		watcherMode = watcher.ModeRedis
+	}
+
+	notifier, err := watcher.NewWatcherFromConfig[live.CacheEvent[struct{}]](watcher.Config{
+		Mode:  watcherMode,
+		Redis: params.CacheConfig.Redis,
+	}, watcher.WatcherFromConfigOptions{
+		RedisChannel: "axonhub:cache:channels",
+		Buffer:       32,
+	})
+	if err != nil {
+		panic(fmt.Errorf("channel watcher init failed: %w", err))
+	}
+
+	svc.channelNotifier = notifier
+
+	svc.enabledChannelsCache = live.NewCache(live.Options[[]*Channel]{
+		Name:            "axonhub:enabled_channels",
+		InitialValue:    []*Channel{},
+		RefreshInterval: time.Minute,
+		RefreshFunc:     svc.refreshEnabledChannels,
+		OnSwap:          svc.onEnabledChannelsSwap,
+		Watcher:         svc.channelNotifier,
+	})
+	xerrors.NoErr(svc.enabledChannelsCache.Load(context.Background(), true))
+
+	// Schedule model sync every hour
 	xerrors.NoErr2(
-		params.Executor.ScheduleFuncAtCronRate(
-			svc.loadChannelsPeriodic,
-			executors.CRONRule{Expr: "*/1 * * * *"},
+		svc.Executors.ScheduleFuncAtCronRate(
+			svc.syncChannelModels,
+			executors.CRONRule{Expr: "11 * * * *"},
 		),
 	)
 
@@ -90,14 +143,18 @@ func NewChannelService(params ChannelServiceParams) *ChannelService {
 	return svc
 }
 
+func (svc *ChannelService) Stop() {
+	svc.enabledChannelsCache.Stop()
+}
+
 type ChannelService struct {
 	*AbstractService
 
-	Executors executors.ScheduledExecutor
+	Executors     executors.ScheduledExecutor
+	SystemService *SystemService
 
-	// latestUpdate 记录最新的 channel 更新时间，用于优化定时加载
-	EnabledChannels []*Channel
-	latestUpdate    time.Time
+	enabledChannelsCache *live.Cache[[]*Channel]
+	channelNotifier      watcher.Notifier[live.CacheEvent[struct{}]]
 
 	// perfWindowSeconds is the configurable sliding window size for performance metrics (in seconds)
 	// If not set (0), uses defaultPerformanceWindowSize (600 seconds = 10 minutes)
@@ -108,40 +165,38 @@ type ChannelService struct {
 	channelPerfMetrics     map[int]*channelMetrics
 	channelPerfMetricsLock sync.RWMutex
 
+	// channelErrorCounts stores the error counts for each channel and status code
+	// channelID -> statusCode -> count
+	channelErrorCounts     map[int]map[int]int
+	channelErrorCountsLock sync.Mutex
+
+	// apiKeyErrorCounts stores the error counts for each API key and status code
+	// channelID -> apiKey -> statusCode -> count
+	apiKeyErrorCounts     map[int]map[string]map[int]int
+	apiKeyErrorCountsLock sync.Mutex
+
 	// perfCh is the channel for performance records for async processing.
 	perfCh chan *PerformanceRecord
 }
 
-func (svc *ChannelService) loadChannelsPeriodic(ctx context.Context) {
-	err := svc.loadChannels(ctx)
-	if err != nil {
-		log.Error(ctx, "failed to load channels", log.Cause(err))
-	}
-}
-
-func (svc *ChannelService) loadChannels(ctx context.Context) error {
+func (svc *ChannelService) refreshEnabledChannels(ctx context.Context, current []*Channel, lastUpdate time.Time) ([]*Channel, time.Time, bool, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
-	// 检查是否有 channels 被修改
+	// Query latest updated channel including soft-deleted ones to detect deletions
 	latestUpdatedChannel, err := svc.entFromContext(ctx).Channel.Query().
 		Order(ent.Desc(channel.FieldUpdatedAt)).
-		First(ctx)
+		First(schematype.SkipSoftDelete(ctx))
 	if err != nil && !ent.IsNotFound(err) {
-		return err
+		return current, lastUpdate, false, err
 	}
 
-	// 如果没有找到任何 channels，latestUpdate 会是 nil
-	if latestUpdatedChannel != nil {
-		// 如果最新的更新时间早于或等于我们记录的时间，说明没有新的修改
-		if !latestUpdatedChannel.UpdatedAt.After(svc.latestUpdate) {
-			log.Debug(ctx, "no new channels updated")
-			return nil
+	if latestUpdatedChannel == nil {
+		if lastUpdate.IsZero() && len(current) == 0 {
+			return current, time.Time{}, false, nil
 		}
-		// 更新最新的修改时间记录
-		svc.latestUpdate = latestUpdatedChannel.UpdatedAt
-	} else {
-		// 如果没有 channels，确保 latestUpdate 是零值时间
-		svc.latestUpdate = time.Time{}
+	} else if !latestUpdatedChannel.UpdatedAt.After(lastUpdate) {
+		log.Debug(ctx, "no new channels updated")
+		return current, lastUpdate, false, nil
 	}
 
 	entities, err := svc.entFromContext(ctx).Channel.Query().
@@ -149,13 +204,13 @@ func (svc *ChannelService) loadChannels(ctx context.Context) error {
 		Order(ent.Desc(channel.FieldOrderingWeight)).
 		All(ctx)
 	if err != nil {
-		return err
+		return current, lastUpdate, false, err
 	}
 
 	var channels []*Channel
 
 	for _, c := range entities {
-		channel, err := svc.buildChannel(c)
+		channel, err := svc.buildChannelWithTransformer(c)
 		if err != nil {
 			log.Warn(ctx, "failed to build channel",
 				log.String("channel", c.Name),
@@ -167,7 +222,7 @@ func (svc *ChannelService) loadChannels(ctx context.Context) error {
 		}
 
 		// Preload override parameters
-		overrideParams := channel.GetOverrideParameters()
+		overrideParams := channel.GetBodyOverrideOperations()
 		if log.DebugEnabled(ctx) {
 			log.Debug(ctx, "created outbound transformer",
 				log.String("channel", c.Name),
@@ -176,103 +231,92 @@ func (svc *ChannelService) loadChannels(ctx context.Context) error {
 			)
 		}
 
+		// Preload model prices
+		svc.preloadModelPrices(ctx, channel)
+
 		channels = append(channels, channel)
 	}
 
 	log.Info(ctx, "loaded channels", log.Int("count", len(channels)))
 
-	svc.EnabledChannels = channels
+	updateTime := time.Time{}
+	if latestUpdatedChannel != nil {
+		updateTime = latestUpdatedChannel.UpdatedAt
+	}
+
+	return channels, updateTime, true, nil
+}
+
+func (svc *ChannelService) onEnabledChannelsSwap(old, new []*Channel) {
+	for _, ch := range new {
+		if ch != nil && ch.startTokenProvider != nil {
+			ch.startTokenProvider()
+		}
+	}
+
+	for _, ch := range old {
+		if ch != nil && ch.stopTokenProvider != nil {
+			ch.stopTokenProvider()
+		}
+	}
+}
+
+// GetEnabledChannels returns all enabled channels.
+// This method hides the internal field and provides a stable interface.
+//
+// WARNING: The returned slice and its elements are internal cached state.
+// DO NOT modify the returned slice or any of its Channel elements.
+// Modifications will not persist and may cause data inconsistency.
+func (svc *ChannelService) GetEnabledChannels() []*Channel {
+	return svc.enabledChannelsCache.GetData()
+}
+
+// GetEnabledChannel returns the enabled channel by id, or nil if not found.
+func (svc *ChannelService) GetEnabledChannel(id int) *Channel {
+	for _, ch := range svc.GetEnabledChannels() {
+		if ch.ID == id {
+			return ch
+		}
+	}
 
 	return nil
 }
 
-// GetChannelForTest retrieves a specific channel by ID for testing purposes,
-// including disabled channels. This bypasses the normal enabled-only filtering.
-func (svc *ChannelService) GetChannelForTest(ctx context.Context, channelID int) (*Channel, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+func (svc *ChannelService) SetEnabledChannelsForTest(channels []*Channel) {
+	svc.enabledChannelsCache.Stop()
 
+	svc.enabledChannelsCache = live.NewCache(live.Options[[]*Channel]{
+		Name:            "enabled_channels_test",
+		InitialValue:    channels,
+		RefreshInterval: 24 * time.Hour,
+		RefreshFunc: func(ctx context.Context, current []*Channel, lastUpdate time.Time) ([]*Channel, time.Time, bool, error) {
+			return current, lastUpdate, false, nil
+		},
+	})
+}
+
+// GetChannel retrieves a specific channel by ID for testing purposes,
+// including disabled channels. This bypasses the normal enabled-only filtering.
+func (svc *ChannelService) GetChannel(ctx context.Context, channelID int) (*Channel, error) {
 	// Get the channel entity from database (including disabled ones)
 	entity, err := svc.entFromContext(ctx).Channel.Get(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("channel not found: %w", err)
 	}
 
-	return svc.buildChannel(entity)
-}
-
-// ListEnabledModels returns all unique models across all enabled channels,
-// considering model mappings. It returns both the original model names
-// from SupportedModels and the "From" names from model mappings.
-func (svc *ChannelService) ListEnabledModels(ctx context.Context) []objects.Model {
-	modelSet := make(map[string]objects.Model)
-
-	for _, ch := range svc.EnabledChannels {
-		// Add all supported models
-		for _, model := range ch.SupportedModels {
-			if _, ok := modelSet[model]; ok {
-				continue
-			}
-
-			modelSet[model] = objects.Model{
-				ID:          model,
-				DisplayName: model,
-				CreatedAt:   ch.CreatedAt,
-				Created:     ch.CreatedAt.Unix(),
-				OwnedBy:     ch.Channel.Type.String(),
-			}
-		}
-
-		// Add all "From" models from model mappings
-		if ch.Settings != nil {
-			for _, mapping := range ch.Settings.ModelMappings {
-				// Only add the mapping if the target model is supported
-				if slices.Contains(ch.SupportedModels, mapping.To) {
-					if _, ok := modelSet[mapping.From]; ok {
-						continue
-					}
-
-					modelSet[mapping.From] = objects.Model{
-						ID:          mapping.From,
-						DisplayName: mapping.From,
-						CreatedAt:   ch.CreatedAt,
-						Created:     ch.CreatedAt.Unix(),
-						OwnedBy:     ch.Channel.Type.String(),
-					}
-				}
-			}
-
-			// Add models with extra prefix
-			if ch.Settings.ExtraModelPrefix != "" {
-				for _, model := range ch.SupportedModels {
-					prefixedModel := ch.Settings.ExtraModelPrefix + "/" + model
-					if _, ok := modelSet[prefixedModel]; ok {
-						continue
-					}
-
-					modelSet[prefixedModel] = objects.Model{
-						ID:          prefixedModel,
-						DisplayName: prefixedModel,
-						CreatedAt:   ch.CreatedAt,
-						Created:     ch.CreatedAt.Unix(),
-						OwnedBy:     ch.Channel.Type.String(),
-					}
-				}
-			}
-		}
-	}
-
-	return lo.Values(modelSet)
+	return svc.buildChannelWithTransformer(entity)
 }
 
 // ListModelsInput represents the input for listing models with filters.
 type ListModelsInput struct {
-	StatusIn       []channel.Status
-	IncludeMapping bool
-	IncludePrefix  bool
+	StatusIn                []channel.Status
+	IncludeAllChannelModels bool
+	IncludeMapping          bool
+	IncludePrefix           bool
 }
 
-// Model represents a model with its status.
-type Model struct {
+// ModelIdentityWithStatus represents a model with its status.
+type ModelIdentityWithStatus struct {
 	ID     string
 	Status channel.Status
 }
@@ -293,7 +337,7 @@ func setModelStatus(models map[string]channel.Status, modelID string, newStatus 
 
 // ListModels returns all unique models across channels matching the filter criteria.
 // It supports filtering by status and optionally including model mappings and prefixes.
-func (svc *ChannelService) ListModels(ctx context.Context, input ListModelsInput) ([]*Model, error) {
+func (svc *ChannelService) ListModels(ctx context.Context, input ListModelsInput) ([]*ModelIdentityWithStatus, error) {
 	// Build query for channels
 	query := svc.entFromContext(ctx).Channel.Query()
 
@@ -314,34 +358,44 @@ func (svc *ChannelService) ListModels(ctx context.Context, input ListModelsInput
 	modelMap := make(map[string]channel.Status)
 
 	for _, ch := range channels {
-		// Add all supported models
-		for _, modelID := range ch.SupportedModels {
-			setModelStatus(modelMap, modelID, ch.Status)
-		}
+		if input.IncludeAllChannelModels {
+			// Use GetModelEntries to get all model entries (including mapping, prefix, auto_trim)
+			bizCh := &Channel{Channel: ch}
 
-		// Add model mappings if requested
-		if input.IncludeMapping && ch.Settings != nil {
-			for _, mapping := range ch.Settings.ModelMappings {
-				// Only add the mapping if the target model is supported
-				if slices.Contains(ch.SupportedModels, mapping.To) {
-					setModelStatus(modelMap, mapping.From, ch.Status)
+			entries := bizCh.GetModelEntries()
+			for requestModel := range entries {
+				setModelStatus(modelMap, requestModel, ch.Status)
+			}
+		} else {
+			// Add all supported models
+			for _, modelID := range ch.SupportedModels {
+				setModelStatus(modelMap, modelID, ch.Status)
+			}
+
+			// Add model mappings if requested
+			if input.IncludeMapping && ch.Settings != nil {
+				for _, mapping := range ch.Settings.ModelMappings {
+					// Only add the mapping if the target model is supported
+					if slices.Contains(ch.SupportedModels, mapping.To) {
+						setModelStatus(modelMap, mapping.From, ch.Status)
+					}
 				}
 			}
-		}
 
-		// Add models with extra prefix if requested
-		if input.IncludePrefix && ch.Settings != nil && ch.Settings.ExtraModelPrefix != "" {
-			for _, modelID := range ch.SupportedModels {
-				prefixedModel := ch.Settings.ExtraModelPrefix + "/" + modelID
-				setModelStatus(modelMap, prefixedModel, ch.Status)
+			// Add models with extra prefix if requested
+			if input.IncludePrefix && ch.Settings != nil && ch.Settings.ExtraModelPrefix != "" {
+				for _, modelID := range ch.SupportedModels {
+					prefixedModel := ch.Settings.ExtraModelPrefix + "/" + modelID
+					setModelStatus(modelMap, prefixedModel, ch.Status)
+				}
 			}
 		}
 	}
 
 	// Convert map to slice
-	models := make([]*Model, 0, len(modelMap))
+	models := make([]*ModelIdentityWithStatus, 0, len(modelMap))
 	for modelID, status := range modelMap {
-		models = append(models, &Model{
+		models = append(models, &ModelIdentityWithStatus{
 			ID:     modelID,
 			Status: status,
 		})
@@ -353,17 +407,37 @@ func (svc *ChannelService) ListModels(ctx context.Context, input ListModelsInput
 // createChannel creates a new channel without triggering a reload.
 // This is useful for batch operations where reload should happen once at the end.
 func (svc *ChannelService) createChannel(ctx context.Context, input ent.CreateChannelInput) (*ent.Channel, error) {
+	if input.Settings != nil {
+		if input.Settings.BodyOverrideOperations != nil {
+			if err := ValidateBodyOverrideOperations(input.Settings.BodyOverrideOperations); err != nil {
+				return nil, fmt.Errorf("invalid body override operations: %w", err)
+			}
+		}
+
+		if input.Settings.HeaderOverrideOperations != nil {
+			if err := ValidateOverrideHeaders(input.Settings.HeaderOverrideOperations); err != nil {
+				return nil, fmt.Errorf("invalid header override operations: %w", err)
+			}
+		}
+	}
+
 	createBuilder := svc.entFromContext(ctx).Channel.Create().
 		SetType(input.Type).
 		SetNillableBaseURL(input.BaseURL).
+		SetNillableRemark(input.Remark).
 		SetName(input.Name).
 		SetCredentials(input.Credentials).
 		SetSupportedModels(input.SupportedModels).
 		SetDefaultTestModel(input.DefaultTestModel).
+		SetNillableAutoSyncSupportedModels(input.AutoSyncSupportedModels).
 		SetSettings(input.Settings)
 
 	if input.Tags != nil {
 		createBuilder.SetTags(input.Tags)
+	}
+
+	if input.Policies != nil {
+		createBuilder.SetPolicies(*input.Policies)
 	}
 
 	channel, err := createBuilder.Save(ctx)
@@ -428,7 +502,8 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 		SetNillableBaseURL(input.BaseURL).
 		SetNillableName(input.Name).
 		SetNillableDefaultTestModel(input.DefaultTestModel).
-		SetNillableOrderingWeight(input.OrderingWeight)
+		SetNillableOrderingWeight(input.OrderingWeight).
+		SetNillableAutoSyncSupportedModels(input.AutoSyncSupportedModels)
 
 	if input.SupportedModels != nil {
 		mut.SetSupportedModels(input.SupportedModels)
@@ -439,23 +514,28 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 	}
 
 	if input.Settings != nil {
-		// Always normalize and validate override parameters
-		input.Settings.OverrideParameters = NormalizeOverrideParameters(input.Settings.OverrideParameters)
-		if err := ValidateOverrideParameters(input.Settings.OverrideParameters); err != nil {
-			return nil, fmt.Errorf("invalid override parameters: %w", err)
+		// Always normalize and validate override settings.
+		if input.Settings.BodyOverrideOperations != nil {
+			if err := ValidateBodyOverrideOperations(input.Settings.BodyOverrideOperations); err != nil {
+				return nil, fmt.Errorf("invalid body override operations: %w", err)
+			}
 		}
-		// Validate override headers
-		if len(input.Settings.OverrideHeaders) > 0 {
-			if err := ValidateOverrideHeaders(input.Settings.OverrideHeaders); err != nil {
-				return nil, fmt.Errorf("invalid override headers: %w", err)
+
+		if input.Settings.HeaderOverrideOperations != nil {
+			if err := ValidateOverrideHeaders(input.Settings.HeaderOverrideOperations); err != nil {
+				return nil, fmt.Errorf("invalid header override operations: %w", err)
 			}
 		}
 
 		mut.SetSettings(input.Settings)
 	}
 
+	if input.Policies != nil {
+		mut.SetPolicies(*input.Policies)
+	}
+
 	if input.Credentials != nil {
-		mut.SetCredentials(input.Credentials)
+		mut.SetCredentials(*input.Credentials)
 	}
 
 	if input.Remark != nil {
@@ -502,23 +582,9 @@ func (svc *ChannelService) asyncReloadChannels() {
 		return
 	}
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error(context.Background(), "panic in async reload channels", log.Any("panic", r))
-			}
-		}()
-
-		reloadCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		// Force reload by resetting latestUpdate timestamp
-		svc.latestUpdate = time.Time{}
-
-		if reloadErr := svc.loadChannels(reloadCtx); reloadErr != nil {
-			log.Error(reloadCtx, "failed to reload channels after bulk update", log.Cause(reloadErr))
-		}
-	}()
+	if err := svc.channelNotifier.Notify(context.Background(), live.NewForceRefreshEvent[struct{}]()); err != nil {
+		log.Warn(context.Background(), "channel cache watcher notify failed", log.Cause(err))
+	}
 }
 
 // DeleteChannel deletes a channel by ID.
@@ -530,4 +596,15 @@ func (svc *ChannelService) DeleteChannel(ctx context.Context, id int) error {
 	svc.asyncReloadChannels()
 
 	return nil
+}
+
+// GetEnabledAPIKeys returns cached enabled API keys.
+func (c *Channel) GetEnabledAPIKeys() []string {
+	return c.cachedEnabledAPIKeys
+}
+
+// IsAPIKeyDisabled checks if a key is disabled (O(1) lookup).
+func (c *Channel) IsAPIKeyDisabled(key string) bool {
+	_, ok := c.cachedDisabledKeySet[key]
+	return ok
 }

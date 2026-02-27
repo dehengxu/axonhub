@@ -9,11 +9,16 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/channelprobe"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
+	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/predicate"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -63,16 +68,6 @@ type APIKeyWhereInput struct {
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
 
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
-
 	// "user_id" field predicates.
 	UserID      *int  `json:"userID,omitempty"`
 	UserIDNEQ   *int  `json:"userIDNEQ,omitempty"`
@@ -114,6 +109,12 @@ type APIKeyWhereInput struct {
 	NameHasSuffix    *string  `json:"nameHasSuffix,omitempty"`
 	NameEqualFold    *string  `json:"nameEqualFold,omitempty"`
 	NameContainsFold *string  `json:"nameContainsFold,omitempty"`
+
+	// "type" field predicates.
+	Type      *apikey.Type  `json:"type,omitempty"`
+	TypeNEQ   *apikey.Type  `json:"typeNEQ,omitempty"`
+	TypeIn    []apikey.Type `json:"typeIn,omitempty"`
+	TypeNotIn []apikey.Type `json:"typeNotIn,omitempty"`
 
 	// "status" field predicates.
 	Status      *apikey.Status  `json:"status,omitempty"`
@@ -277,30 +278,6 @@ func (i *APIKeyWhereInput) P() (predicate.APIKey, error) {
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, apikey.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, apikey.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, apikey.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, apikey.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, apikey.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, apikey.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, apikey.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, apikey.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, apikey.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.UserID != nil {
 		predicates = append(predicates, apikey.UserIDEQ(*i.UserID))
 	}
@@ -402,6 +379,18 @@ func (i *APIKeyWhereInput) P() (predicate.APIKey, error) {
 	}
 	if i.NameContainsFold != nil {
 		predicates = append(predicates, apikey.NameContainsFold(*i.NameContainsFold))
+	}
+	if i.Type != nil {
+		predicates = append(predicates, apikey.TypeEQ(*i.Type))
+	}
+	if i.TypeNEQ != nil {
+		predicates = append(predicates, apikey.TypeNEQ(*i.TypeNEQ))
+	}
+	if len(i.TypeIn) > 0 {
+		predicates = append(predicates, apikey.TypeIn(i.TypeIn...))
+	}
+	if len(i.TypeNotIn) > 0 {
+		predicates = append(predicates, apikey.TypeNotIn(i.TypeNotIn...))
 	}
 	if i.Status != nil {
 		predicates = append(predicates, apikey.StatusEQ(*i.Status))
@@ -517,16 +506,6 @@ type ChannelWhereInput struct {
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
 
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
-
 	// "type" field predicates.
 	Type      *channel.Type  `json:"type,omitempty"`
 	TypeNEQ   *channel.Type  `json:"typeNEQ,omitempty"`
@@ -570,6 +549,10 @@ type ChannelWhereInput struct {
 	StatusNEQ   *channel.Status  `json:"statusNEQ,omitempty"`
 	StatusIn    []channel.Status `json:"statusIn,omitempty"`
 	StatusNotIn []channel.Status `json:"statusNotIn,omitempty"`
+
+	// "auto_sync_supported_models" field predicates.
+	AutoSyncSupportedModels    *bool `json:"autoSyncSupportedModels,omitempty"`
+	AutoSyncSupportedModelsNEQ *bool `json:"autoSyncSupportedModelsNEQ,omitempty"`
 
 	// "default_test_model" field predicates.
 	DefaultTestModel             *string  `json:"defaultTestModel,omitempty"`
@@ -642,9 +625,17 @@ type ChannelWhereInput struct {
 	HasUsageLogs     *bool                 `json:"hasUsageLogs,omitempty"`
 	HasUsageLogsWith []*UsageLogWhereInput `json:"hasUsageLogsWith,omitempty"`
 
-	// "channel_performance" edge predicates.
-	HasChannelPerformance     *bool                           `json:"hasChannelPerformance,omitempty"`
-	HasChannelPerformanceWith []*ChannelPerformanceWhereInput `json:"hasChannelPerformanceWith,omitempty"`
+	// "channel_probes" edge predicates.
+	HasChannelProbes     *bool                     `json:"hasChannelProbes,omitempty"`
+	HasChannelProbesWith []*ChannelProbeWhereInput `json:"hasChannelProbesWith,omitempty"`
+
+	// "channel_model_prices" edge predicates.
+	HasChannelModelPrices     *bool                          `json:"hasChannelModelPrices,omitempty"`
+	HasChannelModelPricesWith []*ChannelModelPriceWhereInput `json:"hasChannelModelPricesWith,omitempty"`
+
+	// "provider_quota_status" edge predicates.
+	HasProviderQuotaStatus     *bool                            `json:"hasProviderQuotaStatus,omitempty"`
+	HasProviderQuotaStatusWith []*ProviderQuotaStatusWhereInput `json:"hasProviderQuotaStatusWith,omitempty"`
 }
 
 // AddPredicates adds custom predicates to the where input to be used during the filtering phase.
@@ -790,30 +781,6 @@ func (i *ChannelWhereInput) P() (predicate.Channel, error) {
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, channel.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, channel.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, channel.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, channel.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, channel.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, channel.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, channel.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, channel.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, channel.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.Type != nil {
 		predicates = append(predicates, channel.TypeEQ(*i.Type))
 	}
@@ -921,6 +888,12 @@ func (i *ChannelWhereInput) P() (predicate.Channel, error) {
 	}
 	if len(i.StatusNotIn) > 0 {
 		predicates = append(predicates, channel.StatusNotIn(i.StatusNotIn...))
+	}
+	if i.AutoSyncSupportedModels != nil {
+		predicates = append(predicates, channel.AutoSyncSupportedModelsEQ(*i.AutoSyncSupportedModels))
+	}
+	if i.AutoSyncSupportedModelsNEQ != nil {
+		predicates = append(predicates, channel.AutoSyncSupportedModelsNEQ(*i.AutoSyncSupportedModelsNEQ))
 	}
 	if i.DefaultTestModel != nil {
 		predicates = append(predicates, channel.DefaultTestModelEQ(*i.DefaultTestModel))
@@ -1130,23 +1103,59 @@ func (i *ChannelWhereInput) P() (predicate.Channel, error) {
 		}
 		predicates = append(predicates, channel.HasUsageLogsWith(with...))
 	}
-	if i.HasChannelPerformance != nil {
-		p := channel.HasChannelPerformance()
-		if !*i.HasChannelPerformance {
+	if i.HasChannelProbes != nil {
+		p := channel.HasChannelProbes()
+		if !*i.HasChannelProbes {
 			p = channel.Not(p)
 		}
 		predicates = append(predicates, p)
 	}
-	if len(i.HasChannelPerformanceWith) > 0 {
-		with := make([]predicate.ChannelPerformance, 0, len(i.HasChannelPerformanceWith))
-		for _, w := range i.HasChannelPerformanceWith {
+	if len(i.HasChannelProbesWith) > 0 {
+		with := make([]predicate.ChannelProbe, 0, len(i.HasChannelProbesWith))
+		for _, w := range i.HasChannelProbesWith {
 			p, err := w.P()
 			if err != nil {
-				return nil, fmt.Errorf("%w: field 'HasChannelPerformanceWith'", err)
+				return nil, fmt.Errorf("%w: field 'HasChannelProbesWith'", err)
 			}
 			with = append(with, p)
 		}
-		predicates = append(predicates, channel.HasChannelPerformanceWith(with...))
+		predicates = append(predicates, channel.HasChannelProbesWith(with...))
+	}
+	if i.HasChannelModelPrices != nil {
+		p := channel.HasChannelModelPrices()
+		if !*i.HasChannelModelPrices {
+			p = channel.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasChannelModelPricesWith) > 0 {
+		with := make([]predicate.ChannelModelPrice, 0, len(i.HasChannelModelPricesWith))
+		for _, w := range i.HasChannelModelPricesWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasChannelModelPricesWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, channel.HasChannelModelPricesWith(with...))
+	}
+	if i.HasProviderQuotaStatus != nil {
+		p := channel.HasProviderQuotaStatus()
+		if !*i.HasProviderQuotaStatus {
+			p = channel.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasProviderQuotaStatusWith) > 0 {
+		with := make([]predicate.ProviderQuotaStatus, 0, len(i.HasProviderQuotaStatusWith))
+		for _, w := range i.HasProviderQuotaStatusWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasProviderQuotaStatusWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, channel.HasProviderQuotaStatusWith(with...))
 	}
 	switch len(predicates) {
 	case 0:
@@ -1155,6 +1164,836 @@ func (i *ChannelWhereInput) P() (predicate.Channel, error) {
 		return predicates[0], nil
 	default:
 		return channel.And(predicates...), nil
+	}
+}
+
+// ChannelModelPriceWhereInput represents a where input for filtering ChannelModelPrice queries.
+type ChannelModelPriceWhereInput struct {
+	Predicates []predicate.ChannelModelPrice  `json:"-"`
+	Not        *ChannelModelPriceWhereInput   `json:"not,omitempty"`
+	Or         []*ChannelModelPriceWhereInput `json:"or,omitempty"`
+	And        []*ChannelModelPriceWhereInput `json:"and,omitempty"`
+
+	// "id" field predicates.
+	ID      *int  `json:"id,omitempty"`
+	IDNEQ   *int  `json:"idNEQ,omitempty"`
+	IDIn    []int `json:"idIn,omitempty"`
+	IDNotIn []int `json:"idNotIn,omitempty"`
+	IDGT    *int  `json:"idGT,omitempty"`
+	IDGTE   *int  `json:"idGTE,omitempty"`
+	IDLT    *int  `json:"idLT,omitempty"`
+	IDLTE   *int  `json:"idLTE,omitempty"`
+
+	// "created_at" field predicates.
+	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
+	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
+	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
+	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
+	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
+	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
+	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
+	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
+
+	// "updated_at" field predicates.
+	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
+	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
+	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
+	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
+	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
+	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
+	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
+
+	// "channel_id" field predicates.
+	ChannelID      *int  `json:"channelID,omitempty"`
+	ChannelIDNEQ   *int  `json:"channelIDNEQ,omitempty"`
+	ChannelIDIn    []int `json:"channelIDIn,omitempty"`
+	ChannelIDNotIn []int `json:"channelIDNotIn,omitempty"`
+
+	// "model_id" field predicates.
+	ModelID             *string  `json:"modelID,omitempty"`
+	ModelIDNEQ          *string  `json:"modelIDNEQ,omitempty"`
+	ModelIDIn           []string `json:"modelIDIn,omitempty"`
+	ModelIDNotIn        []string `json:"modelIDNotIn,omitempty"`
+	ModelIDGT           *string  `json:"modelIDGT,omitempty"`
+	ModelIDGTE          *string  `json:"modelIDGTE,omitempty"`
+	ModelIDLT           *string  `json:"modelIDLT,omitempty"`
+	ModelIDLTE          *string  `json:"modelIDLTE,omitempty"`
+	ModelIDContains     *string  `json:"modelIDContains,omitempty"`
+	ModelIDHasPrefix    *string  `json:"modelIDHasPrefix,omitempty"`
+	ModelIDHasSuffix    *string  `json:"modelIDHasSuffix,omitempty"`
+	ModelIDEqualFold    *string  `json:"modelIDEqualFold,omitempty"`
+	ModelIDContainsFold *string  `json:"modelIDContainsFold,omitempty"`
+
+	// "reference_id" field predicates.
+	ReferenceID             *string  `json:"referenceID,omitempty"`
+	ReferenceIDNEQ          *string  `json:"referenceIDNEQ,omitempty"`
+	ReferenceIDIn           []string `json:"referenceIDIn,omitempty"`
+	ReferenceIDNotIn        []string `json:"referenceIDNotIn,omitempty"`
+	ReferenceIDGT           *string  `json:"referenceIDGT,omitempty"`
+	ReferenceIDGTE          *string  `json:"referenceIDGTE,omitempty"`
+	ReferenceIDLT           *string  `json:"referenceIDLT,omitempty"`
+	ReferenceIDLTE          *string  `json:"referenceIDLTE,omitempty"`
+	ReferenceIDContains     *string  `json:"referenceIDContains,omitempty"`
+	ReferenceIDHasPrefix    *string  `json:"referenceIDHasPrefix,omitempty"`
+	ReferenceIDHasSuffix    *string  `json:"referenceIDHasSuffix,omitempty"`
+	ReferenceIDEqualFold    *string  `json:"referenceIDEqualFold,omitempty"`
+	ReferenceIDContainsFold *string  `json:"referenceIDContainsFold,omitempty"`
+
+	// "channel" edge predicates.
+	HasChannel     *bool                `json:"hasChannel,omitempty"`
+	HasChannelWith []*ChannelWhereInput `json:"hasChannelWith,omitempty"`
+
+	// "versions" edge predicates.
+	HasVersions     *bool                                 `json:"hasVersions,omitempty"`
+	HasVersionsWith []*ChannelModelPriceVersionWhereInput `json:"hasVersionsWith,omitempty"`
+}
+
+// AddPredicates adds custom predicates to the where input to be used during the filtering phase.
+func (i *ChannelModelPriceWhereInput) AddPredicates(predicates ...predicate.ChannelModelPrice) {
+	i.Predicates = append(i.Predicates, predicates...)
+}
+
+// Filter applies the ChannelModelPriceWhereInput filter on the ChannelModelPriceQuery builder.
+func (i *ChannelModelPriceWhereInput) Filter(q *ChannelModelPriceQuery) (*ChannelModelPriceQuery, error) {
+	if i == nil {
+		return q, nil
+	}
+	p, err := i.P()
+	if err != nil {
+		if err == ErrEmptyChannelModelPriceWhereInput {
+			return q, nil
+		}
+		return nil, err
+	}
+	return q.Where(p), nil
+}
+
+// ErrEmptyChannelModelPriceWhereInput is returned in case the ChannelModelPriceWhereInput is empty.
+var ErrEmptyChannelModelPriceWhereInput = errors.New("ent: empty predicate ChannelModelPriceWhereInput")
+
+// P returns a predicate for filtering channelmodelprices.
+// An error is returned if the input is empty or invalid.
+func (i *ChannelModelPriceWhereInput) P() (predicate.ChannelModelPrice, error) {
+	var predicates []predicate.ChannelModelPrice
+	if i.Not != nil {
+		p, err := i.Not.P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'not'", err)
+		}
+		predicates = append(predicates, channelmodelprice.Not(p))
+	}
+	switch n := len(i.Or); {
+	case n == 1:
+		p, err := i.Or[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'or'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		or := make([]predicate.ChannelModelPrice, 0, n)
+		for _, w := range i.Or {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'or'", err)
+			}
+			or = append(or, p)
+		}
+		predicates = append(predicates, channelmodelprice.Or(or...))
+	}
+	switch n := len(i.And); {
+	case n == 1:
+		p, err := i.And[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'and'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		and := make([]predicate.ChannelModelPrice, 0, n)
+		for _, w := range i.And {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'and'", err)
+			}
+			and = append(and, p)
+		}
+		predicates = append(predicates, channelmodelprice.And(and...))
+	}
+	predicates = append(predicates, i.Predicates...)
+	if i.ID != nil {
+		predicates = append(predicates, channelmodelprice.IDEQ(*i.ID))
+	}
+	if i.IDNEQ != nil {
+		predicates = append(predicates, channelmodelprice.IDNEQ(*i.IDNEQ))
+	}
+	if len(i.IDIn) > 0 {
+		predicates = append(predicates, channelmodelprice.IDIn(i.IDIn...))
+	}
+	if len(i.IDNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.IDNotIn(i.IDNotIn...))
+	}
+	if i.IDGT != nil {
+		predicates = append(predicates, channelmodelprice.IDGT(*i.IDGT))
+	}
+	if i.IDGTE != nil {
+		predicates = append(predicates, channelmodelprice.IDGTE(*i.IDGTE))
+	}
+	if i.IDLT != nil {
+		predicates = append(predicates, channelmodelprice.IDLT(*i.IDLT))
+	}
+	if i.IDLTE != nil {
+		predicates = append(predicates, channelmodelprice.IDLTE(*i.IDLTE))
+	}
+	if i.CreatedAt != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtEQ(*i.CreatedAt))
+	}
+	if i.CreatedAtNEQ != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtNEQ(*i.CreatedAtNEQ))
+	}
+	if len(i.CreatedAtIn) > 0 {
+		predicates = append(predicates, channelmodelprice.CreatedAtIn(i.CreatedAtIn...))
+	}
+	if len(i.CreatedAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.CreatedAtNotIn(i.CreatedAtNotIn...))
+	}
+	if i.CreatedAtGT != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtGT(*i.CreatedAtGT))
+	}
+	if i.CreatedAtGTE != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtGTE(*i.CreatedAtGTE))
+	}
+	if i.CreatedAtLT != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtLT(*i.CreatedAtLT))
+	}
+	if i.CreatedAtLTE != nil {
+		predicates = append(predicates, channelmodelprice.CreatedAtLTE(*i.CreatedAtLTE))
+	}
+	if i.UpdatedAt != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtEQ(*i.UpdatedAt))
+	}
+	if i.UpdatedAtNEQ != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtNEQ(*i.UpdatedAtNEQ))
+	}
+	if len(i.UpdatedAtIn) > 0 {
+		predicates = append(predicates, channelmodelprice.UpdatedAtIn(i.UpdatedAtIn...))
+	}
+	if len(i.UpdatedAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.UpdatedAtNotIn(i.UpdatedAtNotIn...))
+	}
+	if i.UpdatedAtGT != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtGT(*i.UpdatedAtGT))
+	}
+	if i.UpdatedAtGTE != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtGTE(*i.UpdatedAtGTE))
+	}
+	if i.UpdatedAtLT != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtLT(*i.UpdatedAtLT))
+	}
+	if i.UpdatedAtLTE != nil {
+		predicates = append(predicates, channelmodelprice.UpdatedAtLTE(*i.UpdatedAtLTE))
+	}
+	if i.ChannelID != nil {
+		predicates = append(predicates, channelmodelprice.ChannelIDEQ(*i.ChannelID))
+	}
+	if i.ChannelIDNEQ != nil {
+		predicates = append(predicates, channelmodelprice.ChannelIDNEQ(*i.ChannelIDNEQ))
+	}
+	if len(i.ChannelIDIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ChannelIDIn(i.ChannelIDIn...))
+	}
+	if len(i.ChannelIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ChannelIDNotIn(i.ChannelIDNotIn...))
+	}
+	if i.ModelID != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDEQ(*i.ModelID))
+	}
+	if i.ModelIDNEQ != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDNEQ(*i.ModelIDNEQ))
+	}
+	if len(i.ModelIDIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ModelIDIn(i.ModelIDIn...))
+	}
+	if len(i.ModelIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ModelIDNotIn(i.ModelIDNotIn...))
+	}
+	if i.ModelIDGT != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDGT(*i.ModelIDGT))
+	}
+	if i.ModelIDGTE != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDGTE(*i.ModelIDGTE))
+	}
+	if i.ModelIDLT != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDLT(*i.ModelIDLT))
+	}
+	if i.ModelIDLTE != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDLTE(*i.ModelIDLTE))
+	}
+	if i.ModelIDContains != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDContains(*i.ModelIDContains))
+	}
+	if i.ModelIDHasPrefix != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDHasPrefix(*i.ModelIDHasPrefix))
+	}
+	if i.ModelIDHasSuffix != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDHasSuffix(*i.ModelIDHasSuffix))
+	}
+	if i.ModelIDEqualFold != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDEqualFold(*i.ModelIDEqualFold))
+	}
+	if i.ModelIDContainsFold != nil {
+		predicates = append(predicates, channelmodelprice.ModelIDContainsFold(*i.ModelIDContainsFold))
+	}
+	if i.ReferenceID != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDEQ(*i.ReferenceID))
+	}
+	if i.ReferenceIDNEQ != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDNEQ(*i.ReferenceIDNEQ))
+	}
+	if len(i.ReferenceIDIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ReferenceIDIn(i.ReferenceIDIn...))
+	}
+	if len(i.ReferenceIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelprice.ReferenceIDNotIn(i.ReferenceIDNotIn...))
+	}
+	if i.ReferenceIDGT != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDGT(*i.ReferenceIDGT))
+	}
+	if i.ReferenceIDGTE != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDGTE(*i.ReferenceIDGTE))
+	}
+	if i.ReferenceIDLT != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDLT(*i.ReferenceIDLT))
+	}
+	if i.ReferenceIDLTE != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDLTE(*i.ReferenceIDLTE))
+	}
+	if i.ReferenceIDContains != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDContains(*i.ReferenceIDContains))
+	}
+	if i.ReferenceIDHasPrefix != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDHasPrefix(*i.ReferenceIDHasPrefix))
+	}
+	if i.ReferenceIDHasSuffix != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDHasSuffix(*i.ReferenceIDHasSuffix))
+	}
+	if i.ReferenceIDEqualFold != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDEqualFold(*i.ReferenceIDEqualFold))
+	}
+	if i.ReferenceIDContainsFold != nil {
+		predicates = append(predicates, channelmodelprice.ReferenceIDContainsFold(*i.ReferenceIDContainsFold))
+	}
+
+	if i.HasChannel != nil {
+		p := channelmodelprice.HasChannel()
+		if !*i.HasChannel {
+			p = channelmodelprice.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasChannelWith) > 0 {
+		with := make([]predicate.Channel, 0, len(i.HasChannelWith))
+		for _, w := range i.HasChannelWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasChannelWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, channelmodelprice.HasChannelWith(with...))
+	}
+	if i.HasVersions != nil {
+		p := channelmodelprice.HasVersions()
+		if !*i.HasVersions {
+			p = channelmodelprice.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasVersionsWith) > 0 {
+		with := make([]predicate.ChannelModelPriceVersion, 0, len(i.HasVersionsWith))
+		for _, w := range i.HasVersionsWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasVersionsWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, channelmodelprice.HasVersionsWith(with...))
+	}
+	switch len(predicates) {
+	case 0:
+		return nil, ErrEmptyChannelModelPriceWhereInput
+	case 1:
+		return predicates[0], nil
+	default:
+		return channelmodelprice.And(predicates...), nil
+	}
+}
+
+// ChannelModelPriceVersionWhereInput represents a where input for filtering ChannelModelPriceVersion queries.
+type ChannelModelPriceVersionWhereInput struct {
+	Predicates []predicate.ChannelModelPriceVersion  `json:"-"`
+	Not        *ChannelModelPriceVersionWhereInput   `json:"not,omitempty"`
+	Or         []*ChannelModelPriceVersionWhereInput `json:"or,omitempty"`
+	And        []*ChannelModelPriceVersionWhereInput `json:"and,omitempty"`
+
+	// "id" field predicates.
+	ID      *int  `json:"id,omitempty"`
+	IDNEQ   *int  `json:"idNEQ,omitempty"`
+	IDIn    []int `json:"idIn,omitempty"`
+	IDNotIn []int `json:"idNotIn,omitempty"`
+	IDGT    *int  `json:"idGT,omitempty"`
+	IDGTE   *int  `json:"idGTE,omitempty"`
+	IDLT    *int  `json:"idLT,omitempty"`
+	IDLTE   *int  `json:"idLTE,omitempty"`
+
+	// "created_at" field predicates.
+	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
+	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
+	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
+	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
+	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
+	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
+	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
+	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
+
+	// "updated_at" field predicates.
+	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
+	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
+	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
+	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
+	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
+	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
+	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
+
+	// "channel_id" field predicates.
+	ChannelID      *int  `json:"channelID,omitempty"`
+	ChannelIDNEQ   *int  `json:"channelIDNEQ,omitempty"`
+	ChannelIDIn    []int `json:"channelIDIn,omitempty"`
+	ChannelIDNotIn []int `json:"channelIDNotIn,omitempty"`
+	ChannelIDGT    *int  `json:"channelIDGT,omitempty"`
+	ChannelIDGTE   *int  `json:"channelIDGTE,omitempty"`
+	ChannelIDLT    *int  `json:"channelIDLT,omitempty"`
+	ChannelIDLTE   *int  `json:"channelIDLTE,omitempty"`
+
+	// "model_id" field predicates.
+	ModelID             *string  `json:"modelID,omitempty"`
+	ModelIDNEQ          *string  `json:"modelIDNEQ,omitempty"`
+	ModelIDIn           []string `json:"modelIDIn,omitempty"`
+	ModelIDNotIn        []string `json:"modelIDNotIn,omitempty"`
+	ModelIDGT           *string  `json:"modelIDGT,omitempty"`
+	ModelIDGTE          *string  `json:"modelIDGTE,omitempty"`
+	ModelIDLT           *string  `json:"modelIDLT,omitempty"`
+	ModelIDLTE          *string  `json:"modelIDLTE,omitempty"`
+	ModelIDContains     *string  `json:"modelIDContains,omitempty"`
+	ModelIDHasPrefix    *string  `json:"modelIDHasPrefix,omitempty"`
+	ModelIDHasSuffix    *string  `json:"modelIDHasSuffix,omitempty"`
+	ModelIDEqualFold    *string  `json:"modelIDEqualFold,omitempty"`
+	ModelIDContainsFold *string  `json:"modelIDContainsFold,omitempty"`
+
+	// "channel_model_price_id" field predicates.
+	ChannelModelPriceID      *int  `json:"channelModelPriceID,omitempty"`
+	ChannelModelPriceIDNEQ   *int  `json:"channelModelPriceIDNEQ,omitempty"`
+	ChannelModelPriceIDIn    []int `json:"channelModelPriceIDIn,omitempty"`
+	ChannelModelPriceIDNotIn []int `json:"channelModelPriceIDNotIn,omitempty"`
+
+	// "status" field predicates.
+	Status      *channelmodelpriceversion.Status  `json:"status,omitempty"`
+	StatusNEQ   *channelmodelpriceversion.Status  `json:"statusNEQ,omitempty"`
+	StatusIn    []channelmodelpriceversion.Status `json:"statusIn,omitempty"`
+	StatusNotIn []channelmodelpriceversion.Status `json:"statusNotIn,omitempty"`
+
+	// "effective_start_at" field predicates.
+	EffectiveStartAt      *time.Time  `json:"effectiveStartAt,omitempty"`
+	EffectiveStartAtNEQ   *time.Time  `json:"effectiveStartAtNEQ,omitempty"`
+	EffectiveStartAtIn    []time.Time `json:"effectiveStartAtIn,omitempty"`
+	EffectiveStartAtNotIn []time.Time `json:"effectiveStartAtNotIn,omitempty"`
+	EffectiveStartAtGT    *time.Time  `json:"effectiveStartAtGT,omitempty"`
+	EffectiveStartAtGTE   *time.Time  `json:"effectiveStartAtGTE,omitempty"`
+	EffectiveStartAtLT    *time.Time  `json:"effectiveStartAtLT,omitempty"`
+	EffectiveStartAtLTE   *time.Time  `json:"effectiveStartAtLTE,omitempty"`
+
+	// "effective_end_at" field predicates.
+	EffectiveEndAt       *time.Time  `json:"effectiveEndAt,omitempty"`
+	EffectiveEndAtNEQ    *time.Time  `json:"effectiveEndAtNEQ,omitempty"`
+	EffectiveEndAtIn     []time.Time `json:"effectiveEndAtIn,omitempty"`
+	EffectiveEndAtNotIn  []time.Time `json:"effectiveEndAtNotIn,omitempty"`
+	EffectiveEndAtGT     *time.Time  `json:"effectiveEndAtGT,omitempty"`
+	EffectiveEndAtGTE    *time.Time  `json:"effectiveEndAtGTE,omitempty"`
+	EffectiveEndAtLT     *time.Time  `json:"effectiveEndAtLT,omitempty"`
+	EffectiveEndAtLTE    *time.Time  `json:"effectiveEndAtLTE,omitempty"`
+	EffectiveEndAtIsNil  bool        `json:"effectiveEndAtIsNil,omitempty"`
+	EffectiveEndAtNotNil bool        `json:"effectiveEndAtNotNil,omitempty"`
+
+	// "reference_id" field predicates.
+	ReferenceID             *string  `json:"referenceID,omitempty"`
+	ReferenceIDNEQ          *string  `json:"referenceIDNEQ,omitempty"`
+	ReferenceIDIn           []string `json:"referenceIDIn,omitempty"`
+	ReferenceIDNotIn        []string `json:"referenceIDNotIn,omitempty"`
+	ReferenceIDGT           *string  `json:"referenceIDGT,omitempty"`
+	ReferenceIDGTE          *string  `json:"referenceIDGTE,omitempty"`
+	ReferenceIDLT           *string  `json:"referenceIDLT,omitempty"`
+	ReferenceIDLTE          *string  `json:"referenceIDLTE,omitempty"`
+	ReferenceIDContains     *string  `json:"referenceIDContains,omitempty"`
+	ReferenceIDHasPrefix    *string  `json:"referenceIDHasPrefix,omitempty"`
+	ReferenceIDHasSuffix    *string  `json:"referenceIDHasSuffix,omitempty"`
+	ReferenceIDEqualFold    *string  `json:"referenceIDEqualFold,omitempty"`
+	ReferenceIDContainsFold *string  `json:"referenceIDContainsFold,omitempty"`
+
+	// "channel_model_price" edge predicates.
+	HasChannelModelPrice     *bool                          `json:"hasChannelModelPrice,omitempty"`
+	HasChannelModelPriceWith []*ChannelModelPriceWhereInput `json:"hasChannelModelPriceWith,omitempty"`
+}
+
+// AddPredicates adds custom predicates to the where input to be used during the filtering phase.
+func (i *ChannelModelPriceVersionWhereInput) AddPredicates(predicates ...predicate.ChannelModelPriceVersion) {
+	i.Predicates = append(i.Predicates, predicates...)
+}
+
+// Filter applies the ChannelModelPriceVersionWhereInput filter on the ChannelModelPriceVersionQuery builder.
+func (i *ChannelModelPriceVersionWhereInput) Filter(q *ChannelModelPriceVersionQuery) (*ChannelModelPriceVersionQuery, error) {
+	if i == nil {
+		return q, nil
+	}
+	p, err := i.P()
+	if err != nil {
+		if err == ErrEmptyChannelModelPriceVersionWhereInput {
+			return q, nil
+		}
+		return nil, err
+	}
+	return q.Where(p), nil
+}
+
+// ErrEmptyChannelModelPriceVersionWhereInput is returned in case the ChannelModelPriceVersionWhereInput is empty.
+var ErrEmptyChannelModelPriceVersionWhereInput = errors.New("ent: empty predicate ChannelModelPriceVersionWhereInput")
+
+// P returns a predicate for filtering channelmodelpriceversions.
+// An error is returned if the input is empty or invalid.
+func (i *ChannelModelPriceVersionWhereInput) P() (predicate.ChannelModelPriceVersion, error) {
+	var predicates []predicate.ChannelModelPriceVersion
+	if i.Not != nil {
+		p, err := i.Not.P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'not'", err)
+		}
+		predicates = append(predicates, channelmodelpriceversion.Not(p))
+	}
+	switch n := len(i.Or); {
+	case n == 1:
+		p, err := i.Or[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'or'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		or := make([]predicate.ChannelModelPriceVersion, 0, n)
+		for _, w := range i.Or {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'or'", err)
+			}
+			or = append(or, p)
+		}
+		predicates = append(predicates, channelmodelpriceversion.Or(or...))
+	}
+	switch n := len(i.And); {
+	case n == 1:
+		p, err := i.And[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'and'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		and := make([]predicate.ChannelModelPriceVersion, 0, n)
+		for _, w := range i.And {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'and'", err)
+			}
+			and = append(and, p)
+		}
+		predicates = append(predicates, channelmodelpriceversion.And(and...))
+	}
+	predicates = append(predicates, i.Predicates...)
+	if i.ID != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDEQ(*i.ID))
+	}
+	if i.IDNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDNEQ(*i.IDNEQ))
+	}
+	if len(i.IDIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.IDIn(i.IDIn...))
+	}
+	if len(i.IDNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.IDNotIn(i.IDNotIn...))
+	}
+	if i.IDGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDGT(*i.IDGT))
+	}
+	if i.IDGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDGTE(*i.IDGTE))
+	}
+	if i.IDLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDLT(*i.IDLT))
+	}
+	if i.IDLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.IDLTE(*i.IDLTE))
+	}
+	if i.CreatedAt != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtEQ(*i.CreatedAt))
+	}
+	if i.CreatedAtNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtNEQ(*i.CreatedAtNEQ))
+	}
+	if len(i.CreatedAtIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtIn(i.CreatedAtIn...))
+	}
+	if len(i.CreatedAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtNotIn(i.CreatedAtNotIn...))
+	}
+	if i.CreatedAtGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtGT(*i.CreatedAtGT))
+	}
+	if i.CreatedAtGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtGTE(*i.CreatedAtGTE))
+	}
+	if i.CreatedAtLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtLT(*i.CreatedAtLT))
+	}
+	if i.CreatedAtLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.CreatedAtLTE(*i.CreatedAtLTE))
+	}
+	if i.UpdatedAt != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtEQ(*i.UpdatedAt))
+	}
+	if i.UpdatedAtNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtNEQ(*i.UpdatedAtNEQ))
+	}
+	if len(i.UpdatedAtIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtIn(i.UpdatedAtIn...))
+	}
+	if len(i.UpdatedAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtNotIn(i.UpdatedAtNotIn...))
+	}
+	if i.UpdatedAtGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtGT(*i.UpdatedAtGT))
+	}
+	if i.UpdatedAtGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtGTE(*i.UpdatedAtGTE))
+	}
+	if i.UpdatedAtLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtLT(*i.UpdatedAtLT))
+	}
+	if i.UpdatedAtLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.UpdatedAtLTE(*i.UpdatedAtLTE))
+	}
+	if i.ChannelID != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDEQ(*i.ChannelID))
+	}
+	if i.ChannelIDNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDNEQ(*i.ChannelIDNEQ))
+	}
+	if len(i.ChannelIDIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDIn(i.ChannelIDIn...))
+	}
+	if len(i.ChannelIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDNotIn(i.ChannelIDNotIn...))
+	}
+	if i.ChannelIDGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDGT(*i.ChannelIDGT))
+	}
+	if i.ChannelIDGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDGTE(*i.ChannelIDGTE))
+	}
+	if i.ChannelIDLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDLT(*i.ChannelIDLT))
+	}
+	if i.ChannelIDLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelIDLTE(*i.ChannelIDLTE))
+	}
+	if i.ModelID != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDEQ(*i.ModelID))
+	}
+	if i.ModelIDNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDNEQ(*i.ModelIDNEQ))
+	}
+	if len(i.ModelIDIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDIn(i.ModelIDIn...))
+	}
+	if len(i.ModelIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDNotIn(i.ModelIDNotIn...))
+	}
+	if i.ModelIDGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDGT(*i.ModelIDGT))
+	}
+	if i.ModelIDGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDGTE(*i.ModelIDGTE))
+	}
+	if i.ModelIDLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDLT(*i.ModelIDLT))
+	}
+	if i.ModelIDLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDLTE(*i.ModelIDLTE))
+	}
+	if i.ModelIDContains != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDContains(*i.ModelIDContains))
+	}
+	if i.ModelIDHasPrefix != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDHasPrefix(*i.ModelIDHasPrefix))
+	}
+	if i.ModelIDHasSuffix != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDHasSuffix(*i.ModelIDHasSuffix))
+	}
+	if i.ModelIDEqualFold != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDEqualFold(*i.ModelIDEqualFold))
+	}
+	if i.ModelIDContainsFold != nil {
+		predicates = append(predicates, channelmodelpriceversion.ModelIDContainsFold(*i.ModelIDContainsFold))
+	}
+	if i.ChannelModelPriceID != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelModelPriceIDEQ(*i.ChannelModelPriceID))
+	}
+	if i.ChannelModelPriceIDNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.ChannelModelPriceIDNEQ(*i.ChannelModelPriceIDNEQ))
+	}
+	if len(i.ChannelModelPriceIDIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ChannelModelPriceIDIn(i.ChannelModelPriceIDIn...))
+	}
+	if len(i.ChannelModelPriceIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ChannelModelPriceIDNotIn(i.ChannelModelPriceIDNotIn...))
+	}
+	if i.Status != nil {
+		predicates = append(predicates, channelmodelpriceversion.StatusEQ(*i.Status))
+	}
+	if i.StatusNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.StatusNEQ(*i.StatusNEQ))
+	}
+	if len(i.StatusIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.StatusIn(i.StatusIn...))
+	}
+	if len(i.StatusNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.StatusNotIn(i.StatusNotIn...))
+	}
+	if i.EffectiveStartAt != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtEQ(*i.EffectiveStartAt))
+	}
+	if i.EffectiveStartAtNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtNEQ(*i.EffectiveStartAtNEQ))
+	}
+	if len(i.EffectiveStartAtIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtIn(i.EffectiveStartAtIn...))
+	}
+	if len(i.EffectiveStartAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtNotIn(i.EffectiveStartAtNotIn...))
+	}
+	if i.EffectiveStartAtGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtGT(*i.EffectiveStartAtGT))
+	}
+	if i.EffectiveStartAtGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtGTE(*i.EffectiveStartAtGTE))
+	}
+	if i.EffectiveStartAtLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtLT(*i.EffectiveStartAtLT))
+	}
+	if i.EffectiveStartAtLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveStartAtLTE(*i.EffectiveStartAtLTE))
+	}
+	if i.EffectiveEndAt != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtEQ(*i.EffectiveEndAt))
+	}
+	if i.EffectiveEndAtNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtNEQ(*i.EffectiveEndAtNEQ))
+	}
+	if len(i.EffectiveEndAtIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtIn(i.EffectiveEndAtIn...))
+	}
+	if len(i.EffectiveEndAtNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtNotIn(i.EffectiveEndAtNotIn...))
+	}
+	if i.EffectiveEndAtGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtGT(*i.EffectiveEndAtGT))
+	}
+	if i.EffectiveEndAtGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtGTE(*i.EffectiveEndAtGTE))
+	}
+	if i.EffectiveEndAtLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtLT(*i.EffectiveEndAtLT))
+	}
+	if i.EffectiveEndAtLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtLTE(*i.EffectiveEndAtLTE))
+	}
+	if i.EffectiveEndAtIsNil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtIsNil())
+	}
+	if i.EffectiveEndAtNotNil {
+		predicates = append(predicates, channelmodelpriceversion.EffectiveEndAtNotNil())
+	}
+	if i.ReferenceID != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDEQ(*i.ReferenceID))
+	}
+	if i.ReferenceIDNEQ != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDNEQ(*i.ReferenceIDNEQ))
+	}
+	if len(i.ReferenceIDIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDIn(i.ReferenceIDIn...))
+	}
+	if len(i.ReferenceIDNotIn) > 0 {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDNotIn(i.ReferenceIDNotIn...))
+	}
+	if i.ReferenceIDGT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDGT(*i.ReferenceIDGT))
+	}
+	if i.ReferenceIDGTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDGTE(*i.ReferenceIDGTE))
+	}
+	if i.ReferenceIDLT != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDLT(*i.ReferenceIDLT))
+	}
+	if i.ReferenceIDLTE != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDLTE(*i.ReferenceIDLTE))
+	}
+	if i.ReferenceIDContains != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDContains(*i.ReferenceIDContains))
+	}
+	if i.ReferenceIDHasPrefix != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDHasPrefix(*i.ReferenceIDHasPrefix))
+	}
+	if i.ReferenceIDHasSuffix != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDHasSuffix(*i.ReferenceIDHasSuffix))
+	}
+	if i.ReferenceIDEqualFold != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDEqualFold(*i.ReferenceIDEqualFold))
+	}
+	if i.ReferenceIDContainsFold != nil {
+		predicates = append(predicates, channelmodelpriceversion.ReferenceIDContainsFold(*i.ReferenceIDContainsFold))
+	}
+
+	if i.HasChannelModelPrice != nil {
+		p := channelmodelpriceversion.HasChannelModelPrice()
+		if !*i.HasChannelModelPrice {
+			p = channelmodelpriceversion.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasChannelModelPriceWith) > 0 {
+		with := make([]predicate.ChannelModelPrice, 0, len(i.HasChannelModelPriceWith))
+		for _, w := range i.HasChannelModelPriceWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasChannelModelPriceWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, channelmodelpriceversion.HasChannelModelPriceWith(with...))
+	}
+	switch len(predicates) {
+	case 0:
+		return nil, ErrEmptyChannelModelPriceVersionWhereInput
+	case 1:
+		return predicates[0], nil
+	default:
+		return channelmodelpriceversion.And(predicates...), nil
 	}
 }
 
@@ -1195,16 +2034,6 @@ type ChannelOverrideTemplateWhereInput struct {
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
 
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
-
 	// "user_id" field predicates.
 	UserID      *int  `json:"userID,omitempty"`
 	UserIDNEQ   *int  `json:"userIDNEQ,omitempty"`
@@ -1242,21 +2071,6 @@ type ChannelOverrideTemplateWhereInput struct {
 	DescriptionNotNil       bool     `json:"descriptionNotNil,omitempty"`
 	DescriptionEqualFold    *string  `json:"descriptionEqualFold,omitempty"`
 	DescriptionContainsFold *string  `json:"descriptionContainsFold,omitempty"`
-
-	// "channel_type" field predicates.
-	ChannelType             *string  `json:"channelType,omitempty"`
-	ChannelTypeNEQ          *string  `json:"channelTypeNEQ,omitempty"`
-	ChannelTypeIn           []string `json:"channelTypeIn,omitempty"`
-	ChannelTypeNotIn        []string `json:"channelTypeNotIn,omitempty"`
-	ChannelTypeGT           *string  `json:"channelTypeGT,omitempty"`
-	ChannelTypeGTE          *string  `json:"channelTypeGTE,omitempty"`
-	ChannelTypeLT           *string  `json:"channelTypeLT,omitempty"`
-	ChannelTypeLTE          *string  `json:"channelTypeLTE,omitempty"`
-	ChannelTypeContains     *string  `json:"channelTypeContains,omitempty"`
-	ChannelTypeHasPrefix    *string  `json:"channelTypeHasPrefix,omitempty"`
-	ChannelTypeHasSuffix    *string  `json:"channelTypeHasSuffix,omitempty"`
-	ChannelTypeEqualFold    *string  `json:"channelTypeEqualFold,omitempty"`
-	ChannelTypeContainsFold *string  `json:"channelTypeContainsFold,omitempty"`
 
 	// "override_parameters" field predicates.
 	OverrideParameters             *string  `json:"overrideParameters,omitempty"`
@@ -1421,30 +2235,6 @@ func (i *ChannelOverrideTemplateWhereInput) P() (predicate.ChannelOverrideTempla
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, channeloverridetemplate.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, channeloverridetemplate.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.UserID != nil {
 		predicates = append(predicates, channeloverridetemplate.UserIDEQ(*i.UserID))
 	}
@@ -1541,45 +2331,6 @@ func (i *ChannelOverrideTemplateWhereInput) P() (predicate.ChannelOverrideTempla
 	if i.DescriptionContainsFold != nil {
 		predicates = append(predicates, channeloverridetemplate.DescriptionContainsFold(*i.DescriptionContainsFold))
 	}
-	if i.ChannelType != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeEQ(*i.ChannelType))
-	}
-	if i.ChannelTypeNEQ != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeNEQ(*i.ChannelTypeNEQ))
-	}
-	if len(i.ChannelTypeIn) > 0 {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeIn(i.ChannelTypeIn...))
-	}
-	if len(i.ChannelTypeNotIn) > 0 {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeNotIn(i.ChannelTypeNotIn...))
-	}
-	if i.ChannelTypeGT != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeGT(*i.ChannelTypeGT))
-	}
-	if i.ChannelTypeGTE != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeGTE(*i.ChannelTypeGTE))
-	}
-	if i.ChannelTypeLT != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeLT(*i.ChannelTypeLT))
-	}
-	if i.ChannelTypeLTE != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeLTE(*i.ChannelTypeLTE))
-	}
-	if i.ChannelTypeContains != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeContains(*i.ChannelTypeContains))
-	}
-	if i.ChannelTypeHasPrefix != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeHasPrefix(*i.ChannelTypeHasPrefix))
-	}
-	if i.ChannelTypeHasSuffix != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeHasSuffix(*i.ChannelTypeHasSuffix))
-	}
-	if i.ChannelTypeEqualFold != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeEqualFold(*i.ChannelTypeEqualFold))
-	}
-	if i.ChannelTypeContainsFold != nil {
-		predicates = append(predicates, channeloverridetemplate.ChannelTypeContainsFold(*i.ChannelTypeContainsFold))
-	}
 	if i.OverrideParameters != nil {
 		predicates = append(predicates, channeloverridetemplate.OverrideParametersEQ(*i.OverrideParameters))
 	}
@@ -1648,12 +2399,12 @@ func (i *ChannelOverrideTemplateWhereInput) P() (predicate.ChannelOverrideTempla
 	}
 }
 
-// ChannelPerformanceWhereInput represents a where input for filtering ChannelPerformance queries.
-type ChannelPerformanceWhereInput struct {
-	Predicates []predicate.ChannelPerformance  `json:"-"`
-	Not        *ChannelPerformanceWhereInput   `json:"not,omitempty"`
-	Or         []*ChannelPerformanceWhereInput `json:"or,omitempty"`
-	And        []*ChannelPerformanceWhereInput `json:"and,omitempty"`
+// ChannelProbeWhereInput represents a where input for filtering ChannelProbe queries.
+type ChannelProbeWhereInput struct {
+	Predicates []predicate.ChannelProbe  `json:"-"`
+	Not        *ChannelProbeWhereInput   `json:"not,omitempty"`
+	Or         []*ChannelProbeWhereInput `json:"or,omitempty"`
+	And        []*ChannelProbeWhereInput `json:"and,omitempty"`
 
 	// "id" field predicates.
 	ID      *int  `json:"id,omitempty"`
@@ -1665,225 +2416,65 @@ type ChannelPerformanceWhereInput struct {
 	IDLT    *int  `json:"idLT,omitempty"`
 	IDLTE   *int  `json:"idLTE,omitempty"`
 
-	// "created_at" field predicates.
-	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
-	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
-	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
-	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
-	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
-	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
-	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
-	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
-
-	// "updated_at" field predicates.
-	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
-	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
-	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
-	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
-	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
-	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
-	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
-	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
-
 	// "channel_id" field predicates.
 	ChannelID      *int  `json:"channelID,omitempty"`
 	ChannelIDNEQ   *int  `json:"channelIDNEQ,omitempty"`
 	ChannelIDIn    []int `json:"channelIDIn,omitempty"`
 	ChannelIDNotIn []int `json:"channelIDNotIn,omitempty"`
 
-	// "success_rate" field predicates.
-	SuccessRate      *int  `json:"successRate,omitempty"`
-	SuccessRateNEQ   *int  `json:"successRateNEQ,omitempty"`
-	SuccessRateIn    []int `json:"successRateIn,omitempty"`
-	SuccessRateNotIn []int `json:"successRateNotIn,omitempty"`
-	SuccessRateGT    *int  `json:"successRateGT,omitempty"`
-	SuccessRateGTE   *int  `json:"successRateGTE,omitempty"`
-	SuccessRateLT    *int  `json:"successRateLT,omitempty"`
-	SuccessRateLTE   *int  `json:"successRateLTE,omitempty"`
+	// "total_request_count" field predicates.
+	TotalRequestCount      *int  `json:"totalRequestCount,omitempty"`
+	TotalRequestCountNEQ   *int  `json:"totalRequestCountNEQ,omitempty"`
+	TotalRequestCountIn    []int `json:"totalRequestCountIn,omitempty"`
+	TotalRequestCountNotIn []int `json:"totalRequestCountNotIn,omitempty"`
+	TotalRequestCountGT    *int  `json:"totalRequestCountGT,omitempty"`
+	TotalRequestCountGTE   *int  `json:"totalRequestCountGTE,omitempty"`
+	TotalRequestCountLT    *int  `json:"totalRequestCountLT,omitempty"`
+	TotalRequestCountLTE   *int  `json:"totalRequestCountLTE,omitempty"`
 
-	// "avg_latency_ms" field predicates.
-	AvgLatencyMs      *int  `json:"avgLatencyMs,omitempty"`
-	AvgLatencyMsNEQ   *int  `json:"avgLatencyMsNEQ,omitempty"`
-	AvgLatencyMsIn    []int `json:"avgLatencyMsIn,omitempty"`
-	AvgLatencyMsNotIn []int `json:"avgLatencyMsNotIn,omitempty"`
-	AvgLatencyMsGT    *int  `json:"avgLatencyMsGT,omitempty"`
-	AvgLatencyMsGTE   *int  `json:"avgLatencyMsGTE,omitempty"`
-	AvgLatencyMsLT    *int  `json:"avgLatencyMsLT,omitempty"`
-	AvgLatencyMsLTE   *int  `json:"avgLatencyMsLTE,omitempty"`
+	// "success_request_count" field predicates.
+	SuccessRequestCount      *int  `json:"successRequestCount,omitempty"`
+	SuccessRequestCountNEQ   *int  `json:"successRequestCountNEQ,omitempty"`
+	SuccessRequestCountIn    []int `json:"successRequestCountIn,omitempty"`
+	SuccessRequestCountNotIn []int `json:"successRequestCountNotIn,omitempty"`
+	SuccessRequestCountGT    *int  `json:"successRequestCountGT,omitempty"`
+	SuccessRequestCountGTE   *int  `json:"successRequestCountGTE,omitempty"`
+	SuccessRequestCountLT    *int  `json:"successRequestCountLT,omitempty"`
+	SuccessRequestCountLTE   *int  `json:"successRequestCountLTE,omitempty"`
 
-	// "avg_token_per_second" field predicates.
-	AvgTokenPerSecond      *int  `json:"avgTokenPerSecond,omitempty"`
-	AvgTokenPerSecondNEQ   *int  `json:"avgTokenPerSecondNEQ,omitempty"`
-	AvgTokenPerSecondIn    []int `json:"avgTokenPerSecondIn,omitempty"`
-	AvgTokenPerSecondNotIn []int `json:"avgTokenPerSecondNotIn,omitempty"`
-	AvgTokenPerSecondGT    *int  `json:"avgTokenPerSecondGT,omitempty"`
-	AvgTokenPerSecondGTE   *int  `json:"avgTokenPerSecondGTE,omitempty"`
-	AvgTokenPerSecondLT    *int  `json:"avgTokenPerSecondLT,omitempty"`
-	AvgTokenPerSecondLTE   *int  `json:"avgTokenPerSecondLTE,omitempty"`
+	// "avg_tokens_per_second" field predicates.
+	AvgTokensPerSecond       *float64  `json:"avgTokensPerSecond,omitempty"`
+	AvgTokensPerSecondNEQ    *float64  `json:"avgTokensPerSecondNEQ,omitempty"`
+	AvgTokensPerSecondIn     []float64 `json:"avgTokensPerSecondIn,omitempty"`
+	AvgTokensPerSecondNotIn  []float64 `json:"avgTokensPerSecondNotIn,omitempty"`
+	AvgTokensPerSecondGT     *float64  `json:"avgTokensPerSecondGT,omitempty"`
+	AvgTokensPerSecondGTE    *float64  `json:"avgTokensPerSecondGTE,omitempty"`
+	AvgTokensPerSecondLT     *float64  `json:"avgTokensPerSecondLT,omitempty"`
+	AvgTokensPerSecondLTE    *float64  `json:"avgTokensPerSecondLTE,omitempty"`
+	AvgTokensPerSecondIsNil  bool      `json:"avgTokensPerSecondIsNil,omitempty"`
+	AvgTokensPerSecondNotNil bool      `json:"avgTokensPerSecondNotNil,omitempty"`
 
-	// "avg_stream_first_token_latency_ms" field predicates.
-	AvgStreamFirstTokenLatencyMs      *int  `json:"avgStreamFirstTokenLatencyMs,omitempty"`
-	AvgStreamFirstTokenLatencyMsNEQ   *int  `json:"avgStreamFirstTokenLatencyMsNEQ,omitempty"`
-	AvgStreamFirstTokenLatencyMsIn    []int `json:"avgStreamFirstTokenLatencyMsIn,omitempty"`
-	AvgStreamFirstTokenLatencyMsNotIn []int `json:"avgStreamFirstTokenLatencyMsNotIn,omitempty"`
-	AvgStreamFirstTokenLatencyMsGT    *int  `json:"avgStreamFirstTokenLatencyMsGT,omitempty"`
-	AvgStreamFirstTokenLatencyMsGTE   *int  `json:"avgStreamFirstTokenLatencyMsGTE,omitempty"`
-	AvgStreamFirstTokenLatencyMsLT    *int  `json:"avgStreamFirstTokenLatencyMsLT,omitempty"`
-	AvgStreamFirstTokenLatencyMsLTE   *int  `json:"avgStreamFirstTokenLatencyMsLTE,omitempty"`
+	// "avg_time_to_first_token_ms" field predicates.
+	AvgTimeToFirstTokenMs       *float64  `json:"avgTimeToFirstTokenMs,omitempty"`
+	AvgTimeToFirstTokenMsNEQ    *float64  `json:"avgTimeToFirstTokenMsNEQ,omitempty"`
+	AvgTimeToFirstTokenMsIn     []float64 `json:"avgTimeToFirstTokenMsIn,omitempty"`
+	AvgTimeToFirstTokenMsNotIn  []float64 `json:"avgTimeToFirstTokenMsNotIn,omitempty"`
+	AvgTimeToFirstTokenMsGT     *float64  `json:"avgTimeToFirstTokenMsGT,omitempty"`
+	AvgTimeToFirstTokenMsGTE    *float64  `json:"avgTimeToFirstTokenMsGTE,omitempty"`
+	AvgTimeToFirstTokenMsLT     *float64  `json:"avgTimeToFirstTokenMsLT,omitempty"`
+	AvgTimeToFirstTokenMsLTE    *float64  `json:"avgTimeToFirstTokenMsLTE,omitempty"`
+	AvgTimeToFirstTokenMsIsNil  bool      `json:"avgTimeToFirstTokenMsIsNil,omitempty"`
+	AvgTimeToFirstTokenMsNotNil bool      `json:"avgTimeToFirstTokenMsNotNil,omitempty"`
 
-	// "avg_stream_token_per_second" field predicates.
-	AvgStreamTokenPerSecond      *float64  `json:"avgStreamTokenPerSecond,omitempty"`
-	AvgStreamTokenPerSecondNEQ   *float64  `json:"avgStreamTokenPerSecondNEQ,omitempty"`
-	AvgStreamTokenPerSecondIn    []float64 `json:"avgStreamTokenPerSecondIn,omitempty"`
-	AvgStreamTokenPerSecondNotIn []float64 `json:"avgStreamTokenPerSecondNotIn,omitempty"`
-	AvgStreamTokenPerSecondGT    *float64  `json:"avgStreamTokenPerSecondGT,omitempty"`
-	AvgStreamTokenPerSecondGTE   *float64  `json:"avgStreamTokenPerSecondGTE,omitempty"`
-	AvgStreamTokenPerSecondLT    *float64  `json:"avgStreamTokenPerSecondLT,omitempty"`
-	AvgStreamTokenPerSecondLTE   *float64  `json:"avgStreamTokenPerSecondLTE,omitempty"`
-
-	// "last_success_at" field predicates.
-	LastSuccessAt       *time.Time  `json:"lastSuccessAt,omitempty"`
-	LastSuccessAtNEQ    *time.Time  `json:"lastSuccessAtNEQ,omitempty"`
-	LastSuccessAtIn     []time.Time `json:"lastSuccessAtIn,omitempty"`
-	LastSuccessAtNotIn  []time.Time `json:"lastSuccessAtNotIn,omitempty"`
-	LastSuccessAtGT     *time.Time  `json:"lastSuccessAtGT,omitempty"`
-	LastSuccessAtGTE    *time.Time  `json:"lastSuccessAtGTE,omitempty"`
-	LastSuccessAtLT     *time.Time  `json:"lastSuccessAtLT,omitempty"`
-	LastSuccessAtLTE    *time.Time  `json:"lastSuccessAtLTE,omitempty"`
-	LastSuccessAtIsNil  bool        `json:"lastSuccessAtIsNil,omitempty"`
-	LastSuccessAtNotNil bool        `json:"lastSuccessAtNotNil,omitempty"`
-
-	// "last_failure_at" field predicates.
-	LastFailureAt       *time.Time  `json:"lastFailureAt,omitempty"`
-	LastFailureAtNEQ    *time.Time  `json:"lastFailureAtNEQ,omitempty"`
-	LastFailureAtIn     []time.Time `json:"lastFailureAtIn,omitempty"`
-	LastFailureAtNotIn  []time.Time `json:"lastFailureAtNotIn,omitempty"`
-	LastFailureAtGT     *time.Time  `json:"lastFailureAtGT,omitempty"`
-	LastFailureAtGTE    *time.Time  `json:"lastFailureAtGTE,omitempty"`
-	LastFailureAtLT     *time.Time  `json:"lastFailureAtLT,omitempty"`
-	LastFailureAtLTE    *time.Time  `json:"lastFailureAtLTE,omitempty"`
-	LastFailureAtIsNil  bool        `json:"lastFailureAtIsNil,omitempty"`
-	LastFailureAtNotNil bool        `json:"lastFailureAtNotNil,omitempty"`
-
-	// "request_count" field predicates.
-	RequestCount      *int64  `json:"requestCount,omitempty"`
-	RequestCountNEQ   *int64  `json:"requestCountNEQ,omitempty"`
-	RequestCountIn    []int64 `json:"requestCountIn,omitempty"`
-	RequestCountNotIn []int64 `json:"requestCountNotIn,omitempty"`
-	RequestCountGT    *int64  `json:"requestCountGT,omitempty"`
-	RequestCountGTE   *int64  `json:"requestCountGTE,omitempty"`
-	RequestCountLT    *int64  `json:"requestCountLT,omitempty"`
-	RequestCountLTE   *int64  `json:"requestCountLTE,omitempty"`
-
-	// "success_count" field predicates.
-	SuccessCount      *int64  `json:"successCount,omitempty"`
-	SuccessCountNEQ   *int64  `json:"successCountNEQ,omitempty"`
-	SuccessCountIn    []int64 `json:"successCountIn,omitempty"`
-	SuccessCountNotIn []int64 `json:"successCountNotIn,omitempty"`
-	SuccessCountGT    *int64  `json:"successCountGT,omitempty"`
-	SuccessCountGTE   *int64  `json:"successCountGTE,omitempty"`
-	SuccessCountLT    *int64  `json:"successCountLT,omitempty"`
-	SuccessCountLTE   *int64  `json:"successCountLTE,omitempty"`
-
-	// "failure_count" field predicates.
-	FailureCount      *int64  `json:"failureCount,omitempty"`
-	FailureCountNEQ   *int64  `json:"failureCountNEQ,omitempty"`
-	FailureCountIn    []int64 `json:"failureCountIn,omitempty"`
-	FailureCountNotIn []int64 `json:"failureCountNotIn,omitempty"`
-	FailureCountGT    *int64  `json:"failureCountGT,omitempty"`
-	FailureCountGTE   *int64  `json:"failureCountGTE,omitempty"`
-	FailureCountLT    *int64  `json:"failureCountLT,omitempty"`
-	FailureCountLTE   *int64  `json:"failureCountLTE,omitempty"`
-
-	// "total_token_count" field predicates.
-	TotalTokenCount      *int64  `json:"totalTokenCount,omitempty"`
-	TotalTokenCountNEQ   *int64  `json:"totalTokenCountNEQ,omitempty"`
-	TotalTokenCountIn    []int64 `json:"totalTokenCountIn,omitempty"`
-	TotalTokenCountNotIn []int64 `json:"totalTokenCountNotIn,omitempty"`
-	TotalTokenCountGT    *int64  `json:"totalTokenCountGT,omitempty"`
-	TotalTokenCountGTE   *int64  `json:"totalTokenCountGTE,omitempty"`
-	TotalTokenCountLT    *int64  `json:"totalTokenCountLT,omitempty"`
-	TotalTokenCountLTE   *int64  `json:"totalTokenCountLTE,omitempty"`
-
-	// "total_request_latency_ms" field predicates.
-	TotalRequestLatencyMs      *int64  `json:"totalRequestLatencyMs,omitempty"`
-	TotalRequestLatencyMsNEQ   *int64  `json:"totalRequestLatencyMsNEQ,omitempty"`
-	TotalRequestLatencyMsIn    []int64 `json:"totalRequestLatencyMsIn,omitempty"`
-	TotalRequestLatencyMsNotIn []int64 `json:"totalRequestLatencyMsNotIn,omitempty"`
-	TotalRequestLatencyMsGT    *int64  `json:"totalRequestLatencyMsGT,omitempty"`
-	TotalRequestLatencyMsGTE   *int64  `json:"totalRequestLatencyMsGTE,omitempty"`
-	TotalRequestLatencyMsLT    *int64  `json:"totalRequestLatencyMsLT,omitempty"`
-	TotalRequestLatencyMsLTE   *int64  `json:"totalRequestLatencyMsLTE,omitempty"`
-
-	// "stream_success_count" field predicates.
-	StreamSuccessCount      *int64  `json:"streamSuccessCount,omitempty"`
-	StreamSuccessCountNEQ   *int64  `json:"streamSuccessCountNEQ,omitempty"`
-	StreamSuccessCountIn    []int64 `json:"streamSuccessCountIn,omitempty"`
-	StreamSuccessCountNotIn []int64 `json:"streamSuccessCountNotIn,omitempty"`
-	StreamSuccessCountGT    *int64  `json:"streamSuccessCountGT,omitempty"`
-	StreamSuccessCountGTE   *int64  `json:"streamSuccessCountGTE,omitempty"`
-	StreamSuccessCountLT    *int64  `json:"streamSuccessCountLT,omitempty"`
-	StreamSuccessCountLTE   *int64  `json:"streamSuccessCountLTE,omitempty"`
-
-	// "stream_total_request_count" field predicates.
-	StreamTotalRequestCount      *int64  `json:"streamTotalRequestCount,omitempty"`
-	StreamTotalRequestCountNEQ   *int64  `json:"streamTotalRequestCountNEQ,omitempty"`
-	StreamTotalRequestCountIn    []int64 `json:"streamTotalRequestCountIn,omitempty"`
-	StreamTotalRequestCountNotIn []int64 `json:"streamTotalRequestCountNotIn,omitempty"`
-	StreamTotalRequestCountGT    *int64  `json:"streamTotalRequestCountGT,omitempty"`
-	StreamTotalRequestCountGTE   *int64  `json:"streamTotalRequestCountGTE,omitempty"`
-	StreamTotalRequestCountLT    *int64  `json:"streamTotalRequestCountLT,omitempty"`
-	StreamTotalRequestCountLTE   *int64  `json:"streamTotalRequestCountLTE,omitempty"`
-
-	// "stream_total_token_count" field predicates.
-	StreamTotalTokenCount      *int64  `json:"streamTotalTokenCount,omitempty"`
-	StreamTotalTokenCountNEQ   *int64  `json:"streamTotalTokenCountNEQ,omitempty"`
-	StreamTotalTokenCountIn    []int64 `json:"streamTotalTokenCountIn,omitempty"`
-	StreamTotalTokenCountNotIn []int64 `json:"streamTotalTokenCountNotIn,omitempty"`
-	StreamTotalTokenCountGT    *int64  `json:"streamTotalTokenCountGT,omitempty"`
-	StreamTotalTokenCountGTE   *int64  `json:"streamTotalTokenCountGTE,omitempty"`
-	StreamTotalTokenCountLT    *int64  `json:"streamTotalTokenCountLT,omitempty"`
-	StreamTotalTokenCountLTE   *int64  `json:"streamTotalTokenCountLTE,omitempty"`
-
-	// "stream_total_request_latency_ms" field predicates.
-	StreamTotalRequestLatencyMs      *int64  `json:"streamTotalRequestLatencyMs,omitempty"`
-	StreamTotalRequestLatencyMsNEQ   *int64  `json:"streamTotalRequestLatencyMsNEQ,omitempty"`
-	StreamTotalRequestLatencyMsIn    []int64 `json:"streamTotalRequestLatencyMsIn,omitempty"`
-	StreamTotalRequestLatencyMsNotIn []int64 `json:"streamTotalRequestLatencyMsNotIn,omitempty"`
-	StreamTotalRequestLatencyMsGT    *int64  `json:"streamTotalRequestLatencyMsGT,omitempty"`
-	StreamTotalRequestLatencyMsGTE   *int64  `json:"streamTotalRequestLatencyMsGTE,omitempty"`
-	StreamTotalRequestLatencyMsLT    *int64  `json:"streamTotalRequestLatencyMsLT,omitempty"`
-	StreamTotalRequestLatencyMsLTE   *int64  `json:"streamTotalRequestLatencyMsLTE,omitempty"`
-
-	// "stream_total_first_token_latency_ms" field predicates.
-	StreamTotalFirstTokenLatencyMs      *int64  `json:"streamTotalFirstTokenLatencyMs,omitempty"`
-	StreamTotalFirstTokenLatencyMsNEQ   *int64  `json:"streamTotalFirstTokenLatencyMsNEQ,omitempty"`
-	StreamTotalFirstTokenLatencyMsIn    []int64 `json:"streamTotalFirstTokenLatencyMsIn,omitempty"`
-	StreamTotalFirstTokenLatencyMsNotIn []int64 `json:"streamTotalFirstTokenLatencyMsNotIn,omitempty"`
-	StreamTotalFirstTokenLatencyMsGT    *int64  `json:"streamTotalFirstTokenLatencyMsGT,omitempty"`
-	StreamTotalFirstTokenLatencyMsGTE   *int64  `json:"streamTotalFirstTokenLatencyMsGTE,omitempty"`
-	StreamTotalFirstTokenLatencyMsLT    *int64  `json:"streamTotalFirstTokenLatencyMsLT,omitempty"`
-	StreamTotalFirstTokenLatencyMsLTE   *int64  `json:"streamTotalFirstTokenLatencyMsLTE,omitempty"`
-
-	// "consecutive_failures" field predicates.
-	ConsecutiveFailures      *int64  `json:"consecutiveFailures,omitempty"`
-	ConsecutiveFailuresNEQ   *int64  `json:"consecutiveFailuresNEQ,omitempty"`
-	ConsecutiveFailuresIn    []int64 `json:"consecutiveFailuresIn,omitempty"`
-	ConsecutiveFailuresNotIn []int64 `json:"consecutiveFailuresNotIn,omitempty"`
-	ConsecutiveFailuresGT    *int64  `json:"consecutiveFailuresGT,omitempty"`
-	ConsecutiveFailuresGTE   *int64  `json:"consecutiveFailuresGTE,omitempty"`
-	ConsecutiveFailuresLT    *int64  `json:"consecutiveFailuresLT,omitempty"`
-	ConsecutiveFailuresLTE   *int64  `json:"consecutiveFailuresLTE,omitempty"`
+	// "timestamp" field predicates.
+	Timestamp      *int64  `json:"timestamp,omitempty"`
+	TimestampNEQ   *int64  `json:"timestampNEQ,omitempty"`
+	TimestampIn    []int64 `json:"timestampIn,omitempty"`
+	TimestampNotIn []int64 `json:"timestampNotIn,omitempty"`
+	TimestampGT    *int64  `json:"timestampGT,omitempty"`
+	TimestampGTE   *int64  `json:"timestampGTE,omitempty"`
+	TimestampLT    *int64  `json:"timestampLT,omitempty"`
+	TimestampLTE   *int64  `json:"timestampLTE,omitempty"`
 
 	// "channel" edge predicates.
 	HasChannel     *bool                `json:"hasChannel,omitempty"`
@@ -1891,18 +2482,18 @@ type ChannelPerformanceWhereInput struct {
 }
 
 // AddPredicates adds custom predicates to the where input to be used during the filtering phase.
-func (i *ChannelPerformanceWhereInput) AddPredicates(predicates ...predicate.ChannelPerformance) {
+func (i *ChannelProbeWhereInput) AddPredicates(predicates ...predicate.ChannelProbe) {
 	i.Predicates = append(i.Predicates, predicates...)
 }
 
-// Filter applies the ChannelPerformanceWhereInput filter on the ChannelPerformanceQuery builder.
-func (i *ChannelPerformanceWhereInput) Filter(q *ChannelPerformanceQuery) (*ChannelPerformanceQuery, error) {
+// Filter applies the ChannelProbeWhereInput filter on the ChannelProbeQuery builder.
+func (i *ChannelProbeWhereInput) Filter(q *ChannelProbeQuery) (*ChannelProbeQuery, error) {
 	if i == nil {
 		return q, nil
 	}
 	p, err := i.P()
 	if err != nil {
-		if err == ErrEmptyChannelPerformanceWhereInput {
+		if err == ErrEmptyChannelProbeWhereInput {
 			return q, nil
 		}
 		return nil, err
@@ -1910,19 +2501,19 @@ func (i *ChannelPerformanceWhereInput) Filter(q *ChannelPerformanceQuery) (*Chan
 	return q.Where(p), nil
 }
 
-// ErrEmptyChannelPerformanceWhereInput is returned in case the ChannelPerformanceWhereInput is empty.
-var ErrEmptyChannelPerformanceWhereInput = errors.New("ent: empty predicate ChannelPerformanceWhereInput")
+// ErrEmptyChannelProbeWhereInput is returned in case the ChannelProbeWhereInput is empty.
+var ErrEmptyChannelProbeWhereInput = errors.New("ent: empty predicate ChannelProbeWhereInput")
 
-// P returns a predicate for filtering channelperformances.
+// P returns a predicate for filtering channelprobes.
 // An error is returned if the input is empty or invalid.
-func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error) {
-	var predicates []predicate.ChannelPerformance
+func (i *ChannelProbeWhereInput) P() (predicate.ChannelProbe, error) {
+	var predicates []predicate.ChannelProbe
 	if i.Not != nil {
 		p, err := i.Not.P()
 		if err != nil {
 			return nil, fmt.Errorf("%w: field 'not'", err)
 		}
-		predicates = append(predicates, channelperformance.Not(p))
+		predicates = append(predicates, channelprobe.Not(p))
 	}
 	switch n := len(i.Or); {
 	case n == 1:
@@ -1932,7 +2523,7 @@ func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error)
 		}
 		predicates = append(predicates, p)
 	case n > 1:
-		or := make([]predicate.ChannelPerformance, 0, n)
+		or := make([]predicate.ChannelProbe, 0, n)
 		for _, w := range i.Or {
 			p, err := w.P()
 			if err != nil {
@@ -1940,7 +2531,7 @@ func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error)
 			}
 			or = append(or, p)
 		}
-		predicates = append(predicates, channelperformance.Or(or...))
+		predicates = append(predicates, channelprobe.Or(or...))
 	}
 	switch n := len(i.And); {
 	case n == 1:
@@ -1950,7 +2541,7 @@ func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error)
 		}
 		predicates = append(predicates, p)
 	case n > 1:
-		and := make([]predicate.ChannelPerformance, 0, n)
+		and := make([]predicate.ChannelProbe, 0, n)
 		for _, w := range i.And {
 			p, err := w.P()
 			if err != nil {
@@ -1958,566 +2549,182 @@ func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error)
 			}
 			and = append(and, p)
 		}
-		predicates = append(predicates, channelperformance.And(and...))
+		predicates = append(predicates, channelprobe.And(and...))
 	}
 	predicates = append(predicates, i.Predicates...)
 	if i.ID != nil {
-		predicates = append(predicates, channelperformance.IDEQ(*i.ID))
+		predicates = append(predicates, channelprobe.IDEQ(*i.ID))
 	}
 	if i.IDNEQ != nil {
-		predicates = append(predicates, channelperformance.IDNEQ(*i.IDNEQ))
+		predicates = append(predicates, channelprobe.IDNEQ(*i.IDNEQ))
 	}
 	if len(i.IDIn) > 0 {
-		predicates = append(predicates, channelperformance.IDIn(i.IDIn...))
+		predicates = append(predicates, channelprobe.IDIn(i.IDIn...))
 	}
 	if len(i.IDNotIn) > 0 {
-		predicates = append(predicates, channelperformance.IDNotIn(i.IDNotIn...))
+		predicates = append(predicates, channelprobe.IDNotIn(i.IDNotIn...))
 	}
 	if i.IDGT != nil {
-		predicates = append(predicates, channelperformance.IDGT(*i.IDGT))
+		predicates = append(predicates, channelprobe.IDGT(*i.IDGT))
 	}
 	if i.IDGTE != nil {
-		predicates = append(predicates, channelperformance.IDGTE(*i.IDGTE))
+		predicates = append(predicates, channelprobe.IDGTE(*i.IDGTE))
 	}
 	if i.IDLT != nil {
-		predicates = append(predicates, channelperformance.IDLT(*i.IDLT))
+		predicates = append(predicates, channelprobe.IDLT(*i.IDLT))
 	}
 	if i.IDLTE != nil {
-		predicates = append(predicates, channelperformance.IDLTE(*i.IDLTE))
-	}
-	if i.CreatedAt != nil {
-		predicates = append(predicates, channelperformance.CreatedAtEQ(*i.CreatedAt))
-	}
-	if i.CreatedAtNEQ != nil {
-		predicates = append(predicates, channelperformance.CreatedAtNEQ(*i.CreatedAtNEQ))
-	}
-	if len(i.CreatedAtIn) > 0 {
-		predicates = append(predicates, channelperformance.CreatedAtIn(i.CreatedAtIn...))
-	}
-	if len(i.CreatedAtNotIn) > 0 {
-		predicates = append(predicates, channelperformance.CreatedAtNotIn(i.CreatedAtNotIn...))
-	}
-	if i.CreatedAtGT != nil {
-		predicates = append(predicates, channelperformance.CreatedAtGT(*i.CreatedAtGT))
-	}
-	if i.CreatedAtGTE != nil {
-		predicates = append(predicates, channelperformance.CreatedAtGTE(*i.CreatedAtGTE))
-	}
-	if i.CreatedAtLT != nil {
-		predicates = append(predicates, channelperformance.CreatedAtLT(*i.CreatedAtLT))
-	}
-	if i.CreatedAtLTE != nil {
-		predicates = append(predicates, channelperformance.CreatedAtLTE(*i.CreatedAtLTE))
-	}
-	if i.UpdatedAt != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtEQ(*i.UpdatedAt))
-	}
-	if i.UpdatedAtNEQ != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtNEQ(*i.UpdatedAtNEQ))
-	}
-	if len(i.UpdatedAtIn) > 0 {
-		predicates = append(predicates, channelperformance.UpdatedAtIn(i.UpdatedAtIn...))
-	}
-	if len(i.UpdatedAtNotIn) > 0 {
-		predicates = append(predicates, channelperformance.UpdatedAtNotIn(i.UpdatedAtNotIn...))
-	}
-	if i.UpdatedAtGT != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtGT(*i.UpdatedAtGT))
-	}
-	if i.UpdatedAtGTE != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtGTE(*i.UpdatedAtGTE))
-	}
-	if i.UpdatedAtLT != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtLT(*i.UpdatedAtLT))
-	}
-	if i.UpdatedAtLTE != nil {
-		predicates = append(predicates, channelperformance.UpdatedAtLTE(*i.UpdatedAtLTE))
-	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, channelperformance.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, channelperformance.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, channelperformance.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, channelperformance.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, channelperformance.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, channelperformance.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, channelperformance.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, channelperformance.DeletedAtLTE(*i.DeletedAtLTE))
+		predicates = append(predicates, channelprobe.IDLTE(*i.IDLTE))
 	}
 	if i.ChannelID != nil {
-		predicates = append(predicates, channelperformance.ChannelIDEQ(*i.ChannelID))
+		predicates = append(predicates, channelprobe.ChannelIDEQ(*i.ChannelID))
 	}
 	if i.ChannelIDNEQ != nil {
-		predicates = append(predicates, channelperformance.ChannelIDNEQ(*i.ChannelIDNEQ))
+		predicates = append(predicates, channelprobe.ChannelIDNEQ(*i.ChannelIDNEQ))
 	}
 	if len(i.ChannelIDIn) > 0 {
-		predicates = append(predicates, channelperformance.ChannelIDIn(i.ChannelIDIn...))
+		predicates = append(predicates, channelprobe.ChannelIDIn(i.ChannelIDIn...))
 	}
 	if len(i.ChannelIDNotIn) > 0 {
-		predicates = append(predicates, channelperformance.ChannelIDNotIn(i.ChannelIDNotIn...))
+		predicates = append(predicates, channelprobe.ChannelIDNotIn(i.ChannelIDNotIn...))
 	}
-	if i.SuccessRate != nil {
-		predicates = append(predicates, channelperformance.SuccessRateEQ(*i.SuccessRate))
+	if i.TotalRequestCount != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountEQ(*i.TotalRequestCount))
 	}
-	if i.SuccessRateNEQ != nil {
-		predicates = append(predicates, channelperformance.SuccessRateNEQ(*i.SuccessRateNEQ))
+	if i.TotalRequestCountNEQ != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountNEQ(*i.TotalRequestCountNEQ))
 	}
-	if len(i.SuccessRateIn) > 0 {
-		predicates = append(predicates, channelperformance.SuccessRateIn(i.SuccessRateIn...))
+	if len(i.TotalRequestCountIn) > 0 {
+		predicates = append(predicates, channelprobe.TotalRequestCountIn(i.TotalRequestCountIn...))
 	}
-	if len(i.SuccessRateNotIn) > 0 {
-		predicates = append(predicates, channelperformance.SuccessRateNotIn(i.SuccessRateNotIn...))
+	if len(i.TotalRequestCountNotIn) > 0 {
+		predicates = append(predicates, channelprobe.TotalRequestCountNotIn(i.TotalRequestCountNotIn...))
 	}
-	if i.SuccessRateGT != nil {
-		predicates = append(predicates, channelperformance.SuccessRateGT(*i.SuccessRateGT))
+	if i.TotalRequestCountGT != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountGT(*i.TotalRequestCountGT))
 	}
-	if i.SuccessRateGTE != nil {
-		predicates = append(predicates, channelperformance.SuccessRateGTE(*i.SuccessRateGTE))
+	if i.TotalRequestCountGTE != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountGTE(*i.TotalRequestCountGTE))
 	}
-	if i.SuccessRateLT != nil {
-		predicates = append(predicates, channelperformance.SuccessRateLT(*i.SuccessRateLT))
+	if i.TotalRequestCountLT != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountLT(*i.TotalRequestCountLT))
 	}
-	if i.SuccessRateLTE != nil {
-		predicates = append(predicates, channelperformance.SuccessRateLTE(*i.SuccessRateLTE))
+	if i.TotalRequestCountLTE != nil {
+		predicates = append(predicates, channelprobe.TotalRequestCountLTE(*i.TotalRequestCountLTE))
 	}
-	if i.AvgLatencyMs != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsEQ(*i.AvgLatencyMs))
+	if i.SuccessRequestCount != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountEQ(*i.SuccessRequestCount))
 	}
-	if i.AvgLatencyMsNEQ != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsNEQ(*i.AvgLatencyMsNEQ))
+	if i.SuccessRequestCountNEQ != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountNEQ(*i.SuccessRequestCountNEQ))
 	}
-	if len(i.AvgLatencyMsIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgLatencyMsIn(i.AvgLatencyMsIn...))
+	if len(i.SuccessRequestCountIn) > 0 {
+		predicates = append(predicates, channelprobe.SuccessRequestCountIn(i.SuccessRequestCountIn...))
 	}
-	if len(i.AvgLatencyMsNotIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgLatencyMsNotIn(i.AvgLatencyMsNotIn...))
+	if len(i.SuccessRequestCountNotIn) > 0 {
+		predicates = append(predicates, channelprobe.SuccessRequestCountNotIn(i.SuccessRequestCountNotIn...))
 	}
-	if i.AvgLatencyMsGT != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsGT(*i.AvgLatencyMsGT))
+	if i.SuccessRequestCountGT != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountGT(*i.SuccessRequestCountGT))
 	}
-	if i.AvgLatencyMsGTE != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsGTE(*i.AvgLatencyMsGTE))
+	if i.SuccessRequestCountGTE != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountGTE(*i.SuccessRequestCountGTE))
 	}
-	if i.AvgLatencyMsLT != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsLT(*i.AvgLatencyMsLT))
+	if i.SuccessRequestCountLT != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountLT(*i.SuccessRequestCountLT))
 	}
-	if i.AvgLatencyMsLTE != nil {
-		predicates = append(predicates, channelperformance.AvgLatencyMsLTE(*i.AvgLatencyMsLTE))
+	if i.SuccessRequestCountLTE != nil {
+		predicates = append(predicates, channelprobe.SuccessRequestCountLTE(*i.SuccessRequestCountLTE))
 	}
-	if i.AvgTokenPerSecond != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondEQ(*i.AvgTokenPerSecond))
+	if i.AvgTokensPerSecond != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondEQ(*i.AvgTokensPerSecond))
 	}
-	if i.AvgTokenPerSecondNEQ != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondNEQ(*i.AvgTokenPerSecondNEQ))
+	if i.AvgTokensPerSecondNEQ != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondNEQ(*i.AvgTokensPerSecondNEQ))
 	}
-	if len(i.AvgTokenPerSecondIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondIn(i.AvgTokenPerSecondIn...))
+	if len(i.AvgTokensPerSecondIn) > 0 {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondIn(i.AvgTokensPerSecondIn...))
 	}
-	if len(i.AvgTokenPerSecondNotIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondNotIn(i.AvgTokenPerSecondNotIn...))
+	if len(i.AvgTokensPerSecondNotIn) > 0 {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondNotIn(i.AvgTokensPerSecondNotIn...))
 	}
-	if i.AvgTokenPerSecondGT != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondGT(*i.AvgTokenPerSecondGT))
+	if i.AvgTokensPerSecondGT != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondGT(*i.AvgTokensPerSecondGT))
 	}
-	if i.AvgTokenPerSecondGTE != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondGTE(*i.AvgTokenPerSecondGTE))
+	if i.AvgTokensPerSecondGTE != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondGTE(*i.AvgTokensPerSecondGTE))
 	}
-	if i.AvgTokenPerSecondLT != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondLT(*i.AvgTokenPerSecondLT))
+	if i.AvgTokensPerSecondLT != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondLT(*i.AvgTokensPerSecondLT))
 	}
-	if i.AvgTokenPerSecondLTE != nil {
-		predicates = append(predicates, channelperformance.AvgTokenPerSecondLTE(*i.AvgTokenPerSecondLTE))
+	if i.AvgTokensPerSecondLTE != nil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondLTE(*i.AvgTokensPerSecondLTE))
 	}
-	if i.AvgStreamFirstTokenLatencyMs != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsEQ(*i.AvgStreamFirstTokenLatencyMs))
+	if i.AvgTokensPerSecondIsNil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondIsNil())
 	}
-	if i.AvgStreamFirstTokenLatencyMsNEQ != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsNEQ(*i.AvgStreamFirstTokenLatencyMsNEQ))
+	if i.AvgTokensPerSecondNotNil {
+		predicates = append(predicates, channelprobe.AvgTokensPerSecondNotNil())
 	}
-	if len(i.AvgStreamFirstTokenLatencyMsIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsIn(i.AvgStreamFirstTokenLatencyMsIn...))
+	if i.AvgTimeToFirstTokenMs != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsEQ(*i.AvgTimeToFirstTokenMs))
 	}
-	if len(i.AvgStreamFirstTokenLatencyMsNotIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsNotIn(i.AvgStreamFirstTokenLatencyMsNotIn...))
+	if i.AvgTimeToFirstTokenMsNEQ != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsNEQ(*i.AvgTimeToFirstTokenMsNEQ))
 	}
-	if i.AvgStreamFirstTokenLatencyMsGT != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsGT(*i.AvgStreamFirstTokenLatencyMsGT))
+	if len(i.AvgTimeToFirstTokenMsIn) > 0 {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsIn(i.AvgTimeToFirstTokenMsIn...))
 	}
-	if i.AvgStreamFirstTokenLatencyMsGTE != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsGTE(*i.AvgStreamFirstTokenLatencyMsGTE))
+	if len(i.AvgTimeToFirstTokenMsNotIn) > 0 {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsNotIn(i.AvgTimeToFirstTokenMsNotIn...))
 	}
-	if i.AvgStreamFirstTokenLatencyMsLT != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsLT(*i.AvgStreamFirstTokenLatencyMsLT))
+	if i.AvgTimeToFirstTokenMsGT != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsGT(*i.AvgTimeToFirstTokenMsGT))
 	}
-	if i.AvgStreamFirstTokenLatencyMsLTE != nil {
-		predicates = append(predicates, channelperformance.AvgStreamFirstTokenLatencyMsLTE(*i.AvgStreamFirstTokenLatencyMsLTE))
+	if i.AvgTimeToFirstTokenMsGTE != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsGTE(*i.AvgTimeToFirstTokenMsGTE))
 	}
-	if i.AvgStreamTokenPerSecond != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondEQ(*i.AvgStreamTokenPerSecond))
+	if i.AvgTimeToFirstTokenMsLT != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsLT(*i.AvgTimeToFirstTokenMsLT))
 	}
-	if i.AvgStreamTokenPerSecondNEQ != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondNEQ(*i.AvgStreamTokenPerSecondNEQ))
+	if i.AvgTimeToFirstTokenMsLTE != nil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsLTE(*i.AvgTimeToFirstTokenMsLTE))
 	}
-	if len(i.AvgStreamTokenPerSecondIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondIn(i.AvgStreamTokenPerSecondIn...))
+	if i.AvgTimeToFirstTokenMsIsNil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsIsNil())
 	}
-	if len(i.AvgStreamTokenPerSecondNotIn) > 0 {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondNotIn(i.AvgStreamTokenPerSecondNotIn...))
+	if i.AvgTimeToFirstTokenMsNotNil {
+		predicates = append(predicates, channelprobe.AvgTimeToFirstTokenMsNotNil())
 	}
-	if i.AvgStreamTokenPerSecondGT != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondGT(*i.AvgStreamTokenPerSecondGT))
+	if i.Timestamp != nil {
+		predicates = append(predicates, channelprobe.TimestampEQ(*i.Timestamp))
 	}
-	if i.AvgStreamTokenPerSecondGTE != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondGTE(*i.AvgStreamTokenPerSecondGTE))
+	if i.TimestampNEQ != nil {
+		predicates = append(predicates, channelprobe.TimestampNEQ(*i.TimestampNEQ))
 	}
-	if i.AvgStreamTokenPerSecondLT != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondLT(*i.AvgStreamTokenPerSecondLT))
+	if len(i.TimestampIn) > 0 {
+		predicates = append(predicates, channelprobe.TimestampIn(i.TimestampIn...))
 	}
-	if i.AvgStreamTokenPerSecondLTE != nil {
-		predicates = append(predicates, channelperformance.AvgStreamTokenPerSecondLTE(*i.AvgStreamTokenPerSecondLTE))
+	if len(i.TimestampNotIn) > 0 {
+		predicates = append(predicates, channelprobe.TimestampNotIn(i.TimestampNotIn...))
 	}
-	if i.LastSuccessAt != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtEQ(*i.LastSuccessAt))
+	if i.TimestampGT != nil {
+		predicates = append(predicates, channelprobe.TimestampGT(*i.TimestampGT))
 	}
-	if i.LastSuccessAtNEQ != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtNEQ(*i.LastSuccessAtNEQ))
+	if i.TimestampGTE != nil {
+		predicates = append(predicates, channelprobe.TimestampGTE(*i.TimestampGTE))
 	}
-	if len(i.LastSuccessAtIn) > 0 {
-		predicates = append(predicates, channelperformance.LastSuccessAtIn(i.LastSuccessAtIn...))
+	if i.TimestampLT != nil {
+		predicates = append(predicates, channelprobe.TimestampLT(*i.TimestampLT))
 	}
-	if len(i.LastSuccessAtNotIn) > 0 {
-		predicates = append(predicates, channelperformance.LastSuccessAtNotIn(i.LastSuccessAtNotIn...))
-	}
-	if i.LastSuccessAtGT != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtGT(*i.LastSuccessAtGT))
-	}
-	if i.LastSuccessAtGTE != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtGTE(*i.LastSuccessAtGTE))
-	}
-	if i.LastSuccessAtLT != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtLT(*i.LastSuccessAtLT))
-	}
-	if i.LastSuccessAtLTE != nil {
-		predicates = append(predicates, channelperformance.LastSuccessAtLTE(*i.LastSuccessAtLTE))
-	}
-	if i.LastSuccessAtIsNil {
-		predicates = append(predicates, channelperformance.LastSuccessAtIsNil())
-	}
-	if i.LastSuccessAtNotNil {
-		predicates = append(predicates, channelperformance.LastSuccessAtNotNil())
-	}
-	if i.LastFailureAt != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtEQ(*i.LastFailureAt))
-	}
-	if i.LastFailureAtNEQ != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtNEQ(*i.LastFailureAtNEQ))
-	}
-	if len(i.LastFailureAtIn) > 0 {
-		predicates = append(predicates, channelperformance.LastFailureAtIn(i.LastFailureAtIn...))
-	}
-	if len(i.LastFailureAtNotIn) > 0 {
-		predicates = append(predicates, channelperformance.LastFailureAtNotIn(i.LastFailureAtNotIn...))
-	}
-	if i.LastFailureAtGT != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtGT(*i.LastFailureAtGT))
-	}
-	if i.LastFailureAtGTE != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtGTE(*i.LastFailureAtGTE))
-	}
-	if i.LastFailureAtLT != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtLT(*i.LastFailureAtLT))
-	}
-	if i.LastFailureAtLTE != nil {
-		predicates = append(predicates, channelperformance.LastFailureAtLTE(*i.LastFailureAtLTE))
-	}
-	if i.LastFailureAtIsNil {
-		predicates = append(predicates, channelperformance.LastFailureAtIsNil())
-	}
-	if i.LastFailureAtNotNil {
-		predicates = append(predicates, channelperformance.LastFailureAtNotNil())
-	}
-	if i.RequestCount != nil {
-		predicates = append(predicates, channelperformance.RequestCountEQ(*i.RequestCount))
-	}
-	if i.RequestCountNEQ != nil {
-		predicates = append(predicates, channelperformance.RequestCountNEQ(*i.RequestCountNEQ))
-	}
-	if len(i.RequestCountIn) > 0 {
-		predicates = append(predicates, channelperformance.RequestCountIn(i.RequestCountIn...))
-	}
-	if len(i.RequestCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.RequestCountNotIn(i.RequestCountNotIn...))
-	}
-	if i.RequestCountGT != nil {
-		predicates = append(predicates, channelperformance.RequestCountGT(*i.RequestCountGT))
-	}
-	if i.RequestCountGTE != nil {
-		predicates = append(predicates, channelperformance.RequestCountGTE(*i.RequestCountGTE))
-	}
-	if i.RequestCountLT != nil {
-		predicates = append(predicates, channelperformance.RequestCountLT(*i.RequestCountLT))
-	}
-	if i.RequestCountLTE != nil {
-		predicates = append(predicates, channelperformance.RequestCountLTE(*i.RequestCountLTE))
-	}
-	if i.SuccessCount != nil {
-		predicates = append(predicates, channelperformance.SuccessCountEQ(*i.SuccessCount))
-	}
-	if i.SuccessCountNEQ != nil {
-		predicates = append(predicates, channelperformance.SuccessCountNEQ(*i.SuccessCountNEQ))
-	}
-	if len(i.SuccessCountIn) > 0 {
-		predicates = append(predicates, channelperformance.SuccessCountIn(i.SuccessCountIn...))
-	}
-	if len(i.SuccessCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.SuccessCountNotIn(i.SuccessCountNotIn...))
-	}
-	if i.SuccessCountGT != nil {
-		predicates = append(predicates, channelperformance.SuccessCountGT(*i.SuccessCountGT))
-	}
-	if i.SuccessCountGTE != nil {
-		predicates = append(predicates, channelperformance.SuccessCountGTE(*i.SuccessCountGTE))
-	}
-	if i.SuccessCountLT != nil {
-		predicates = append(predicates, channelperformance.SuccessCountLT(*i.SuccessCountLT))
-	}
-	if i.SuccessCountLTE != nil {
-		predicates = append(predicates, channelperformance.SuccessCountLTE(*i.SuccessCountLTE))
-	}
-	if i.FailureCount != nil {
-		predicates = append(predicates, channelperformance.FailureCountEQ(*i.FailureCount))
-	}
-	if i.FailureCountNEQ != nil {
-		predicates = append(predicates, channelperformance.FailureCountNEQ(*i.FailureCountNEQ))
-	}
-	if len(i.FailureCountIn) > 0 {
-		predicates = append(predicates, channelperformance.FailureCountIn(i.FailureCountIn...))
-	}
-	if len(i.FailureCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.FailureCountNotIn(i.FailureCountNotIn...))
-	}
-	if i.FailureCountGT != nil {
-		predicates = append(predicates, channelperformance.FailureCountGT(*i.FailureCountGT))
-	}
-	if i.FailureCountGTE != nil {
-		predicates = append(predicates, channelperformance.FailureCountGTE(*i.FailureCountGTE))
-	}
-	if i.FailureCountLT != nil {
-		predicates = append(predicates, channelperformance.FailureCountLT(*i.FailureCountLT))
-	}
-	if i.FailureCountLTE != nil {
-		predicates = append(predicates, channelperformance.FailureCountLTE(*i.FailureCountLTE))
-	}
-	if i.TotalTokenCount != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountEQ(*i.TotalTokenCount))
-	}
-	if i.TotalTokenCountNEQ != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountNEQ(*i.TotalTokenCountNEQ))
-	}
-	if len(i.TotalTokenCountIn) > 0 {
-		predicates = append(predicates, channelperformance.TotalTokenCountIn(i.TotalTokenCountIn...))
-	}
-	if len(i.TotalTokenCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.TotalTokenCountNotIn(i.TotalTokenCountNotIn...))
-	}
-	if i.TotalTokenCountGT != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountGT(*i.TotalTokenCountGT))
-	}
-	if i.TotalTokenCountGTE != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountGTE(*i.TotalTokenCountGTE))
-	}
-	if i.TotalTokenCountLT != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountLT(*i.TotalTokenCountLT))
-	}
-	if i.TotalTokenCountLTE != nil {
-		predicates = append(predicates, channelperformance.TotalTokenCountLTE(*i.TotalTokenCountLTE))
-	}
-	if i.TotalRequestLatencyMs != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsEQ(*i.TotalRequestLatencyMs))
-	}
-	if i.TotalRequestLatencyMsNEQ != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsNEQ(*i.TotalRequestLatencyMsNEQ))
-	}
-	if len(i.TotalRequestLatencyMsIn) > 0 {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsIn(i.TotalRequestLatencyMsIn...))
-	}
-	if len(i.TotalRequestLatencyMsNotIn) > 0 {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsNotIn(i.TotalRequestLatencyMsNotIn...))
-	}
-	if i.TotalRequestLatencyMsGT != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsGT(*i.TotalRequestLatencyMsGT))
-	}
-	if i.TotalRequestLatencyMsGTE != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsGTE(*i.TotalRequestLatencyMsGTE))
-	}
-	if i.TotalRequestLatencyMsLT != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsLT(*i.TotalRequestLatencyMsLT))
-	}
-	if i.TotalRequestLatencyMsLTE != nil {
-		predicates = append(predicates, channelperformance.TotalRequestLatencyMsLTE(*i.TotalRequestLatencyMsLTE))
-	}
-	if i.StreamSuccessCount != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountEQ(*i.StreamSuccessCount))
-	}
-	if i.StreamSuccessCountNEQ != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountNEQ(*i.StreamSuccessCountNEQ))
-	}
-	if len(i.StreamSuccessCountIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamSuccessCountIn(i.StreamSuccessCountIn...))
-	}
-	if len(i.StreamSuccessCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamSuccessCountNotIn(i.StreamSuccessCountNotIn...))
-	}
-	if i.StreamSuccessCountGT != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountGT(*i.StreamSuccessCountGT))
-	}
-	if i.StreamSuccessCountGTE != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountGTE(*i.StreamSuccessCountGTE))
-	}
-	if i.StreamSuccessCountLT != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountLT(*i.StreamSuccessCountLT))
-	}
-	if i.StreamSuccessCountLTE != nil {
-		predicates = append(predicates, channelperformance.StreamSuccessCountLTE(*i.StreamSuccessCountLTE))
-	}
-	if i.StreamTotalRequestCount != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountEQ(*i.StreamTotalRequestCount))
-	}
-	if i.StreamTotalRequestCountNEQ != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountNEQ(*i.StreamTotalRequestCountNEQ))
-	}
-	if len(i.StreamTotalRequestCountIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountIn(i.StreamTotalRequestCountIn...))
-	}
-	if len(i.StreamTotalRequestCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountNotIn(i.StreamTotalRequestCountNotIn...))
-	}
-	if i.StreamTotalRequestCountGT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountGT(*i.StreamTotalRequestCountGT))
-	}
-	if i.StreamTotalRequestCountGTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountGTE(*i.StreamTotalRequestCountGTE))
-	}
-	if i.StreamTotalRequestCountLT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountLT(*i.StreamTotalRequestCountLT))
-	}
-	if i.StreamTotalRequestCountLTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestCountLTE(*i.StreamTotalRequestCountLTE))
-	}
-	if i.StreamTotalTokenCount != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountEQ(*i.StreamTotalTokenCount))
-	}
-	if i.StreamTotalTokenCountNEQ != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountNEQ(*i.StreamTotalTokenCountNEQ))
-	}
-	if len(i.StreamTotalTokenCountIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountIn(i.StreamTotalTokenCountIn...))
-	}
-	if len(i.StreamTotalTokenCountNotIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountNotIn(i.StreamTotalTokenCountNotIn...))
-	}
-	if i.StreamTotalTokenCountGT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountGT(*i.StreamTotalTokenCountGT))
-	}
-	if i.StreamTotalTokenCountGTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountGTE(*i.StreamTotalTokenCountGTE))
-	}
-	if i.StreamTotalTokenCountLT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountLT(*i.StreamTotalTokenCountLT))
-	}
-	if i.StreamTotalTokenCountLTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalTokenCountLTE(*i.StreamTotalTokenCountLTE))
-	}
-	if i.StreamTotalRequestLatencyMs != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsEQ(*i.StreamTotalRequestLatencyMs))
-	}
-	if i.StreamTotalRequestLatencyMsNEQ != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsNEQ(*i.StreamTotalRequestLatencyMsNEQ))
-	}
-	if len(i.StreamTotalRequestLatencyMsIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsIn(i.StreamTotalRequestLatencyMsIn...))
-	}
-	if len(i.StreamTotalRequestLatencyMsNotIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsNotIn(i.StreamTotalRequestLatencyMsNotIn...))
-	}
-	if i.StreamTotalRequestLatencyMsGT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsGT(*i.StreamTotalRequestLatencyMsGT))
-	}
-	if i.StreamTotalRequestLatencyMsGTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsGTE(*i.StreamTotalRequestLatencyMsGTE))
-	}
-	if i.StreamTotalRequestLatencyMsLT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsLT(*i.StreamTotalRequestLatencyMsLT))
-	}
-	if i.StreamTotalRequestLatencyMsLTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalRequestLatencyMsLTE(*i.StreamTotalRequestLatencyMsLTE))
-	}
-	if i.StreamTotalFirstTokenLatencyMs != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsEQ(*i.StreamTotalFirstTokenLatencyMs))
-	}
-	if i.StreamTotalFirstTokenLatencyMsNEQ != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsNEQ(*i.StreamTotalFirstTokenLatencyMsNEQ))
-	}
-	if len(i.StreamTotalFirstTokenLatencyMsIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsIn(i.StreamTotalFirstTokenLatencyMsIn...))
-	}
-	if len(i.StreamTotalFirstTokenLatencyMsNotIn) > 0 {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsNotIn(i.StreamTotalFirstTokenLatencyMsNotIn...))
-	}
-	if i.StreamTotalFirstTokenLatencyMsGT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsGT(*i.StreamTotalFirstTokenLatencyMsGT))
-	}
-	if i.StreamTotalFirstTokenLatencyMsGTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsGTE(*i.StreamTotalFirstTokenLatencyMsGTE))
-	}
-	if i.StreamTotalFirstTokenLatencyMsLT != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsLT(*i.StreamTotalFirstTokenLatencyMsLT))
-	}
-	if i.StreamTotalFirstTokenLatencyMsLTE != nil {
-		predicates = append(predicates, channelperformance.StreamTotalFirstTokenLatencyMsLTE(*i.StreamTotalFirstTokenLatencyMsLTE))
-	}
-	if i.ConsecutiveFailures != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresEQ(*i.ConsecutiveFailures))
-	}
-	if i.ConsecutiveFailuresNEQ != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresNEQ(*i.ConsecutiveFailuresNEQ))
-	}
-	if len(i.ConsecutiveFailuresIn) > 0 {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresIn(i.ConsecutiveFailuresIn...))
-	}
-	if len(i.ConsecutiveFailuresNotIn) > 0 {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresNotIn(i.ConsecutiveFailuresNotIn...))
-	}
-	if i.ConsecutiveFailuresGT != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresGT(*i.ConsecutiveFailuresGT))
-	}
-	if i.ConsecutiveFailuresGTE != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresGTE(*i.ConsecutiveFailuresGTE))
-	}
-	if i.ConsecutiveFailuresLT != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresLT(*i.ConsecutiveFailuresLT))
-	}
-	if i.ConsecutiveFailuresLTE != nil {
-		predicates = append(predicates, channelperformance.ConsecutiveFailuresLTE(*i.ConsecutiveFailuresLTE))
+	if i.TimestampLTE != nil {
+		predicates = append(predicates, channelprobe.TimestampLTE(*i.TimestampLTE))
 	}
 
 	if i.HasChannel != nil {
-		p := channelperformance.HasChannel()
+		p := channelprobe.HasChannel()
 		if !*i.HasChannel {
-			p = channelperformance.Not(p)
+			p = channelprobe.Not(p)
 		}
 		predicates = append(predicates, p)
 	}
@@ -2530,15 +2737,15 @@ func (i *ChannelPerformanceWhereInput) P() (predicate.ChannelPerformance, error)
 			}
 			with = append(with, p)
 		}
-		predicates = append(predicates, channelperformance.HasChannelWith(with...))
+		predicates = append(predicates, channelprobe.HasChannelWith(with...))
 	}
 	switch len(predicates) {
 	case 0:
-		return nil, ErrEmptyChannelPerformanceWhereInput
+		return nil, ErrEmptyChannelProbeWhereInput
 	case 1:
 		return predicates[0], nil
 	default:
-		return channelperformance.And(predicates...), nil
+		return channelprobe.And(predicates...), nil
 	}
 }
 
@@ -2578,16 +2785,6 @@ type DataStorageWhereInput struct {
 	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "name" field predicates.
 	Name             *string  `json:"name,omitempty"`
@@ -2787,30 +2984,6 @@ func (i *DataStorageWhereInput) P() (predicate.DataStorage, error) {
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, datastorage.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, datastorage.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, datastorage.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, datastorage.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, datastorage.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, datastorage.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, datastorage.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, datastorage.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, datastorage.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.Name != nil {
 		predicates = append(predicates, datastorage.NameEQ(*i.Name))
 	}
@@ -2966,6 +3139,566 @@ func (i *DataStorageWhereInput) P() (predicate.DataStorage, error) {
 	}
 }
 
+// ModelWhereInput represents a where input for filtering Model queries.
+type ModelWhereInput struct {
+	Predicates []predicate.Model  `json:"-"`
+	Not        *ModelWhereInput   `json:"not,omitempty"`
+	Or         []*ModelWhereInput `json:"or,omitempty"`
+	And        []*ModelWhereInput `json:"and,omitempty"`
+
+	// "id" field predicates.
+	ID      *int  `json:"id,omitempty"`
+	IDNEQ   *int  `json:"idNEQ,omitempty"`
+	IDIn    []int `json:"idIn,omitempty"`
+	IDNotIn []int `json:"idNotIn,omitempty"`
+	IDGT    *int  `json:"idGT,omitempty"`
+	IDGTE   *int  `json:"idGTE,omitempty"`
+	IDLT    *int  `json:"idLT,omitempty"`
+	IDLTE   *int  `json:"idLTE,omitempty"`
+
+	// "created_at" field predicates.
+	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
+	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
+	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
+	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
+	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
+	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
+	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
+	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
+
+	// "updated_at" field predicates.
+	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
+	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
+	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
+	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
+	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
+	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
+	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
+
+	// "developer" field predicates.
+	Developer             *string  `json:"developer,omitempty"`
+	DeveloperNEQ          *string  `json:"developerNEQ,omitempty"`
+	DeveloperIn           []string `json:"developerIn,omitempty"`
+	DeveloperNotIn        []string `json:"developerNotIn,omitempty"`
+	DeveloperGT           *string  `json:"developerGT,omitempty"`
+	DeveloperGTE          *string  `json:"developerGTE,omitempty"`
+	DeveloperLT           *string  `json:"developerLT,omitempty"`
+	DeveloperLTE          *string  `json:"developerLTE,omitempty"`
+	DeveloperContains     *string  `json:"developerContains,omitempty"`
+	DeveloperHasPrefix    *string  `json:"developerHasPrefix,omitempty"`
+	DeveloperHasSuffix    *string  `json:"developerHasSuffix,omitempty"`
+	DeveloperEqualFold    *string  `json:"developerEqualFold,omitempty"`
+	DeveloperContainsFold *string  `json:"developerContainsFold,omitempty"`
+
+	// "model_id" field predicates.
+	ModelID             *string  `json:"modelID,omitempty"`
+	ModelIDNEQ          *string  `json:"modelIDNEQ,omitempty"`
+	ModelIDIn           []string `json:"modelIDIn,omitempty"`
+	ModelIDNotIn        []string `json:"modelIDNotIn,omitempty"`
+	ModelIDGT           *string  `json:"modelIDGT,omitempty"`
+	ModelIDGTE          *string  `json:"modelIDGTE,omitempty"`
+	ModelIDLT           *string  `json:"modelIDLT,omitempty"`
+	ModelIDLTE          *string  `json:"modelIDLTE,omitempty"`
+	ModelIDContains     *string  `json:"modelIDContains,omitempty"`
+	ModelIDHasPrefix    *string  `json:"modelIDHasPrefix,omitempty"`
+	ModelIDHasSuffix    *string  `json:"modelIDHasSuffix,omitempty"`
+	ModelIDEqualFold    *string  `json:"modelIDEqualFold,omitempty"`
+	ModelIDContainsFold *string  `json:"modelIDContainsFold,omitempty"`
+
+	// "type" field predicates.
+	Type      *model.Type  `json:"type,omitempty"`
+	TypeNEQ   *model.Type  `json:"typeNEQ,omitempty"`
+	TypeIn    []model.Type `json:"typeIn,omitempty"`
+	TypeNotIn []model.Type `json:"typeNotIn,omitempty"`
+
+	// "name" field predicates.
+	Name             *string  `json:"name,omitempty"`
+	NameNEQ          *string  `json:"nameNEQ,omitempty"`
+	NameIn           []string `json:"nameIn,omitempty"`
+	NameNotIn        []string `json:"nameNotIn,omitempty"`
+	NameGT           *string  `json:"nameGT,omitempty"`
+	NameGTE          *string  `json:"nameGTE,omitempty"`
+	NameLT           *string  `json:"nameLT,omitempty"`
+	NameLTE          *string  `json:"nameLTE,omitempty"`
+	NameContains     *string  `json:"nameContains,omitempty"`
+	NameHasPrefix    *string  `json:"nameHasPrefix,omitempty"`
+	NameHasSuffix    *string  `json:"nameHasSuffix,omitempty"`
+	NameEqualFold    *string  `json:"nameEqualFold,omitempty"`
+	NameContainsFold *string  `json:"nameContainsFold,omitempty"`
+
+	// "icon" field predicates.
+	Icon             *string  `json:"icon,omitempty"`
+	IconNEQ          *string  `json:"iconNEQ,omitempty"`
+	IconIn           []string `json:"iconIn,omitempty"`
+	IconNotIn        []string `json:"iconNotIn,omitempty"`
+	IconGT           *string  `json:"iconGT,omitempty"`
+	IconGTE          *string  `json:"iconGTE,omitempty"`
+	IconLT           *string  `json:"iconLT,omitempty"`
+	IconLTE          *string  `json:"iconLTE,omitempty"`
+	IconContains     *string  `json:"iconContains,omitempty"`
+	IconHasPrefix    *string  `json:"iconHasPrefix,omitempty"`
+	IconHasSuffix    *string  `json:"iconHasSuffix,omitempty"`
+	IconEqualFold    *string  `json:"iconEqualFold,omitempty"`
+	IconContainsFold *string  `json:"iconContainsFold,omitempty"`
+
+	// "group" field predicates.
+	Group             *string  `json:"group,omitempty"`
+	GroupNEQ          *string  `json:"groupNEQ,omitempty"`
+	GroupIn           []string `json:"groupIn,omitempty"`
+	GroupNotIn        []string `json:"groupNotIn,omitempty"`
+	GroupGT           *string  `json:"groupGT,omitempty"`
+	GroupGTE          *string  `json:"groupGTE,omitempty"`
+	GroupLT           *string  `json:"groupLT,omitempty"`
+	GroupLTE          *string  `json:"groupLTE,omitempty"`
+	GroupContains     *string  `json:"groupContains,omitempty"`
+	GroupHasPrefix    *string  `json:"groupHasPrefix,omitempty"`
+	GroupHasSuffix    *string  `json:"groupHasSuffix,omitempty"`
+	GroupEqualFold    *string  `json:"groupEqualFold,omitempty"`
+	GroupContainsFold *string  `json:"groupContainsFold,omitempty"`
+
+	// "status" field predicates.
+	Status      *model.Status  `json:"status,omitempty"`
+	StatusNEQ   *model.Status  `json:"statusNEQ,omitempty"`
+	StatusIn    []model.Status `json:"statusIn,omitempty"`
+	StatusNotIn []model.Status `json:"statusNotIn,omitempty"`
+
+	// "remark" field predicates.
+	Remark             *string  `json:"remark,omitempty"`
+	RemarkNEQ          *string  `json:"remarkNEQ,omitempty"`
+	RemarkIn           []string `json:"remarkIn,omitempty"`
+	RemarkNotIn        []string `json:"remarkNotIn,omitempty"`
+	RemarkGT           *string  `json:"remarkGT,omitempty"`
+	RemarkGTE          *string  `json:"remarkGTE,omitempty"`
+	RemarkLT           *string  `json:"remarkLT,omitempty"`
+	RemarkLTE          *string  `json:"remarkLTE,omitempty"`
+	RemarkContains     *string  `json:"remarkContains,omitempty"`
+	RemarkHasPrefix    *string  `json:"remarkHasPrefix,omitempty"`
+	RemarkHasSuffix    *string  `json:"remarkHasSuffix,omitempty"`
+	RemarkIsNil        bool     `json:"remarkIsNil,omitempty"`
+	RemarkNotNil       bool     `json:"remarkNotNil,omitempty"`
+	RemarkEqualFold    *string  `json:"remarkEqualFold,omitempty"`
+	RemarkContainsFold *string  `json:"remarkContainsFold,omitempty"`
+}
+
+// AddPredicates adds custom predicates to the where input to be used during the filtering phase.
+func (i *ModelWhereInput) AddPredicates(predicates ...predicate.Model) {
+	i.Predicates = append(i.Predicates, predicates...)
+}
+
+// Filter applies the ModelWhereInput filter on the ModelQuery builder.
+func (i *ModelWhereInput) Filter(q *ModelQuery) (*ModelQuery, error) {
+	if i == nil {
+		return q, nil
+	}
+	p, err := i.P()
+	if err != nil {
+		if err == ErrEmptyModelWhereInput {
+			return q, nil
+		}
+		return nil, err
+	}
+	return q.Where(p), nil
+}
+
+// ErrEmptyModelWhereInput is returned in case the ModelWhereInput is empty.
+var ErrEmptyModelWhereInput = errors.New("ent: empty predicate ModelWhereInput")
+
+// P returns a predicate for filtering models.
+// An error is returned if the input is empty or invalid.
+func (i *ModelWhereInput) P() (predicate.Model, error) {
+	var predicates []predicate.Model
+	if i.Not != nil {
+		p, err := i.Not.P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'not'", err)
+		}
+		predicates = append(predicates, model.Not(p))
+	}
+	switch n := len(i.Or); {
+	case n == 1:
+		p, err := i.Or[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'or'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		or := make([]predicate.Model, 0, n)
+		for _, w := range i.Or {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'or'", err)
+			}
+			or = append(or, p)
+		}
+		predicates = append(predicates, model.Or(or...))
+	}
+	switch n := len(i.And); {
+	case n == 1:
+		p, err := i.And[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'and'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		and := make([]predicate.Model, 0, n)
+		for _, w := range i.And {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'and'", err)
+			}
+			and = append(and, p)
+		}
+		predicates = append(predicates, model.And(and...))
+	}
+	predicates = append(predicates, i.Predicates...)
+	if i.ID != nil {
+		predicates = append(predicates, model.IDEQ(*i.ID))
+	}
+	if i.IDNEQ != nil {
+		predicates = append(predicates, model.IDNEQ(*i.IDNEQ))
+	}
+	if len(i.IDIn) > 0 {
+		predicates = append(predicates, model.IDIn(i.IDIn...))
+	}
+	if len(i.IDNotIn) > 0 {
+		predicates = append(predicates, model.IDNotIn(i.IDNotIn...))
+	}
+	if i.IDGT != nil {
+		predicates = append(predicates, model.IDGT(*i.IDGT))
+	}
+	if i.IDGTE != nil {
+		predicates = append(predicates, model.IDGTE(*i.IDGTE))
+	}
+	if i.IDLT != nil {
+		predicates = append(predicates, model.IDLT(*i.IDLT))
+	}
+	if i.IDLTE != nil {
+		predicates = append(predicates, model.IDLTE(*i.IDLTE))
+	}
+	if i.CreatedAt != nil {
+		predicates = append(predicates, model.CreatedAtEQ(*i.CreatedAt))
+	}
+	if i.CreatedAtNEQ != nil {
+		predicates = append(predicates, model.CreatedAtNEQ(*i.CreatedAtNEQ))
+	}
+	if len(i.CreatedAtIn) > 0 {
+		predicates = append(predicates, model.CreatedAtIn(i.CreatedAtIn...))
+	}
+	if len(i.CreatedAtNotIn) > 0 {
+		predicates = append(predicates, model.CreatedAtNotIn(i.CreatedAtNotIn...))
+	}
+	if i.CreatedAtGT != nil {
+		predicates = append(predicates, model.CreatedAtGT(*i.CreatedAtGT))
+	}
+	if i.CreatedAtGTE != nil {
+		predicates = append(predicates, model.CreatedAtGTE(*i.CreatedAtGTE))
+	}
+	if i.CreatedAtLT != nil {
+		predicates = append(predicates, model.CreatedAtLT(*i.CreatedAtLT))
+	}
+	if i.CreatedAtLTE != nil {
+		predicates = append(predicates, model.CreatedAtLTE(*i.CreatedAtLTE))
+	}
+	if i.UpdatedAt != nil {
+		predicates = append(predicates, model.UpdatedAtEQ(*i.UpdatedAt))
+	}
+	if i.UpdatedAtNEQ != nil {
+		predicates = append(predicates, model.UpdatedAtNEQ(*i.UpdatedAtNEQ))
+	}
+	if len(i.UpdatedAtIn) > 0 {
+		predicates = append(predicates, model.UpdatedAtIn(i.UpdatedAtIn...))
+	}
+	if len(i.UpdatedAtNotIn) > 0 {
+		predicates = append(predicates, model.UpdatedAtNotIn(i.UpdatedAtNotIn...))
+	}
+	if i.UpdatedAtGT != nil {
+		predicates = append(predicates, model.UpdatedAtGT(*i.UpdatedAtGT))
+	}
+	if i.UpdatedAtGTE != nil {
+		predicates = append(predicates, model.UpdatedAtGTE(*i.UpdatedAtGTE))
+	}
+	if i.UpdatedAtLT != nil {
+		predicates = append(predicates, model.UpdatedAtLT(*i.UpdatedAtLT))
+	}
+	if i.UpdatedAtLTE != nil {
+		predicates = append(predicates, model.UpdatedAtLTE(*i.UpdatedAtLTE))
+	}
+	if i.Developer != nil {
+		predicates = append(predicates, model.DeveloperEQ(*i.Developer))
+	}
+	if i.DeveloperNEQ != nil {
+		predicates = append(predicates, model.DeveloperNEQ(*i.DeveloperNEQ))
+	}
+	if len(i.DeveloperIn) > 0 {
+		predicates = append(predicates, model.DeveloperIn(i.DeveloperIn...))
+	}
+	if len(i.DeveloperNotIn) > 0 {
+		predicates = append(predicates, model.DeveloperNotIn(i.DeveloperNotIn...))
+	}
+	if i.DeveloperGT != nil {
+		predicates = append(predicates, model.DeveloperGT(*i.DeveloperGT))
+	}
+	if i.DeveloperGTE != nil {
+		predicates = append(predicates, model.DeveloperGTE(*i.DeveloperGTE))
+	}
+	if i.DeveloperLT != nil {
+		predicates = append(predicates, model.DeveloperLT(*i.DeveloperLT))
+	}
+	if i.DeveloperLTE != nil {
+		predicates = append(predicates, model.DeveloperLTE(*i.DeveloperLTE))
+	}
+	if i.DeveloperContains != nil {
+		predicates = append(predicates, model.DeveloperContains(*i.DeveloperContains))
+	}
+	if i.DeveloperHasPrefix != nil {
+		predicates = append(predicates, model.DeveloperHasPrefix(*i.DeveloperHasPrefix))
+	}
+	if i.DeveloperHasSuffix != nil {
+		predicates = append(predicates, model.DeveloperHasSuffix(*i.DeveloperHasSuffix))
+	}
+	if i.DeveloperEqualFold != nil {
+		predicates = append(predicates, model.DeveloperEqualFold(*i.DeveloperEqualFold))
+	}
+	if i.DeveloperContainsFold != nil {
+		predicates = append(predicates, model.DeveloperContainsFold(*i.DeveloperContainsFold))
+	}
+	if i.ModelID != nil {
+		predicates = append(predicates, model.ModelIDEQ(*i.ModelID))
+	}
+	if i.ModelIDNEQ != nil {
+		predicates = append(predicates, model.ModelIDNEQ(*i.ModelIDNEQ))
+	}
+	if len(i.ModelIDIn) > 0 {
+		predicates = append(predicates, model.ModelIDIn(i.ModelIDIn...))
+	}
+	if len(i.ModelIDNotIn) > 0 {
+		predicates = append(predicates, model.ModelIDNotIn(i.ModelIDNotIn...))
+	}
+	if i.ModelIDGT != nil {
+		predicates = append(predicates, model.ModelIDGT(*i.ModelIDGT))
+	}
+	if i.ModelIDGTE != nil {
+		predicates = append(predicates, model.ModelIDGTE(*i.ModelIDGTE))
+	}
+	if i.ModelIDLT != nil {
+		predicates = append(predicates, model.ModelIDLT(*i.ModelIDLT))
+	}
+	if i.ModelIDLTE != nil {
+		predicates = append(predicates, model.ModelIDLTE(*i.ModelIDLTE))
+	}
+	if i.ModelIDContains != nil {
+		predicates = append(predicates, model.ModelIDContains(*i.ModelIDContains))
+	}
+	if i.ModelIDHasPrefix != nil {
+		predicates = append(predicates, model.ModelIDHasPrefix(*i.ModelIDHasPrefix))
+	}
+	if i.ModelIDHasSuffix != nil {
+		predicates = append(predicates, model.ModelIDHasSuffix(*i.ModelIDHasSuffix))
+	}
+	if i.ModelIDEqualFold != nil {
+		predicates = append(predicates, model.ModelIDEqualFold(*i.ModelIDEqualFold))
+	}
+	if i.ModelIDContainsFold != nil {
+		predicates = append(predicates, model.ModelIDContainsFold(*i.ModelIDContainsFold))
+	}
+	if i.Type != nil {
+		predicates = append(predicates, model.TypeEQ(*i.Type))
+	}
+	if i.TypeNEQ != nil {
+		predicates = append(predicates, model.TypeNEQ(*i.TypeNEQ))
+	}
+	if len(i.TypeIn) > 0 {
+		predicates = append(predicates, model.TypeIn(i.TypeIn...))
+	}
+	if len(i.TypeNotIn) > 0 {
+		predicates = append(predicates, model.TypeNotIn(i.TypeNotIn...))
+	}
+	if i.Name != nil {
+		predicates = append(predicates, model.NameEQ(*i.Name))
+	}
+	if i.NameNEQ != nil {
+		predicates = append(predicates, model.NameNEQ(*i.NameNEQ))
+	}
+	if len(i.NameIn) > 0 {
+		predicates = append(predicates, model.NameIn(i.NameIn...))
+	}
+	if len(i.NameNotIn) > 0 {
+		predicates = append(predicates, model.NameNotIn(i.NameNotIn...))
+	}
+	if i.NameGT != nil {
+		predicates = append(predicates, model.NameGT(*i.NameGT))
+	}
+	if i.NameGTE != nil {
+		predicates = append(predicates, model.NameGTE(*i.NameGTE))
+	}
+	if i.NameLT != nil {
+		predicates = append(predicates, model.NameLT(*i.NameLT))
+	}
+	if i.NameLTE != nil {
+		predicates = append(predicates, model.NameLTE(*i.NameLTE))
+	}
+	if i.NameContains != nil {
+		predicates = append(predicates, model.NameContains(*i.NameContains))
+	}
+	if i.NameHasPrefix != nil {
+		predicates = append(predicates, model.NameHasPrefix(*i.NameHasPrefix))
+	}
+	if i.NameHasSuffix != nil {
+		predicates = append(predicates, model.NameHasSuffix(*i.NameHasSuffix))
+	}
+	if i.NameEqualFold != nil {
+		predicates = append(predicates, model.NameEqualFold(*i.NameEqualFold))
+	}
+	if i.NameContainsFold != nil {
+		predicates = append(predicates, model.NameContainsFold(*i.NameContainsFold))
+	}
+	if i.Icon != nil {
+		predicates = append(predicates, model.IconEQ(*i.Icon))
+	}
+	if i.IconNEQ != nil {
+		predicates = append(predicates, model.IconNEQ(*i.IconNEQ))
+	}
+	if len(i.IconIn) > 0 {
+		predicates = append(predicates, model.IconIn(i.IconIn...))
+	}
+	if len(i.IconNotIn) > 0 {
+		predicates = append(predicates, model.IconNotIn(i.IconNotIn...))
+	}
+	if i.IconGT != nil {
+		predicates = append(predicates, model.IconGT(*i.IconGT))
+	}
+	if i.IconGTE != nil {
+		predicates = append(predicates, model.IconGTE(*i.IconGTE))
+	}
+	if i.IconLT != nil {
+		predicates = append(predicates, model.IconLT(*i.IconLT))
+	}
+	if i.IconLTE != nil {
+		predicates = append(predicates, model.IconLTE(*i.IconLTE))
+	}
+	if i.IconContains != nil {
+		predicates = append(predicates, model.IconContains(*i.IconContains))
+	}
+	if i.IconHasPrefix != nil {
+		predicates = append(predicates, model.IconHasPrefix(*i.IconHasPrefix))
+	}
+	if i.IconHasSuffix != nil {
+		predicates = append(predicates, model.IconHasSuffix(*i.IconHasSuffix))
+	}
+	if i.IconEqualFold != nil {
+		predicates = append(predicates, model.IconEqualFold(*i.IconEqualFold))
+	}
+	if i.IconContainsFold != nil {
+		predicates = append(predicates, model.IconContainsFold(*i.IconContainsFold))
+	}
+	if i.Group != nil {
+		predicates = append(predicates, model.GroupEQ(*i.Group))
+	}
+	if i.GroupNEQ != nil {
+		predicates = append(predicates, model.GroupNEQ(*i.GroupNEQ))
+	}
+	if len(i.GroupIn) > 0 {
+		predicates = append(predicates, model.GroupIn(i.GroupIn...))
+	}
+	if len(i.GroupNotIn) > 0 {
+		predicates = append(predicates, model.GroupNotIn(i.GroupNotIn...))
+	}
+	if i.GroupGT != nil {
+		predicates = append(predicates, model.GroupGT(*i.GroupGT))
+	}
+	if i.GroupGTE != nil {
+		predicates = append(predicates, model.GroupGTE(*i.GroupGTE))
+	}
+	if i.GroupLT != nil {
+		predicates = append(predicates, model.GroupLT(*i.GroupLT))
+	}
+	if i.GroupLTE != nil {
+		predicates = append(predicates, model.GroupLTE(*i.GroupLTE))
+	}
+	if i.GroupContains != nil {
+		predicates = append(predicates, model.GroupContains(*i.GroupContains))
+	}
+	if i.GroupHasPrefix != nil {
+		predicates = append(predicates, model.GroupHasPrefix(*i.GroupHasPrefix))
+	}
+	if i.GroupHasSuffix != nil {
+		predicates = append(predicates, model.GroupHasSuffix(*i.GroupHasSuffix))
+	}
+	if i.GroupEqualFold != nil {
+		predicates = append(predicates, model.GroupEqualFold(*i.GroupEqualFold))
+	}
+	if i.GroupContainsFold != nil {
+		predicates = append(predicates, model.GroupContainsFold(*i.GroupContainsFold))
+	}
+	if i.Status != nil {
+		predicates = append(predicates, model.StatusEQ(*i.Status))
+	}
+	if i.StatusNEQ != nil {
+		predicates = append(predicates, model.StatusNEQ(*i.StatusNEQ))
+	}
+	if len(i.StatusIn) > 0 {
+		predicates = append(predicates, model.StatusIn(i.StatusIn...))
+	}
+	if len(i.StatusNotIn) > 0 {
+		predicates = append(predicates, model.StatusNotIn(i.StatusNotIn...))
+	}
+	if i.Remark != nil {
+		predicates = append(predicates, model.RemarkEQ(*i.Remark))
+	}
+	if i.RemarkNEQ != nil {
+		predicates = append(predicates, model.RemarkNEQ(*i.RemarkNEQ))
+	}
+	if len(i.RemarkIn) > 0 {
+		predicates = append(predicates, model.RemarkIn(i.RemarkIn...))
+	}
+	if len(i.RemarkNotIn) > 0 {
+		predicates = append(predicates, model.RemarkNotIn(i.RemarkNotIn...))
+	}
+	if i.RemarkGT != nil {
+		predicates = append(predicates, model.RemarkGT(*i.RemarkGT))
+	}
+	if i.RemarkGTE != nil {
+		predicates = append(predicates, model.RemarkGTE(*i.RemarkGTE))
+	}
+	if i.RemarkLT != nil {
+		predicates = append(predicates, model.RemarkLT(*i.RemarkLT))
+	}
+	if i.RemarkLTE != nil {
+		predicates = append(predicates, model.RemarkLTE(*i.RemarkLTE))
+	}
+	if i.RemarkContains != nil {
+		predicates = append(predicates, model.RemarkContains(*i.RemarkContains))
+	}
+	if i.RemarkHasPrefix != nil {
+		predicates = append(predicates, model.RemarkHasPrefix(*i.RemarkHasPrefix))
+	}
+	if i.RemarkHasSuffix != nil {
+		predicates = append(predicates, model.RemarkHasSuffix(*i.RemarkHasSuffix))
+	}
+	if i.RemarkIsNil {
+		predicates = append(predicates, model.RemarkIsNil())
+	}
+	if i.RemarkNotNil {
+		predicates = append(predicates, model.RemarkNotNil())
+	}
+	if i.RemarkEqualFold != nil {
+		predicates = append(predicates, model.RemarkEqualFold(*i.RemarkEqualFold))
+	}
+	if i.RemarkContainsFold != nil {
+		predicates = append(predicates, model.RemarkContainsFold(*i.RemarkContainsFold))
+	}
+
+	switch len(predicates) {
+	case 0:
+		return nil, ErrEmptyModelWhereInput
+	case 1:
+		return predicates[0], nil
+	default:
+		return model.And(predicates...), nil
+	}
+}
+
 // ProjectWhereInput represents a where input for filtering Project queries.
 type ProjectWhereInput struct {
 	Predicates []predicate.Project  `json:"-"`
@@ -3002,16 +3735,6 @@ type ProjectWhereInput struct {
 	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "name" field predicates.
 	Name             *string  `json:"name,omitempty"`
@@ -3076,6 +3799,10 @@ type ProjectWhereInput struct {
 	// "traces" edge predicates.
 	HasTraces     *bool              `json:"hasTraces,omitempty"`
 	HasTracesWith []*TraceWhereInput `json:"hasTracesWith,omitempty"`
+
+	// "prompts" edge predicates.
+	HasPrompts     *bool               `json:"hasPrompts,omitempty"`
+	HasPromptsWith []*PromptWhereInput `json:"hasPromptsWith,omitempty"`
 
 	// "project_users" edge predicates.
 	HasProjectUsers     *bool                    `json:"hasProjectUsers,omitempty"`
@@ -3224,30 +3951,6 @@ func (i *ProjectWhereInput) P() (predicate.Project, error) {
 	}
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, project.UpdatedAtLTE(*i.UpdatedAtLTE))
-	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, project.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, project.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, project.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, project.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, project.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, project.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, project.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, project.DeletedAtLTE(*i.DeletedAtLTE))
 	}
 	if i.Name != nil {
 		predicates = append(predicates, project.NameEQ(*i.Name))
@@ -3466,6 +4169,24 @@ func (i *ProjectWhereInput) P() (predicate.Project, error) {
 		}
 		predicates = append(predicates, project.HasTracesWith(with...))
 	}
+	if i.HasPrompts != nil {
+		p := project.HasPrompts()
+		if !*i.HasPrompts {
+			p = project.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasPromptsWith) > 0 {
+		with := make([]predicate.Prompt, 0, len(i.HasPromptsWith))
+		for _, w := range i.HasPromptsWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasPromptsWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, project.HasPromptsWith(with...))
+	}
 	if i.HasProjectUsers != nil {
 		p := project.HasProjectUsers()
 		if !*i.HasProjectUsers {
@@ -3491,6 +4212,842 @@ func (i *ProjectWhereInput) P() (predicate.Project, error) {
 		return predicates[0], nil
 	default:
 		return project.And(predicates...), nil
+	}
+}
+
+// PromptWhereInput represents a where input for filtering Prompt queries.
+type PromptWhereInput struct {
+	Predicates []predicate.Prompt  `json:"-"`
+	Not        *PromptWhereInput   `json:"not,omitempty"`
+	Or         []*PromptWhereInput `json:"or,omitempty"`
+	And        []*PromptWhereInput `json:"and,omitempty"`
+
+	// "id" field predicates.
+	ID      *int  `json:"id,omitempty"`
+	IDNEQ   *int  `json:"idNEQ,omitempty"`
+	IDIn    []int `json:"idIn,omitempty"`
+	IDNotIn []int `json:"idNotIn,omitempty"`
+	IDGT    *int  `json:"idGT,omitempty"`
+	IDGTE   *int  `json:"idGTE,omitempty"`
+	IDLT    *int  `json:"idLT,omitempty"`
+	IDLTE   *int  `json:"idLTE,omitempty"`
+
+	// "created_at" field predicates.
+	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
+	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
+	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
+	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
+	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
+	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
+	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
+	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
+
+	// "updated_at" field predicates.
+	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
+	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
+	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
+	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
+	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
+	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
+	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
+
+	// "project_id" field predicates.
+	ProjectID      *int  `json:"projectID,omitempty"`
+	ProjectIDNEQ   *int  `json:"projectIDNEQ,omitempty"`
+	ProjectIDIn    []int `json:"projectIDIn,omitempty"`
+	ProjectIDNotIn []int `json:"projectIDNotIn,omitempty"`
+	ProjectIDGT    *int  `json:"projectIDGT,omitempty"`
+	ProjectIDGTE   *int  `json:"projectIDGTE,omitempty"`
+	ProjectIDLT    *int  `json:"projectIDLT,omitempty"`
+	ProjectIDLTE   *int  `json:"projectIDLTE,omitempty"`
+
+	// "name" field predicates.
+	Name             *string  `json:"name,omitempty"`
+	NameNEQ          *string  `json:"nameNEQ,omitempty"`
+	NameIn           []string `json:"nameIn,omitempty"`
+	NameNotIn        []string `json:"nameNotIn,omitempty"`
+	NameGT           *string  `json:"nameGT,omitempty"`
+	NameGTE          *string  `json:"nameGTE,omitempty"`
+	NameLT           *string  `json:"nameLT,omitempty"`
+	NameLTE          *string  `json:"nameLTE,omitempty"`
+	NameContains     *string  `json:"nameContains,omitempty"`
+	NameHasPrefix    *string  `json:"nameHasPrefix,omitempty"`
+	NameHasSuffix    *string  `json:"nameHasSuffix,omitempty"`
+	NameEqualFold    *string  `json:"nameEqualFold,omitempty"`
+	NameContainsFold *string  `json:"nameContainsFold,omitempty"`
+
+	// "description" field predicates.
+	Description             *string  `json:"description,omitempty"`
+	DescriptionNEQ          *string  `json:"descriptionNEQ,omitempty"`
+	DescriptionIn           []string `json:"descriptionIn,omitempty"`
+	DescriptionNotIn        []string `json:"descriptionNotIn,omitempty"`
+	DescriptionGT           *string  `json:"descriptionGT,omitempty"`
+	DescriptionGTE          *string  `json:"descriptionGTE,omitempty"`
+	DescriptionLT           *string  `json:"descriptionLT,omitempty"`
+	DescriptionLTE          *string  `json:"descriptionLTE,omitempty"`
+	DescriptionContains     *string  `json:"descriptionContains,omitempty"`
+	DescriptionHasPrefix    *string  `json:"descriptionHasPrefix,omitempty"`
+	DescriptionHasSuffix    *string  `json:"descriptionHasSuffix,omitempty"`
+	DescriptionEqualFold    *string  `json:"descriptionEqualFold,omitempty"`
+	DescriptionContainsFold *string  `json:"descriptionContainsFold,omitempty"`
+
+	// "role" field predicates.
+	Role             *string  `json:"role,omitempty"`
+	RoleNEQ          *string  `json:"roleNEQ,omitempty"`
+	RoleIn           []string `json:"roleIn,omitempty"`
+	RoleNotIn        []string `json:"roleNotIn,omitempty"`
+	RoleGT           *string  `json:"roleGT,omitempty"`
+	RoleGTE          *string  `json:"roleGTE,omitempty"`
+	RoleLT           *string  `json:"roleLT,omitempty"`
+	RoleLTE          *string  `json:"roleLTE,omitempty"`
+	RoleContains     *string  `json:"roleContains,omitempty"`
+	RoleHasPrefix    *string  `json:"roleHasPrefix,omitempty"`
+	RoleHasSuffix    *string  `json:"roleHasSuffix,omitempty"`
+	RoleEqualFold    *string  `json:"roleEqualFold,omitempty"`
+	RoleContainsFold *string  `json:"roleContainsFold,omitempty"`
+
+	// "content" field predicates.
+	Content             *string  `json:"content,omitempty"`
+	ContentNEQ          *string  `json:"contentNEQ,omitempty"`
+	ContentIn           []string `json:"contentIn,omitempty"`
+	ContentNotIn        []string `json:"contentNotIn,omitempty"`
+	ContentGT           *string  `json:"contentGT,omitempty"`
+	ContentGTE          *string  `json:"contentGTE,omitempty"`
+	ContentLT           *string  `json:"contentLT,omitempty"`
+	ContentLTE          *string  `json:"contentLTE,omitempty"`
+	ContentContains     *string  `json:"contentContains,omitempty"`
+	ContentHasPrefix    *string  `json:"contentHasPrefix,omitempty"`
+	ContentHasSuffix    *string  `json:"contentHasSuffix,omitempty"`
+	ContentEqualFold    *string  `json:"contentEqualFold,omitempty"`
+	ContentContainsFold *string  `json:"contentContainsFold,omitempty"`
+
+	// "status" field predicates.
+	Status      *prompt.Status  `json:"status,omitempty"`
+	StatusNEQ   *prompt.Status  `json:"statusNEQ,omitempty"`
+	StatusIn    []prompt.Status `json:"statusIn,omitempty"`
+	StatusNotIn []prompt.Status `json:"statusNotIn,omitempty"`
+
+	// "projects" edge predicates.
+	HasProjects     *bool                `json:"hasProjects,omitempty"`
+	HasProjectsWith []*ProjectWhereInput `json:"hasProjectsWith,omitempty"`
+}
+
+// AddPredicates adds custom predicates to the where input to be used during the filtering phase.
+func (i *PromptWhereInput) AddPredicates(predicates ...predicate.Prompt) {
+	i.Predicates = append(i.Predicates, predicates...)
+}
+
+// Filter applies the PromptWhereInput filter on the PromptQuery builder.
+func (i *PromptWhereInput) Filter(q *PromptQuery) (*PromptQuery, error) {
+	if i == nil {
+		return q, nil
+	}
+	p, err := i.P()
+	if err != nil {
+		if err == ErrEmptyPromptWhereInput {
+			return q, nil
+		}
+		return nil, err
+	}
+	return q.Where(p), nil
+}
+
+// ErrEmptyPromptWhereInput is returned in case the PromptWhereInput is empty.
+var ErrEmptyPromptWhereInput = errors.New("ent: empty predicate PromptWhereInput")
+
+// P returns a predicate for filtering prompts.
+// An error is returned if the input is empty or invalid.
+func (i *PromptWhereInput) P() (predicate.Prompt, error) {
+	var predicates []predicate.Prompt
+	if i.Not != nil {
+		p, err := i.Not.P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'not'", err)
+		}
+		predicates = append(predicates, prompt.Not(p))
+	}
+	switch n := len(i.Or); {
+	case n == 1:
+		p, err := i.Or[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'or'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		or := make([]predicate.Prompt, 0, n)
+		for _, w := range i.Or {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'or'", err)
+			}
+			or = append(or, p)
+		}
+		predicates = append(predicates, prompt.Or(or...))
+	}
+	switch n := len(i.And); {
+	case n == 1:
+		p, err := i.And[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'and'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		and := make([]predicate.Prompt, 0, n)
+		for _, w := range i.And {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'and'", err)
+			}
+			and = append(and, p)
+		}
+		predicates = append(predicates, prompt.And(and...))
+	}
+	predicates = append(predicates, i.Predicates...)
+	if i.ID != nil {
+		predicates = append(predicates, prompt.IDEQ(*i.ID))
+	}
+	if i.IDNEQ != nil {
+		predicates = append(predicates, prompt.IDNEQ(*i.IDNEQ))
+	}
+	if len(i.IDIn) > 0 {
+		predicates = append(predicates, prompt.IDIn(i.IDIn...))
+	}
+	if len(i.IDNotIn) > 0 {
+		predicates = append(predicates, prompt.IDNotIn(i.IDNotIn...))
+	}
+	if i.IDGT != nil {
+		predicates = append(predicates, prompt.IDGT(*i.IDGT))
+	}
+	if i.IDGTE != nil {
+		predicates = append(predicates, prompt.IDGTE(*i.IDGTE))
+	}
+	if i.IDLT != nil {
+		predicates = append(predicates, prompt.IDLT(*i.IDLT))
+	}
+	if i.IDLTE != nil {
+		predicates = append(predicates, prompt.IDLTE(*i.IDLTE))
+	}
+	if i.CreatedAt != nil {
+		predicates = append(predicates, prompt.CreatedAtEQ(*i.CreatedAt))
+	}
+	if i.CreatedAtNEQ != nil {
+		predicates = append(predicates, prompt.CreatedAtNEQ(*i.CreatedAtNEQ))
+	}
+	if len(i.CreatedAtIn) > 0 {
+		predicates = append(predicates, prompt.CreatedAtIn(i.CreatedAtIn...))
+	}
+	if len(i.CreatedAtNotIn) > 0 {
+		predicates = append(predicates, prompt.CreatedAtNotIn(i.CreatedAtNotIn...))
+	}
+	if i.CreatedAtGT != nil {
+		predicates = append(predicates, prompt.CreatedAtGT(*i.CreatedAtGT))
+	}
+	if i.CreatedAtGTE != nil {
+		predicates = append(predicates, prompt.CreatedAtGTE(*i.CreatedAtGTE))
+	}
+	if i.CreatedAtLT != nil {
+		predicates = append(predicates, prompt.CreatedAtLT(*i.CreatedAtLT))
+	}
+	if i.CreatedAtLTE != nil {
+		predicates = append(predicates, prompt.CreatedAtLTE(*i.CreatedAtLTE))
+	}
+	if i.UpdatedAt != nil {
+		predicates = append(predicates, prompt.UpdatedAtEQ(*i.UpdatedAt))
+	}
+	if i.UpdatedAtNEQ != nil {
+		predicates = append(predicates, prompt.UpdatedAtNEQ(*i.UpdatedAtNEQ))
+	}
+	if len(i.UpdatedAtIn) > 0 {
+		predicates = append(predicates, prompt.UpdatedAtIn(i.UpdatedAtIn...))
+	}
+	if len(i.UpdatedAtNotIn) > 0 {
+		predicates = append(predicates, prompt.UpdatedAtNotIn(i.UpdatedAtNotIn...))
+	}
+	if i.UpdatedAtGT != nil {
+		predicates = append(predicates, prompt.UpdatedAtGT(*i.UpdatedAtGT))
+	}
+	if i.UpdatedAtGTE != nil {
+		predicates = append(predicates, prompt.UpdatedAtGTE(*i.UpdatedAtGTE))
+	}
+	if i.UpdatedAtLT != nil {
+		predicates = append(predicates, prompt.UpdatedAtLT(*i.UpdatedAtLT))
+	}
+	if i.UpdatedAtLTE != nil {
+		predicates = append(predicates, prompt.UpdatedAtLTE(*i.UpdatedAtLTE))
+	}
+	if i.ProjectID != nil {
+		predicates = append(predicates, prompt.ProjectIDEQ(*i.ProjectID))
+	}
+	if i.ProjectIDNEQ != nil {
+		predicates = append(predicates, prompt.ProjectIDNEQ(*i.ProjectIDNEQ))
+	}
+	if len(i.ProjectIDIn) > 0 {
+		predicates = append(predicates, prompt.ProjectIDIn(i.ProjectIDIn...))
+	}
+	if len(i.ProjectIDNotIn) > 0 {
+		predicates = append(predicates, prompt.ProjectIDNotIn(i.ProjectIDNotIn...))
+	}
+	if i.ProjectIDGT != nil {
+		predicates = append(predicates, prompt.ProjectIDGT(*i.ProjectIDGT))
+	}
+	if i.ProjectIDGTE != nil {
+		predicates = append(predicates, prompt.ProjectIDGTE(*i.ProjectIDGTE))
+	}
+	if i.ProjectIDLT != nil {
+		predicates = append(predicates, prompt.ProjectIDLT(*i.ProjectIDLT))
+	}
+	if i.ProjectIDLTE != nil {
+		predicates = append(predicates, prompt.ProjectIDLTE(*i.ProjectIDLTE))
+	}
+	if i.Name != nil {
+		predicates = append(predicates, prompt.NameEQ(*i.Name))
+	}
+	if i.NameNEQ != nil {
+		predicates = append(predicates, prompt.NameNEQ(*i.NameNEQ))
+	}
+	if len(i.NameIn) > 0 {
+		predicates = append(predicates, prompt.NameIn(i.NameIn...))
+	}
+	if len(i.NameNotIn) > 0 {
+		predicates = append(predicates, prompt.NameNotIn(i.NameNotIn...))
+	}
+	if i.NameGT != nil {
+		predicates = append(predicates, prompt.NameGT(*i.NameGT))
+	}
+	if i.NameGTE != nil {
+		predicates = append(predicates, prompt.NameGTE(*i.NameGTE))
+	}
+	if i.NameLT != nil {
+		predicates = append(predicates, prompt.NameLT(*i.NameLT))
+	}
+	if i.NameLTE != nil {
+		predicates = append(predicates, prompt.NameLTE(*i.NameLTE))
+	}
+	if i.NameContains != nil {
+		predicates = append(predicates, prompt.NameContains(*i.NameContains))
+	}
+	if i.NameHasPrefix != nil {
+		predicates = append(predicates, prompt.NameHasPrefix(*i.NameHasPrefix))
+	}
+	if i.NameHasSuffix != nil {
+		predicates = append(predicates, prompt.NameHasSuffix(*i.NameHasSuffix))
+	}
+	if i.NameEqualFold != nil {
+		predicates = append(predicates, prompt.NameEqualFold(*i.NameEqualFold))
+	}
+	if i.NameContainsFold != nil {
+		predicates = append(predicates, prompt.NameContainsFold(*i.NameContainsFold))
+	}
+	if i.Description != nil {
+		predicates = append(predicates, prompt.DescriptionEQ(*i.Description))
+	}
+	if i.DescriptionNEQ != nil {
+		predicates = append(predicates, prompt.DescriptionNEQ(*i.DescriptionNEQ))
+	}
+	if len(i.DescriptionIn) > 0 {
+		predicates = append(predicates, prompt.DescriptionIn(i.DescriptionIn...))
+	}
+	if len(i.DescriptionNotIn) > 0 {
+		predicates = append(predicates, prompt.DescriptionNotIn(i.DescriptionNotIn...))
+	}
+	if i.DescriptionGT != nil {
+		predicates = append(predicates, prompt.DescriptionGT(*i.DescriptionGT))
+	}
+	if i.DescriptionGTE != nil {
+		predicates = append(predicates, prompt.DescriptionGTE(*i.DescriptionGTE))
+	}
+	if i.DescriptionLT != nil {
+		predicates = append(predicates, prompt.DescriptionLT(*i.DescriptionLT))
+	}
+	if i.DescriptionLTE != nil {
+		predicates = append(predicates, prompt.DescriptionLTE(*i.DescriptionLTE))
+	}
+	if i.DescriptionContains != nil {
+		predicates = append(predicates, prompt.DescriptionContains(*i.DescriptionContains))
+	}
+	if i.DescriptionHasPrefix != nil {
+		predicates = append(predicates, prompt.DescriptionHasPrefix(*i.DescriptionHasPrefix))
+	}
+	if i.DescriptionHasSuffix != nil {
+		predicates = append(predicates, prompt.DescriptionHasSuffix(*i.DescriptionHasSuffix))
+	}
+	if i.DescriptionEqualFold != nil {
+		predicates = append(predicates, prompt.DescriptionEqualFold(*i.DescriptionEqualFold))
+	}
+	if i.DescriptionContainsFold != nil {
+		predicates = append(predicates, prompt.DescriptionContainsFold(*i.DescriptionContainsFold))
+	}
+	if i.Role != nil {
+		predicates = append(predicates, prompt.RoleEQ(*i.Role))
+	}
+	if i.RoleNEQ != nil {
+		predicates = append(predicates, prompt.RoleNEQ(*i.RoleNEQ))
+	}
+	if len(i.RoleIn) > 0 {
+		predicates = append(predicates, prompt.RoleIn(i.RoleIn...))
+	}
+	if len(i.RoleNotIn) > 0 {
+		predicates = append(predicates, prompt.RoleNotIn(i.RoleNotIn...))
+	}
+	if i.RoleGT != nil {
+		predicates = append(predicates, prompt.RoleGT(*i.RoleGT))
+	}
+	if i.RoleGTE != nil {
+		predicates = append(predicates, prompt.RoleGTE(*i.RoleGTE))
+	}
+	if i.RoleLT != nil {
+		predicates = append(predicates, prompt.RoleLT(*i.RoleLT))
+	}
+	if i.RoleLTE != nil {
+		predicates = append(predicates, prompt.RoleLTE(*i.RoleLTE))
+	}
+	if i.RoleContains != nil {
+		predicates = append(predicates, prompt.RoleContains(*i.RoleContains))
+	}
+	if i.RoleHasPrefix != nil {
+		predicates = append(predicates, prompt.RoleHasPrefix(*i.RoleHasPrefix))
+	}
+	if i.RoleHasSuffix != nil {
+		predicates = append(predicates, prompt.RoleHasSuffix(*i.RoleHasSuffix))
+	}
+	if i.RoleEqualFold != nil {
+		predicates = append(predicates, prompt.RoleEqualFold(*i.RoleEqualFold))
+	}
+	if i.RoleContainsFold != nil {
+		predicates = append(predicates, prompt.RoleContainsFold(*i.RoleContainsFold))
+	}
+	if i.Content != nil {
+		predicates = append(predicates, prompt.ContentEQ(*i.Content))
+	}
+	if i.ContentNEQ != nil {
+		predicates = append(predicates, prompt.ContentNEQ(*i.ContentNEQ))
+	}
+	if len(i.ContentIn) > 0 {
+		predicates = append(predicates, prompt.ContentIn(i.ContentIn...))
+	}
+	if len(i.ContentNotIn) > 0 {
+		predicates = append(predicates, prompt.ContentNotIn(i.ContentNotIn...))
+	}
+	if i.ContentGT != nil {
+		predicates = append(predicates, prompt.ContentGT(*i.ContentGT))
+	}
+	if i.ContentGTE != nil {
+		predicates = append(predicates, prompt.ContentGTE(*i.ContentGTE))
+	}
+	if i.ContentLT != nil {
+		predicates = append(predicates, prompt.ContentLT(*i.ContentLT))
+	}
+	if i.ContentLTE != nil {
+		predicates = append(predicates, prompt.ContentLTE(*i.ContentLTE))
+	}
+	if i.ContentContains != nil {
+		predicates = append(predicates, prompt.ContentContains(*i.ContentContains))
+	}
+	if i.ContentHasPrefix != nil {
+		predicates = append(predicates, prompt.ContentHasPrefix(*i.ContentHasPrefix))
+	}
+	if i.ContentHasSuffix != nil {
+		predicates = append(predicates, prompt.ContentHasSuffix(*i.ContentHasSuffix))
+	}
+	if i.ContentEqualFold != nil {
+		predicates = append(predicates, prompt.ContentEqualFold(*i.ContentEqualFold))
+	}
+	if i.ContentContainsFold != nil {
+		predicates = append(predicates, prompt.ContentContainsFold(*i.ContentContainsFold))
+	}
+	if i.Status != nil {
+		predicates = append(predicates, prompt.StatusEQ(*i.Status))
+	}
+	if i.StatusNEQ != nil {
+		predicates = append(predicates, prompt.StatusNEQ(*i.StatusNEQ))
+	}
+	if len(i.StatusIn) > 0 {
+		predicates = append(predicates, prompt.StatusIn(i.StatusIn...))
+	}
+	if len(i.StatusNotIn) > 0 {
+		predicates = append(predicates, prompt.StatusNotIn(i.StatusNotIn...))
+	}
+
+	if i.HasProjects != nil {
+		p := prompt.HasProjects()
+		if !*i.HasProjects {
+			p = prompt.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasProjectsWith) > 0 {
+		with := make([]predicate.Project, 0, len(i.HasProjectsWith))
+		for _, w := range i.HasProjectsWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasProjectsWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, prompt.HasProjectsWith(with...))
+	}
+	switch len(predicates) {
+	case 0:
+		return nil, ErrEmptyPromptWhereInput
+	case 1:
+		return predicates[0], nil
+	default:
+		return prompt.And(predicates...), nil
+	}
+}
+
+// ProviderQuotaStatusWhereInput represents a where input for filtering ProviderQuotaStatus queries.
+type ProviderQuotaStatusWhereInput struct {
+	Predicates []predicate.ProviderQuotaStatus  `json:"-"`
+	Not        *ProviderQuotaStatusWhereInput   `json:"not,omitempty"`
+	Or         []*ProviderQuotaStatusWhereInput `json:"or,omitempty"`
+	And        []*ProviderQuotaStatusWhereInput `json:"and,omitempty"`
+
+	// "id" field predicates.
+	ID      *int  `json:"id,omitempty"`
+	IDNEQ   *int  `json:"idNEQ,omitempty"`
+	IDIn    []int `json:"idIn,omitempty"`
+	IDNotIn []int `json:"idNotIn,omitempty"`
+	IDGT    *int  `json:"idGT,omitempty"`
+	IDGTE   *int  `json:"idGTE,omitempty"`
+	IDLT    *int  `json:"idLT,omitempty"`
+	IDLTE   *int  `json:"idLTE,omitempty"`
+
+	// "created_at" field predicates.
+	CreatedAt      *time.Time  `json:"createdAt,omitempty"`
+	CreatedAtNEQ   *time.Time  `json:"createdAtNEQ,omitempty"`
+	CreatedAtIn    []time.Time `json:"createdAtIn,omitempty"`
+	CreatedAtNotIn []time.Time `json:"createdAtNotIn,omitempty"`
+	CreatedAtGT    *time.Time  `json:"createdAtGT,omitempty"`
+	CreatedAtGTE   *time.Time  `json:"createdAtGTE,omitempty"`
+	CreatedAtLT    *time.Time  `json:"createdAtLT,omitempty"`
+	CreatedAtLTE   *time.Time  `json:"createdAtLTE,omitempty"`
+
+	// "updated_at" field predicates.
+	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	UpdatedAtNEQ   *time.Time  `json:"updatedAtNEQ,omitempty"`
+	UpdatedAtIn    []time.Time `json:"updatedAtIn,omitempty"`
+	UpdatedAtNotIn []time.Time `json:"updatedAtNotIn,omitempty"`
+	UpdatedAtGT    *time.Time  `json:"updatedAtGT,omitempty"`
+	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
+	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
+	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
+
+	// "channel_id" field predicates.
+	ChannelID      *int  `json:"channelID,omitempty"`
+	ChannelIDNEQ   *int  `json:"channelIDNEQ,omitempty"`
+	ChannelIDIn    []int `json:"channelIDIn,omitempty"`
+	ChannelIDNotIn []int `json:"channelIDNotIn,omitempty"`
+
+	// "provider_type" field predicates.
+	ProviderType      *providerquotastatus.ProviderType  `json:"providerType,omitempty"`
+	ProviderTypeNEQ   *providerquotastatus.ProviderType  `json:"providerTypeNEQ,omitempty"`
+	ProviderTypeIn    []providerquotastatus.ProviderType `json:"providerTypeIn,omitempty"`
+	ProviderTypeNotIn []providerquotastatus.ProviderType `json:"providerTypeNotIn,omitempty"`
+
+	// "status" field predicates.
+	Status      *providerquotastatus.Status  `json:"status,omitempty"`
+	StatusNEQ   *providerquotastatus.Status  `json:"statusNEQ,omitempty"`
+	StatusIn    []providerquotastatus.Status `json:"statusIn,omitempty"`
+	StatusNotIn []providerquotastatus.Status `json:"statusNotIn,omitempty"`
+
+	// "next_reset_at" field predicates.
+	NextResetAt       *time.Time  `json:"nextResetAt,omitempty"`
+	NextResetAtNEQ    *time.Time  `json:"nextResetAtNEQ,omitempty"`
+	NextResetAtIn     []time.Time `json:"nextResetAtIn,omitempty"`
+	NextResetAtNotIn  []time.Time `json:"nextResetAtNotIn,omitempty"`
+	NextResetAtGT     *time.Time  `json:"nextResetAtGT,omitempty"`
+	NextResetAtGTE    *time.Time  `json:"nextResetAtGTE,omitempty"`
+	NextResetAtLT     *time.Time  `json:"nextResetAtLT,omitempty"`
+	NextResetAtLTE    *time.Time  `json:"nextResetAtLTE,omitempty"`
+	NextResetAtIsNil  bool        `json:"nextResetAtIsNil,omitempty"`
+	NextResetAtNotNil bool        `json:"nextResetAtNotNil,omitempty"`
+
+	// "ready" field predicates.
+	Ready    *bool `json:"ready,omitempty"`
+	ReadyNEQ *bool `json:"readyNEQ,omitempty"`
+
+	// "next_check_at" field predicates.
+	NextCheckAt      *time.Time  `json:"nextCheckAt,omitempty"`
+	NextCheckAtNEQ   *time.Time  `json:"nextCheckAtNEQ,omitempty"`
+	NextCheckAtIn    []time.Time `json:"nextCheckAtIn,omitempty"`
+	NextCheckAtNotIn []time.Time `json:"nextCheckAtNotIn,omitempty"`
+	NextCheckAtGT    *time.Time  `json:"nextCheckAtGT,omitempty"`
+	NextCheckAtGTE   *time.Time  `json:"nextCheckAtGTE,omitempty"`
+	NextCheckAtLT    *time.Time  `json:"nextCheckAtLT,omitempty"`
+	NextCheckAtLTE   *time.Time  `json:"nextCheckAtLTE,omitempty"`
+
+	// "channel" edge predicates.
+	HasChannel     *bool                `json:"hasChannel,omitempty"`
+	HasChannelWith []*ChannelWhereInput `json:"hasChannelWith,omitempty"`
+}
+
+// AddPredicates adds custom predicates to the where input to be used during the filtering phase.
+func (i *ProviderQuotaStatusWhereInput) AddPredicates(predicates ...predicate.ProviderQuotaStatus) {
+	i.Predicates = append(i.Predicates, predicates...)
+}
+
+// Filter applies the ProviderQuotaStatusWhereInput filter on the ProviderQuotaStatusQuery builder.
+func (i *ProviderQuotaStatusWhereInput) Filter(q *ProviderQuotaStatusQuery) (*ProviderQuotaStatusQuery, error) {
+	if i == nil {
+		return q, nil
+	}
+	p, err := i.P()
+	if err != nil {
+		if err == ErrEmptyProviderQuotaStatusWhereInput {
+			return q, nil
+		}
+		return nil, err
+	}
+	return q.Where(p), nil
+}
+
+// ErrEmptyProviderQuotaStatusWhereInput is returned in case the ProviderQuotaStatusWhereInput is empty.
+var ErrEmptyProviderQuotaStatusWhereInput = errors.New("ent: empty predicate ProviderQuotaStatusWhereInput")
+
+// P returns a predicate for filtering providerquotastatusslice.
+// An error is returned if the input is empty or invalid.
+func (i *ProviderQuotaStatusWhereInput) P() (predicate.ProviderQuotaStatus, error) {
+	var predicates []predicate.ProviderQuotaStatus
+	if i.Not != nil {
+		p, err := i.Not.P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'not'", err)
+		}
+		predicates = append(predicates, providerquotastatus.Not(p))
+	}
+	switch n := len(i.Or); {
+	case n == 1:
+		p, err := i.Or[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'or'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		or := make([]predicate.ProviderQuotaStatus, 0, n)
+		for _, w := range i.Or {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'or'", err)
+			}
+			or = append(or, p)
+		}
+		predicates = append(predicates, providerquotastatus.Or(or...))
+	}
+	switch n := len(i.And); {
+	case n == 1:
+		p, err := i.And[0].P()
+		if err != nil {
+			return nil, fmt.Errorf("%w: field 'and'", err)
+		}
+		predicates = append(predicates, p)
+	case n > 1:
+		and := make([]predicate.ProviderQuotaStatus, 0, n)
+		for _, w := range i.And {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'and'", err)
+			}
+			and = append(and, p)
+		}
+		predicates = append(predicates, providerquotastatus.And(and...))
+	}
+	predicates = append(predicates, i.Predicates...)
+	if i.ID != nil {
+		predicates = append(predicates, providerquotastatus.IDEQ(*i.ID))
+	}
+	if i.IDNEQ != nil {
+		predicates = append(predicates, providerquotastatus.IDNEQ(*i.IDNEQ))
+	}
+	if len(i.IDIn) > 0 {
+		predicates = append(predicates, providerquotastatus.IDIn(i.IDIn...))
+	}
+	if len(i.IDNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.IDNotIn(i.IDNotIn...))
+	}
+	if i.IDGT != nil {
+		predicates = append(predicates, providerquotastatus.IDGT(*i.IDGT))
+	}
+	if i.IDGTE != nil {
+		predicates = append(predicates, providerquotastatus.IDGTE(*i.IDGTE))
+	}
+	if i.IDLT != nil {
+		predicates = append(predicates, providerquotastatus.IDLT(*i.IDLT))
+	}
+	if i.IDLTE != nil {
+		predicates = append(predicates, providerquotastatus.IDLTE(*i.IDLTE))
+	}
+	if i.CreatedAt != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtEQ(*i.CreatedAt))
+	}
+	if i.CreatedAtNEQ != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtNEQ(*i.CreatedAtNEQ))
+	}
+	if len(i.CreatedAtIn) > 0 {
+		predicates = append(predicates, providerquotastatus.CreatedAtIn(i.CreatedAtIn...))
+	}
+	if len(i.CreatedAtNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.CreatedAtNotIn(i.CreatedAtNotIn...))
+	}
+	if i.CreatedAtGT != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtGT(*i.CreatedAtGT))
+	}
+	if i.CreatedAtGTE != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtGTE(*i.CreatedAtGTE))
+	}
+	if i.CreatedAtLT != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtLT(*i.CreatedAtLT))
+	}
+	if i.CreatedAtLTE != nil {
+		predicates = append(predicates, providerquotastatus.CreatedAtLTE(*i.CreatedAtLTE))
+	}
+	if i.UpdatedAt != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtEQ(*i.UpdatedAt))
+	}
+	if i.UpdatedAtNEQ != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtNEQ(*i.UpdatedAtNEQ))
+	}
+	if len(i.UpdatedAtIn) > 0 {
+		predicates = append(predicates, providerquotastatus.UpdatedAtIn(i.UpdatedAtIn...))
+	}
+	if len(i.UpdatedAtNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.UpdatedAtNotIn(i.UpdatedAtNotIn...))
+	}
+	if i.UpdatedAtGT != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtGT(*i.UpdatedAtGT))
+	}
+	if i.UpdatedAtGTE != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtGTE(*i.UpdatedAtGTE))
+	}
+	if i.UpdatedAtLT != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtLT(*i.UpdatedAtLT))
+	}
+	if i.UpdatedAtLTE != nil {
+		predicates = append(predicates, providerquotastatus.UpdatedAtLTE(*i.UpdatedAtLTE))
+	}
+	if i.ChannelID != nil {
+		predicates = append(predicates, providerquotastatus.ChannelIDEQ(*i.ChannelID))
+	}
+	if i.ChannelIDNEQ != nil {
+		predicates = append(predicates, providerquotastatus.ChannelIDNEQ(*i.ChannelIDNEQ))
+	}
+	if len(i.ChannelIDIn) > 0 {
+		predicates = append(predicates, providerquotastatus.ChannelIDIn(i.ChannelIDIn...))
+	}
+	if len(i.ChannelIDNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.ChannelIDNotIn(i.ChannelIDNotIn...))
+	}
+	if i.ProviderType != nil {
+		predicates = append(predicates, providerquotastatus.ProviderTypeEQ(*i.ProviderType))
+	}
+	if i.ProviderTypeNEQ != nil {
+		predicates = append(predicates, providerquotastatus.ProviderTypeNEQ(*i.ProviderTypeNEQ))
+	}
+	if len(i.ProviderTypeIn) > 0 {
+		predicates = append(predicates, providerquotastatus.ProviderTypeIn(i.ProviderTypeIn...))
+	}
+	if len(i.ProviderTypeNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.ProviderTypeNotIn(i.ProviderTypeNotIn...))
+	}
+	if i.Status != nil {
+		predicates = append(predicates, providerquotastatus.StatusEQ(*i.Status))
+	}
+	if i.StatusNEQ != nil {
+		predicates = append(predicates, providerquotastatus.StatusNEQ(*i.StatusNEQ))
+	}
+	if len(i.StatusIn) > 0 {
+		predicates = append(predicates, providerquotastatus.StatusIn(i.StatusIn...))
+	}
+	if len(i.StatusNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.StatusNotIn(i.StatusNotIn...))
+	}
+	if i.NextResetAt != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtEQ(*i.NextResetAt))
+	}
+	if i.NextResetAtNEQ != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtNEQ(*i.NextResetAtNEQ))
+	}
+	if len(i.NextResetAtIn) > 0 {
+		predicates = append(predicates, providerquotastatus.NextResetAtIn(i.NextResetAtIn...))
+	}
+	if len(i.NextResetAtNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.NextResetAtNotIn(i.NextResetAtNotIn...))
+	}
+	if i.NextResetAtGT != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtGT(*i.NextResetAtGT))
+	}
+	if i.NextResetAtGTE != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtGTE(*i.NextResetAtGTE))
+	}
+	if i.NextResetAtLT != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtLT(*i.NextResetAtLT))
+	}
+	if i.NextResetAtLTE != nil {
+		predicates = append(predicates, providerquotastatus.NextResetAtLTE(*i.NextResetAtLTE))
+	}
+	if i.NextResetAtIsNil {
+		predicates = append(predicates, providerquotastatus.NextResetAtIsNil())
+	}
+	if i.NextResetAtNotNil {
+		predicates = append(predicates, providerquotastatus.NextResetAtNotNil())
+	}
+	if i.Ready != nil {
+		predicates = append(predicates, providerquotastatus.ReadyEQ(*i.Ready))
+	}
+	if i.ReadyNEQ != nil {
+		predicates = append(predicates, providerquotastatus.ReadyNEQ(*i.ReadyNEQ))
+	}
+	if i.NextCheckAt != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtEQ(*i.NextCheckAt))
+	}
+	if i.NextCheckAtNEQ != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtNEQ(*i.NextCheckAtNEQ))
+	}
+	if len(i.NextCheckAtIn) > 0 {
+		predicates = append(predicates, providerquotastatus.NextCheckAtIn(i.NextCheckAtIn...))
+	}
+	if len(i.NextCheckAtNotIn) > 0 {
+		predicates = append(predicates, providerquotastatus.NextCheckAtNotIn(i.NextCheckAtNotIn...))
+	}
+	if i.NextCheckAtGT != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtGT(*i.NextCheckAtGT))
+	}
+	if i.NextCheckAtGTE != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtGTE(*i.NextCheckAtGTE))
+	}
+	if i.NextCheckAtLT != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtLT(*i.NextCheckAtLT))
+	}
+	if i.NextCheckAtLTE != nil {
+		predicates = append(predicates, providerquotastatus.NextCheckAtLTE(*i.NextCheckAtLTE))
+	}
+
+	if i.HasChannel != nil {
+		p := providerquotastatus.HasChannel()
+		if !*i.HasChannel {
+			p = providerquotastatus.Not(p)
+		}
+		predicates = append(predicates, p)
+	}
+	if len(i.HasChannelWith) > 0 {
+		with := make([]predicate.Channel, 0, len(i.HasChannelWith))
+		for _, w := range i.HasChannelWith {
+			p, err := w.P()
+			if err != nil {
+				return nil, fmt.Errorf("%w: field 'HasChannelWith'", err)
+			}
+			with = append(with, p)
+		}
+		predicates = append(predicates, providerquotastatus.HasChannelWith(with...))
+	}
+	switch len(predicates) {
+	case 0:
+		return nil, ErrEmptyProviderQuotaStatusWhereInput
+	case 1:
+		return predicates[0], nil
+	default:
+		return providerquotastatus.And(predicates...), nil
 	}
 }
 
@@ -3631,6 +5188,21 @@ type RequestWhereInput struct {
 	// "stream" field predicates.
 	Stream    *bool `json:"stream,omitempty"`
 	StreamNEQ *bool `json:"streamNEQ,omitempty"`
+
+	// "client_ip" field predicates.
+	ClientIP             *string  `json:"clientIP,omitempty"`
+	ClientIPNEQ          *string  `json:"clientIPNEQ,omitempty"`
+	ClientIPIn           []string `json:"clientIPIn,omitempty"`
+	ClientIPNotIn        []string `json:"clientIPNotIn,omitempty"`
+	ClientIPGT           *string  `json:"clientIPGT,omitempty"`
+	ClientIPGTE          *string  `json:"clientIPGTE,omitempty"`
+	ClientIPLT           *string  `json:"clientIPLT,omitempty"`
+	ClientIPLTE          *string  `json:"clientIPLTE,omitempty"`
+	ClientIPContains     *string  `json:"clientIPContains,omitempty"`
+	ClientIPHasPrefix    *string  `json:"clientIPHasPrefix,omitempty"`
+	ClientIPHasSuffix    *string  `json:"clientIPHasSuffix,omitempty"`
+	ClientIPEqualFold    *string  `json:"clientIPEqualFold,omitempty"`
+	ClientIPContainsFold *string  `json:"clientIPContainsFold,omitempty"`
 
 	// "metrics_latency_ms" field predicates.
 	MetricsLatencyMs       *int64  `json:"metricsLatencyMs,omitempty"`
@@ -4065,6 +5637,45 @@ func (i *RequestWhereInput) P() (predicate.Request, error) {
 	if i.StreamNEQ != nil {
 		predicates = append(predicates, request.StreamNEQ(*i.StreamNEQ))
 	}
+	if i.ClientIP != nil {
+		predicates = append(predicates, request.ClientIPEQ(*i.ClientIP))
+	}
+	if i.ClientIPNEQ != nil {
+		predicates = append(predicates, request.ClientIPNEQ(*i.ClientIPNEQ))
+	}
+	if len(i.ClientIPIn) > 0 {
+		predicates = append(predicates, request.ClientIPIn(i.ClientIPIn...))
+	}
+	if len(i.ClientIPNotIn) > 0 {
+		predicates = append(predicates, request.ClientIPNotIn(i.ClientIPNotIn...))
+	}
+	if i.ClientIPGT != nil {
+		predicates = append(predicates, request.ClientIPGT(*i.ClientIPGT))
+	}
+	if i.ClientIPGTE != nil {
+		predicates = append(predicates, request.ClientIPGTE(*i.ClientIPGTE))
+	}
+	if i.ClientIPLT != nil {
+		predicates = append(predicates, request.ClientIPLT(*i.ClientIPLT))
+	}
+	if i.ClientIPLTE != nil {
+		predicates = append(predicates, request.ClientIPLTE(*i.ClientIPLTE))
+	}
+	if i.ClientIPContains != nil {
+		predicates = append(predicates, request.ClientIPContains(*i.ClientIPContains))
+	}
+	if i.ClientIPHasPrefix != nil {
+		predicates = append(predicates, request.ClientIPHasPrefix(*i.ClientIPHasPrefix))
+	}
+	if i.ClientIPHasSuffix != nil {
+		predicates = append(predicates, request.ClientIPHasSuffix(*i.ClientIPHasSuffix))
+	}
+	if i.ClientIPEqualFold != nil {
+		predicates = append(predicates, request.ClientIPEqualFold(*i.ClientIPEqualFold))
+	}
+	if i.ClientIPContainsFold != nil {
+		predicates = append(predicates, request.ClientIPContainsFold(*i.ClientIPContainsFold))
+	}
 	if i.MetricsLatencyMs != nil {
 		predicates = append(predicates, request.MetricsLatencyMsEQ(*i.MetricsLatencyMs))
 	}
@@ -4400,6 +6011,10 @@ type RequestExecutionWhereInput struct {
 	StatusNEQ   *requestexecution.Status  `json:"statusNEQ,omitempty"`
 	StatusIn    []requestexecution.Status `json:"statusIn,omitempty"`
 	StatusNotIn []requestexecution.Status `json:"statusNotIn,omitempty"`
+
+	// "stream" field predicates.
+	Stream    *bool `json:"stream,omitempty"`
+	StreamNEQ *bool `json:"streamNEQ,omitempty"`
 
 	// "metrics_latency_ms" field predicates.
 	MetricsLatencyMs       *int64  `json:"metricsLatencyMs,omitempty"`
@@ -4833,6 +6448,12 @@ func (i *RequestExecutionWhereInput) P() (predicate.RequestExecution, error) {
 	if len(i.StatusNotIn) > 0 {
 		predicates = append(predicates, requestexecution.StatusNotIn(i.StatusNotIn...))
 	}
+	if i.Stream != nil {
+		predicates = append(predicates, requestexecution.StreamEQ(*i.Stream))
+	}
+	if i.StreamNEQ != nil {
+		predicates = append(predicates, requestexecution.StreamNEQ(*i.StreamNEQ))
+	}
 	if i.MetricsLatencyMs != nil {
 		predicates = append(predicates, requestexecution.MetricsLatencyMsEQ(*i.MetricsLatencyMs))
 	}
@@ -4994,16 +6615,6 @@ type RoleWhereInput struct {
 	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "name" field predicates.
 	Name             *string  `json:"name,omitempty"`
@@ -5190,30 +6801,6 @@ func (i *RoleWhereInput) P() (predicate.Role, error) {
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, role.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, role.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, role.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, role.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, role.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, role.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, role.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, role.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, role.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.Name != nil {
 		predicates = append(predicates, role.NameEQ(*i.Name))
 	}
@@ -5384,16 +6971,6 @@ type SystemWhereInput struct {
 	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "key" field predicates.
 	Key             *string  `json:"key,omitempty"`
@@ -5568,30 +7145,6 @@ func (i *SystemWhereInput) P() (predicate.System, error) {
 	}
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, system.UpdatedAtLTE(*i.UpdatedAtLTE))
-	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, system.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, system.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, system.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, system.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, system.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, system.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, system.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, system.DeletedAtLTE(*i.DeletedAtLTE))
 	}
 	if i.Key != nil {
 		predicates = append(predicates, system.KeyEQ(*i.Key))
@@ -6389,6 +7942,18 @@ type UsageLogWhereInput struct {
 	RequestIDIn    []int `json:"requestIDIn,omitempty"`
 	RequestIDNotIn []int `json:"requestIDNotIn,omitempty"`
 
+	// "api_key_id" field predicates.
+	APIKeyID       *int  `json:"apiKeyID,omitempty"`
+	APIKeyIDNEQ    *int  `json:"apiKeyIDNEQ,omitempty"`
+	APIKeyIDIn     []int `json:"apiKeyIDIn,omitempty"`
+	APIKeyIDNotIn  []int `json:"apiKeyIDNotIn,omitempty"`
+	APIKeyIDGT     *int  `json:"apiKeyIDGT,omitempty"`
+	APIKeyIDGTE    *int  `json:"apiKeyIDGTE,omitempty"`
+	APIKeyIDLT     *int  `json:"apiKeyIDLT,omitempty"`
+	APIKeyIDLTE    *int  `json:"apiKeyIDLTE,omitempty"`
+	APIKeyIDIsNil  bool  `json:"apiKeyIDIsNil,omitempty"`
+	APIKeyIDNotNil bool  `json:"apiKeyIDNotNil,omitempty"`
+
 	// "project_id" field predicates.
 	ProjectID      *int  `json:"projectID,omitempty"`
 	ProjectIDNEQ   *int  `json:"projectIDNEQ,omitempty"`
@@ -6484,6 +8049,30 @@ type UsageLogWhereInput struct {
 	PromptWriteCachedTokensIsNil  bool    `json:"promptWriteCachedTokensIsNil,omitempty"`
 	PromptWriteCachedTokensNotNil bool    `json:"promptWriteCachedTokensNotNil,omitempty"`
 
+	// "prompt_write_cached_tokens_5m" field predicates.
+	PromptWriteCachedTokens5m       *int64  `json:"promptWriteCachedTokens5m,omitempty"`
+	PromptWriteCachedTokens5mNEQ    *int64  `json:"promptWriteCachedTokens5mNEQ,omitempty"`
+	PromptWriteCachedTokens5mIn     []int64 `json:"promptWriteCachedTokens5mIn,omitempty"`
+	PromptWriteCachedTokens5mNotIn  []int64 `json:"promptWriteCachedTokens5mNotIn,omitempty"`
+	PromptWriteCachedTokens5mGT     *int64  `json:"promptWriteCachedTokens5mGT,omitempty"`
+	PromptWriteCachedTokens5mGTE    *int64  `json:"promptWriteCachedTokens5mGTE,omitempty"`
+	PromptWriteCachedTokens5mLT     *int64  `json:"promptWriteCachedTokens5mLT,omitempty"`
+	PromptWriteCachedTokens5mLTE    *int64  `json:"promptWriteCachedTokens5mLTE,omitempty"`
+	PromptWriteCachedTokens5mIsNil  bool    `json:"promptWriteCachedTokens5mIsNil,omitempty"`
+	PromptWriteCachedTokens5mNotNil bool    `json:"promptWriteCachedTokens5mNotNil,omitempty"`
+
+	// "prompt_write_cached_tokens_1h" field predicates.
+	PromptWriteCachedTokens1h       *int64  `json:"promptWriteCachedTokens1h,omitempty"`
+	PromptWriteCachedTokens1hNEQ    *int64  `json:"promptWriteCachedTokens1hNEQ,omitempty"`
+	PromptWriteCachedTokens1hIn     []int64 `json:"promptWriteCachedTokens1hIn,omitempty"`
+	PromptWriteCachedTokens1hNotIn  []int64 `json:"promptWriteCachedTokens1hNotIn,omitempty"`
+	PromptWriteCachedTokens1hGT     *int64  `json:"promptWriteCachedTokens1hGT,omitempty"`
+	PromptWriteCachedTokens1hGTE    *int64  `json:"promptWriteCachedTokens1hGTE,omitempty"`
+	PromptWriteCachedTokens1hLT     *int64  `json:"promptWriteCachedTokens1hLT,omitempty"`
+	PromptWriteCachedTokens1hLTE    *int64  `json:"promptWriteCachedTokens1hLTE,omitempty"`
+	PromptWriteCachedTokens1hIsNil  bool    `json:"promptWriteCachedTokens1hIsNil,omitempty"`
+	PromptWriteCachedTokens1hNotNil bool    `json:"promptWriteCachedTokens1hNotNil,omitempty"`
+
 	// "completion_audio_tokens" field predicates.
 	CompletionAudioTokens       *int64  `json:"completionAudioTokens,omitempty"`
 	CompletionAudioTokensNEQ    *int64  `json:"completionAudioTokensNEQ,omitempty"`
@@ -6552,6 +8141,35 @@ type UsageLogWhereInput struct {
 	FormatHasSuffix    *string  `json:"formatHasSuffix,omitempty"`
 	FormatEqualFold    *string  `json:"formatEqualFold,omitempty"`
 	FormatContainsFold *string  `json:"formatContainsFold,omitempty"`
+
+	// "total_cost" field predicates.
+	TotalCost       *float64  `json:"totalCost,omitempty"`
+	TotalCostNEQ    *float64  `json:"totalCostNEQ,omitempty"`
+	TotalCostIn     []float64 `json:"totalCostIn,omitempty"`
+	TotalCostNotIn  []float64 `json:"totalCostNotIn,omitempty"`
+	TotalCostGT     *float64  `json:"totalCostGT,omitempty"`
+	TotalCostGTE    *float64  `json:"totalCostGTE,omitempty"`
+	TotalCostLT     *float64  `json:"totalCostLT,omitempty"`
+	TotalCostLTE    *float64  `json:"totalCostLTE,omitempty"`
+	TotalCostIsNil  bool      `json:"totalCostIsNil,omitempty"`
+	TotalCostNotNil bool      `json:"totalCostNotNil,omitempty"`
+
+	// "cost_price_reference_id" field predicates.
+	CostPriceReferenceID             *string  `json:"costPriceReferenceID,omitempty"`
+	CostPriceReferenceIDNEQ          *string  `json:"costPriceReferenceIDNEQ,omitempty"`
+	CostPriceReferenceIDIn           []string `json:"costPriceReferenceIDIn,omitempty"`
+	CostPriceReferenceIDNotIn        []string `json:"costPriceReferenceIDNotIn,omitempty"`
+	CostPriceReferenceIDGT           *string  `json:"costPriceReferenceIDGT,omitempty"`
+	CostPriceReferenceIDGTE          *string  `json:"costPriceReferenceIDGTE,omitempty"`
+	CostPriceReferenceIDLT           *string  `json:"costPriceReferenceIDLT,omitempty"`
+	CostPriceReferenceIDLTE          *string  `json:"costPriceReferenceIDLTE,omitempty"`
+	CostPriceReferenceIDContains     *string  `json:"costPriceReferenceIDContains,omitempty"`
+	CostPriceReferenceIDHasPrefix    *string  `json:"costPriceReferenceIDHasPrefix,omitempty"`
+	CostPriceReferenceIDHasSuffix    *string  `json:"costPriceReferenceIDHasSuffix,omitempty"`
+	CostPriceReferenceIDIsNil        bool     `json:"costPriceReferenceIDIsNil,omitempty"`
+	CostPriceReferenceIDNotNil       bool     `json:"costPriceReferenceIDNotNil,omitempty"`
+	CostPriceReferenceIDEqualFold    *string  `json:"costPriceReferenceIDEqualFold,omitempty"`
+	CostPriceReferenceIDContainsFold *string  `json:"costPriceReferenceIDContainsFold,omitempty"`
 
 	// "request" edge predicates.
 	HasRequest     *bool                `json:"hasRequest,omitempty"`
@@ -6720,6 +8338,36 @@ func (i *UsageLogWhereInput) P() (predicate.UsageLog, error) {
 	}
 	if len(i.RequestIDNotIn) > 0 {
 		predicates = append(predicates, usagelog.RequestIDNotIn(i.RequestIDNotIn...))
+	}
+	if i.APIKeyID != nil {
+		predicates = append(predicates, usagelog.APIKeyIDEQ(*i.APIKeyID))
+	}
+	if i.APIKeyIDNEQ != nil {
+		predicates = append(predicates, usagelog.APIKeyIDNEQ(*i.APIKeyIDNEQ))
+	}
+	if len(i.APIKeyIDIn) > 0 {
+		predicates = append(predicates, usagelog.APIKeyIDIn(i.APIKeyIDIn...))
+	}
+	if len(i.APIKeyIDNotIn) > 0 {
+		predicates = append(predicates, usagelog.APIKeyIDNotIn(i.APIKeyIDNotIn...))
+	}
+	if i.APIKeyIDGT != nil {
+		predicates = append(predicates, usagelog.APIKeyIDGT(*i.APIKeyIDGT))
+	}
+	if i.APIKeyIDGTE != nil {
+		predicates = append(predicates, usagelog.APIKeyIDGTE(*i.APIKeyIDGTE))
+	}
+	if i.APIKeyIDLT != nil {
+		predicates = append(predicates, usagelog.APIKeyIDLT(*i.APIKeyIDLT))
+	}
+	if i.APIKeyIDLTE != nil {
+		predicates = append(predicates, usagelog.APIKeyIDLTE(*i.APIKeyIDLTE))
+	}
+	if i.APIKeyIDIsNil {
+		predicates = append(predicates, usagelog.APIKeyIDIsNil())
+	}
+	if i.APIKeyIDNotNil {
+		predicates = append(predicates, usagelog.APIKeyIDNotNil())
 	}
 	if i.ProjectID != nil {
 		predicates = append(predicates, usagelog.ProjectIDEQ(*i.ProjectID))
@@ -6952,6 +8600,66 @@ func (i *UsageLogWhereInput) P() (predicate.UsageLog, error) {
 	if i.PromptWriteCachedTokensNotNil {
 		predicates = append(predicates, usagelog.PromptWriteCachedTokensNotNil())
 	}
+	if i.PromptWriteCachedTokens5m != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mEQ(*i.PromptWriteCachedTokens5m))
+	}
+	if i.PromptWriteCachedTokens5mNEQ != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mNEQ(*i.PromptWriteCachedTokens5mNEQ))
+	}
+	if len(i.PromptWriteCachedTokens5mIn) > 0 {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mIn(i.PromptWriteCachedTokens5mIn...))
+	}
+	if len(i.PromptWriteCachedTokens5mNotIn) > 0 {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mNotIn(i.PromptWriteCachedTokens5mNotIn...))
+	}
+	if i.PromptWriteCachedTokens5mGT != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mGT(*i.PromptWriteCachedTokens5mGT))
+	}
+	if i.PromptWriteCachedTokens5mGTE != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mGTE(*i.PromptWriteCachedTokens5mGTE))
+	}
+	if i.PromptWriteCachedTokens5mLT != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mLT(*i.PromptWriteCachedTokens5mLT))
+	}
+	if i.PromptWriteCachedTokens5mLTE != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mLTE(*i.PromptWriteCachedTokens5mLTE))
+	}
+	if i.PromptWriteCachedTokens5mIsNil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mIsNil())
+	}
+	if i.PromptWriteCachedTokens5mNotNil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens5mNotNil())
+	}
+	if i.PromptWriteCachedTokens1h != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hEQ(*i.PromptWriteCachedTokens1h))
+	}
+	if i.PromptWriteCachedTokens1hNEQ != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hNEQ(*i.PromptWriteCachedTokens1hNEQ))
+	}
+	if len(i.PromptWriteCachedTokens1hIn) > 0 {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hIn(i.PromptWriteCachedTokens1hIn...))
+	}
+	if len(i.PromptWriteCachedTokens1hNotIn) > 0 {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hNotIn(i.PromptWriteCachedTokens1hNotIn...))
+	}
+	if i.PromptWriteCachedTokens1hGT != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hGT(*i.PromptWriteCachedTokens1hGT))
+	}
+	if i.PromptWriteCachedTokens1hGTE != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hGTE(*i.PromptWriteCachedTokens1hGTE))
+	}
+	if i.PromptWriteCachedTokens1hLT != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hLT(*i.PromptWriteCachedTokens1hLT))
+	}
+	if i.PromptWriteCachedTokens1hLTE != nil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hLTE(*i.PromptWriteCachedTokens1hLTE))
+	}
+	if i.PromptWriteCachedTokens1hIsNil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hIsNil())
+	}
+	if i.PromptWriteCachedTokens1hNotNil {
+		predicates = append(predicates, usagelog.PromptWriteCachedTokens1hNotNil())
+	}
 	if i.CompletionAudioTokens != nil {
 		predicates = append(predicates, usagelog.CompletionAudioTokensEQ(*i.CompletionAudioTokens))
 	}
@@ -7123,6 +8831,81 @@ func (i *UsageLogWhereInput) P() (predicate.UsageLog, error) {
 	if i.FormatContainsFold != nil {
 		predicates = append(predicates, usagelog.FormatContainsFold(*i.FormatContainsFold))
 	}
+	if i.TotalCost != nil {
+		predicates = append(predicates, usagelog.TotalCostEQ(*i.TotalCost))
+	}
+	if i.TotalCostNEQ != nil {
+		predicates = append(predicates, usagelog.TotalCostNEQ(*i.TotalCostNEQ))
+	}
+	if len(i.TotalCostIn) > 0 {
+		predicates = append(predicates, usagelog.TotalCostIn(i.TotalCostIn...))
+	}
+	if len(i.TotalCostNotIn) > 0 {
+		predicates = append(predicates, usagelog.TotalCostNotIn(i.TotalCostNotIn...))
+	}
+	if i.TotalCostGT != nil {
+		predicates = append(predicates, usagelog.TotalCostGT(*i.TotalCostGT))
+	}
+	if i.TotalCostGTE != nil {
+		predicates = append(predicates, usagelog.TotalCostGTE(*i.TotalCostGTE))
+	}
+	if i.TotalCostLT != nil {
+		predicates = append(predicates, usagelog.TotalCostLT(*i.TotalCostLT))
+	}
+	if i.TotalCostLTE != nil {
+		predicates = append(predicates, usagelog.TotalCostLTE(*i.TotalCostLTE))
+	}
+	if i.TotalCostIsNil {
+		predicates = append(predicates, usagelog.TotalCostIsNil())
+	}
+	if i.TotalCostNotNil {
+		predicates = append(predicates, usagelog.TotalCostNotNil())
+	}
+	if i.CostPriceReferenceID != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDEQ(*i.CostPriceReferenceID))
+	}
+	if i.CostPriceReferenceIDNEQ != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDNEQ(*i.CostPriceReferenceIDNEQ))
+	}
+	if len(i.CostPriceReferenceIDIn) > 0 {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDIn(i.CostPriceReferenceIDIn...))
+	}
+	if len(i.CostPriceReferenceIDNotIn) > 0 {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDNotIn(i.CostPriceReferenceIDNotIn...))
+	}
+	if i.CostPriceReferenceIDGT != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDGT(*i.CostPriceReferenceIDGT))
+	}
+	if i.CostPriceReferenceIDGTE != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDGTE(*i.CostPriceReferenceIDGTE))
+	}
+	if i.CostPriceReferenceIDLT != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDLT(*i.CostPriceReferenceIDLT))
+	}
+	if i.CostPriceReferenceIDLTE != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDLTE(*i.CostPriceReferenceIDLTE))
+	}
+	if i.CostPriceReferenceIDContains != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDContains(*i.CostPriceReferenceIDContains))
+	}
+	if i.CostPriceReferenceIDHasPrefix != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDHasPrefix(*i.CostPriceReferenceIDHasPrefix))
+	}
+	if i.CostPriceReferenceIDHasSuffix != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDHasSuffix(*i.CostPriceReferenceIDHasSuffix))
+	}
+	if i.CostPriceReferenceIDIsNil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDIsNil())
+	}
+	if i.CostPriceReferenceIDNotNil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDNotNil())
+	}
+	if i.CostPriceReferenceIDEqualFold != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDEqualFold(*i.CostPriceReferenceIDEqualFold))
+	}
+	if i.CostPriceReferenceIDContainsFold != nil {
+		predicates = append(predicates, usagelog.CostPriceReferenceIDContainsFold(*i.CostPriceReferenceIDContainsFold))
+	}
 
 	if i.HasRequest != nil {
 		p := usagelog.HasRequest()
@@ -7224,16 +9007,6 @@ type UserWhereInput struct {
 	UpdatedAtGTE   *time.Time  `json:"updatedAtGTE,omitempty"`
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "email" field predicates.
 	Email             *string  `json:"email,omitempty"`
@@ -7504,30 +9277,6 @@ func (i *UserWhereInput) P() (predicate.User, error) {
 	}
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, user.UpdatedAtLTE(*i.UpdatedAtLTE))
-	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, user.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, user.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, user.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, user.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, user.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, user.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, user.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, user.DeletedAtLTE(*i.DeletedAtLTE))
 	}
 	if i.Email != nil {
 		predicates = append(predicates, user.EmailEQ(*i.Email))
@@ -7943,16 +9692,6 @@ type UserProjectWhereInput struct {
 	UpdatedAtLT    *time.Time  `json:"updatedAtLT,omitempty"`
 	UpdatedAtLTE   *time.Time  `json:"updatedAtLTE,omitempty"`
 
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
-
 	// "user_id" field predicates.
 	UserID      *int  `json:"userID,omitempty"`
 	UserIDNEQ   *int  `json:"userIDNEQ,omitempty"`
@@ -8121,30 +9860,6 @@ func (i *UserProjectWhereInput) P() (predicate.UserProject, error) {
 	if i.UpdatedAtLTE != nil {
 		predicates = append(predicates, userproject.UpdatedAtLTE(*i.UpdatedAtLTE))
 	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, userproject.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, userproject.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, userproject.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, userproject.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, userproject.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, userproject.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, userproject.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, userproject.DeletedAtLTE(*i.DeletedAtLTE))
-	}
 	if i.UserID != nil {
 		predicates = append(predicates, userproject.UserIDEQ(*i.UserID))
 	}
@@ -8238,16 +9953,6 @@ type UserRoleWhereInput struct {
 	IDGTE   *int  `json:"idGTE,omitempty"`
 	IDLT    *int  `json:"idLT,omitempty"`
 	IDLTE   *int  `json:"idLTE,omitempty"`
-
-	// "deleted_at" field predicates.
-	DeletedAt      *int  `json:"deletedAt,omitempty"`
-	DeletedAtNEQ   *int  `json:"deletedAtNEQ,omitempty"`
-	DeletedAtIn    []int `json:"deletedAtIn,omitempty"`
-	DeletedAtNotIn []int `json:"deletedAtNotIn,omitempty"`
-	DeletedAtGT    *int  `json:"deletedAtGT,omitempty"`
-	DeletedAtGTE   *int  `json:"deletedAtGTE,omitempty"`
-	DeletedAtLT    *int  `json:"deletedAtLT,omitempty"`
-	DeletedAtLTE   *int  `json:"deletedAtLTE,omitempty"`
 
 	// "user_id" field predicates.
 	UserID      *int  `json:"userID,omitempty"`
@@ -8388,30 +10093,6 @@ func (i *UserRoleWhereInput) P() (predicate.UserRole, error) {
 	}
 	if i.IDLTE != nil {
 		predicates = append(predicates, userrole.IDLTE(*i.IDLTE))
-	}
-	if i.DeletedAt != nil {
-		predicates = append(predicates, userrole.DeletedAtEQ(*i.DeletedAt))
-	}
-	if i.DeletedAtNEQ != nil {
-		predicates = append(predicates, userrole.DeletedAtNEQ(*i.DeletedAtNEQ))
-	}
-	if len(i.DeletedAtIn) > 0 {
-		predicates = append(predicates, userrole.DeletedAtIn(i.DeletedAtIn...))
-	}
-	if len(i.DeletedAtNotIn) > 0 {
-		predicates = append(predicates, userrole.DeletedAtNotIn(i.DeletedAtNotIn...))
-	}
-	if i.DeletedAtGT != nil {
-		predicates = append(predicates, userrole.DeletedAtGT(*i.DeletedAtGT))
-	}
-	if i.DeletedAtGTE != nil {
-		predicates = append(predicates, userrole.DeletedAtGTE(*i.DeletedAtGTE))
-	}
-	if i.DeletedAtLT != nil {
-		predicates = append(predicates, userrole.DeletedAtLT(*i.DeletedAtLT))
-	}
-	if i.DeletedAtLTE != nil {
-		predicates = append(predicates, userrole.DeletedAtLTE(*i.DeletedAtLTE))
 	}
 	if i.UserID != nil {
 		predicates = append(predicates, userrole.UserIDEQ(*i.UserID))

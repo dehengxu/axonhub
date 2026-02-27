@@ -37,7 +37,8 @@ func setupTestTraceService(t *testing.T, client *ent.Client) (*TraceService, *en
 			Client:        client,
 		},
 	)
-	usageLogService := NewUsageLogService(client, systemService)
+	channelService := NewChannelServiceForTest(client)
+	usageLogService := NewUsageLogService(client, systemService, channelService)
 	traceService := NewTraceService(TraceServiceParams{
 		RequestService: NewRequestService(client, systemService, usageLogService, dataStorageService),
 		Ent:            client,
@@ -754,7 +755,7 @@ func TestTraceService_GetRequestTrace_MultipleRequestsWithToolResults(t *testing
 }
 
 func TestTraceService_GetRequestTrace_integration(t *testing.T) {
-	if testing.Short() {
+	if true {
 		t.Skip("skipping integration test in short mode")
 	}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/enttest"
 	"github.com/looplj/axonhub/internal/ent/privacy"
+	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
 
@@ -59,8 +60,8 @@ func TestErrorAwareStrategy_Score_WithMockConsecutiveFailures(t *testing.T) {
 	}
 
 	score := strategy.Score(ctx, channel)
-	// Base 200 - (3 * 50) = 50
-	assert.Equal(t, 50.0, score)
+	// Base 200 - 40 - (3 * 30) = 70
+	assert.Equal(t, 70.0, score)
 }
 
 func TestErrorAwareStrategy_Score_WithMockRecentSuccess(t *testing.T) {
@@ -71,7 +72,7 @@ func TestErrorAwareStrategy_Score_WithMockRecentSuccess(t *testing.T) {
 
 	// Create metrics with recent success - but no boost should be applied
 	metrics := &biz.AggregatedMetrics{
-		LastSuccessAt: &recentSuccess,
+		LastSelectedAt: &recentSuccess,
 	}
 
 	mockProvider := &mockMetricsProvider{
@@ -103,13 +104,14 @@ func TestErrorAwareStrategy_Score_ConsecutiveFailures(t *testing.T) {
 		SetType("openai").
 		SetSupportedModels([]string{"gpt-4"}).
 		SetDefaultTestModel("gpt-4").
+		SetCredentials(objects.ChannelCredentials{APIKeys: []string{"test-key"}}).
 		Save(ctx)
 	require.NoError(t, err)
 
 	channelService := newTestChannelService(client)
 
 	// Record consecutive failures
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		perf := &biz.PerformanceRecord{
 			ChannelID:        ch.ID,
 			StartTime:        time.Now().Add(-time.Minute),
@@ -127,7 +129,7 @@ func TestErrorAwareStrategy_Score_ConsecutiveFailures(t *testing.T) {
 	score := strategy.Score(ctx, channel)
 
 	// Should have significant penalty for 3 consecutive failures
-	// Base 200 - (3 * 50) = 50
+	// Base 200 - 40 - (3 * 30) = 70
 	assert.Less(t, score, 100.0, "Score should be penalized for consecutive failures")
 }
 
@@ -143,6 +145,7 @@ func TestErrorAwareStrategy_Score_RecentSuccess(t *testing.T) {
 		SetType("openai").
 		SetSupportedModels([]string{"gpt-4"}).
 		SetDefaultTestModel("gpt-4").
+		SetCredentials(objects.ChannelCredentials{APIKeys: []string{"test-key"}}).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -155,7 +158,6 @@ func TestErrorAwareStrategy_Score_RecentSuccess(t *testing.T) {
 		EndTime:          time.Now(),
 		Success:          true,
 		RequestCompleted: true,
-		TokenCount:       100,
 	}
 	channelService.RecordPerformance(ctx, perf)
 
@@ -212,28 +214,8 @@ func TestErrorAwareStrategy_ScoreConsistency(t *testing.T) {
 		{
 			name: "recent success",
 			metrics: &biz.AggregatedMetrics{
-				LastSuccessAt: &recentSuccess,
+				LastSelectedAt: &recentSuccess,
 			},
-		},
-		{
-			name: "low success rate",
-			metrics: func() *biz.AggregatedMetrics {
-				m := &biz.AggregatedMetrics{}
-				m.RequestCount = 20
-				m.SuccessCount = 8 // 40% success rate
-
-				return m
-			}(),
-		},
-		{
-			name: "high success rate",
-			metrics: func() *biz.AggregatedMetrics {
-				m := &biz.AggregatedMetrics{}
-				m.RequestCount = 20
-				m.SuccessCount = 19 // 95% success rate
-
-				return m
-			}(),
 		},
 		{
 			name: "complex scenario",
@@ -241,7 +223,7 @@ func TestErrorAwareStrategy_ScoreConsistency(t *testing.T) {
 				m := &biz.AggregatedMetrics{}
 				m.ConsecutiveFailures = 2
 				m.LastFailureAt = &recentFailure
-				m.LastSuccessAt = &recentSuccess
+				m.LastSelectedAt = &recentSuccess
 				m.RequestCount = 15
 				m.SuccessCount = 10
 
@@ -333,7 +315,7 @@ func TestConnectionAwareStrategy_Score_PartialUtilization(t *testing.T) {
 	}
 
 	// Simulate 5 active connections out of 10 max (50% utilization)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		tracker.IncrementConnection(channel.ID)
 	}
 
@@ -356,7 +338,7 @@ func TestConnectionAwareStrategy_Score_FullUtilization(t *testing.T) {
 	}
 
 	// Simulate full utilization
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		tracker.IncrementConnection(channel.ID)
 	}
 
@@ -479,7 +461,7 @@ func TestErrorAwareStrategy_OnlyPenaltiesNoBoosts(t *testing.T) {
 	// Test that recent success does NOT give a boost
 	t.Run("no recent success boost", func(t *testing.T) {
 		metrics := &biz.AggregatedMetrics{
-			LastSuccessAt: &recentSuccess,
+			LastSelectedAt: &recentSuccess,
 		}
 		metrics.RequestCount = 10
 		metrics.SuccessCount = 10 // 100% success rate
@@ -521,75 +503,6 @@ func TestErrorAwareStrategy_OnlyPenaltiesNoBoosts(t *testing.T) {
 		// Base 200, no boosts applied
 		assert.Equal(t, 200.0, score)
 	})
-
-	// Test that low success rate DOES apply penalty
-	t.Run("low success rate penalty still applies", func(t *testing.T) {
-		metrics := &biz.AggregatedMetrics{}
-		metrics.RequestCount = 10
-		metrics.SuccessCount = 4 // 40% success rate
-
-		mockProvider := &mockMetricsProvider{
-			metrics: map[int]*biz.AggregatedMetrics{
-				1: metrics,
-			},
-		}
-		strategy := NewErrorAwareStrategy(mockProvider)
-
-		channel := &biz.Channel{
-			Channel: &ent.Channel{ID: 1, Name: "test"},
-		}
-
-		score := strategy.Score(ctx, channel)
-		// Base 200 - 50 (low success rate penalty) = 150
-		assert.Equal(t, 150.0, score)
-	})
-}
-
-// TestErrorAwareStrategy_LowSuccessRatePenalty tests that low success rate penalty is applied.
-func TestErrorAwareStrategy_LowSuccessRatePenalty(t *testing.T) {
-	ctx := context.Background()
-
-	testCases := []struct {
-		name                    string
-		requestCount            int64
-		successCount            int64
-		expectLowSuccessPenalty bool
-	}{
-		{"4 requests - no check (below threshold)", 4, 1, false},
-		{"5 requests - high rate, no penalty", 5, 5, false},
-		{"5 requests - low rate, penalty", 5, 2, true},
-		{"10 requests - high rate, no penalty", 10, 10, false},
-		{"10 requests - 50% rate, no penalty", 10, 5, false}, // 50% is not < 50%
-		{"10 requests - 40% rate, penalty", 10, 4, true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			metrics := &biz.AggregatedMetrics{}
-			metrics.RequestCount = tc.requestCount
-			metrics.SuccessCount = tc.successCount
-
-			mockProvider := &mockMetricsProvider{
-				metrics: map[int]*biz.AggregatedMetrics{
-					1: metrics,
-				},
-			}
-			strategy := NewErrorAwareStrategy(mockProvider)
-
-			channel := &biz.Channel{
-				Channel: &ent.Channel{ID: 1, Name: "test"},
-			}
-
-			score := strategy.Score(ctx, channel)
-
-			expectedScore := 200.0
-			if tc.expectLowSuccessPenalty {
-				expectedScore -= 50.0
-			}
-
-			assert.Equal(t, expectedScore, score, "Score should match expected for %s", tc.name)
-		})
-	}
 }
 
 // TestErrorAwareStrategy_FairDistribution tests that the strategy promotes fair distribution
@@ -609,14 +522,14 @@ func TestErrorAwareStrategy_FairDistribution(t *testing.T) {
 
 	channelMetrics := map[int]*biz.AggregatedMetrics{
 		8: func() *biz.AggregatedMetrics {
-			m := &biz.AggregatedMetrics{LastSuccessAt: &recentSuccess}
+			m := &biz.AggregatedMetrics{LastSelectedAt: &recentSuccess}
 			m.RequestCount = 23
 			m.SuccessCount = 23
 
 			return m
 		}(),
 		6: func() *biz.AggregatedMetrics {
-			m := &biz.AggregatedMetrics{LastSuccessAt: &oldSuccess}
+			m := &biz.AggregatedMetrics{LastSelectedAt: &oldSuccess}
 			m.RequestCount = 5
 			m.SuccessCount = 5
 
@@ -630,7 +543,7 @@ func TestErrorAwareStrategy_FairDistribution(t *testing.T) {
 			return m
 		}(),
 		7: func() *biz.AggregatedMetrics {
-			m := &biz.AggregatedMetrics{LastSuccessAt: &oldSuccess}
+			m := &biz.AggregatedMetrics{LastSelectedAt: &oldSuccess}
 			m.RequestCount = 1
 			m.SuccessCount = 1
 

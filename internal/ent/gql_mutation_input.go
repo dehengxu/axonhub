@@ -3,9 +3,12 @@
 package ent
 
 import (
+	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
+	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/role"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -16,12 +19,20 @@ import (
 // CreateAPIKeyInput represents a mutation input for creating apikeys.
 type CreateAPIKeyInput struct {
 	Name      string
+	Type      *apikey.Type
+	Scopes    []string
 	ProjectID int
 }
 
 // Mutate applies the CreateAPIKeyInput on the APIKeyMutation builder.
 func (i *CreateAPIKeyInput) Mutate(m *APIKeyMutation) {
 	m.SetName(i.Name)
+	if v := i.Type; v != nil {
+		m.SetType(*v)
+	}
+	if v := i.Scopes; v != nil {
+		m.SetScopes(v)
+	}
 	m.SetProjectID(i.ProjectID)
 }
 
@@ -33,13 +44,25 @@ func (c *APIKeyCreate) SetInput(i CreateAPIKeyInput) *APIKeyCreate {
 
 // UpdateAPIKeyInput represents a mutation input for updating apikeys.
 type UpdateAPIKeyInput struct {
-	Name *string
+	Name         *string
+	ClearScopes  bool
+	Scopes       []string
+	AppendScopes []string
 }
 
 // Mutate applies the UpdateAPIKeyInput on the APIKeyMutation builder.
 func (i *UpdateAPIKeyInput) Mutate(m *APIKeyMutation) {
 	if v := i.Name; v != nil {
 		m.SetName(*v)
+	}
+	if i.ClearScopes {
+		m.ClearScopes()
+	}
+	if v := i.Scopes; v != nil {
+		m.SetScopes(v)
+	}
+	if i.AppendScopes != nil {
+		m.AppendScopes(i.Scopes)
 	}
 }
 
@@ -57,17 +80,18 @@ func (c *APIKeyUpdateOne) SetInput(i UpdateAPIKeyInput) *APIKeyUpdateOne {
 
 // CreateChannelInput represents a mutation input for creating channels.
 type CreateChannelInput struct {
-	Type             channel.Type
-	BaseURL          *string
-	Name             string
-	Status           *channel.Status
-	Credentials      *objects.ChannelCredentials
-	SupportedModels  []string
-	Tags             []string
-	DefaultTestModel string
-	Settings         *objects.ChannelSettings
-	OrderingWeight   *int
-	Remark           *string
+	Type                    channel.Type
+	BaseURL                 *string
+	Name                    string
+	Credentials             objects.ChannelCredentials
+	SupportedModels         []string
+	AutoSyncSupportedModels *bool
+	Tags                    []string
+	DefaultTestModel        string
+	Policies                *objects.ChannelPolicies
+	Settings                *objects.ChannelSettings
+	OrderingWeight          *int
+	Remark                  *string
 }
 
 // Mutate applies the CreateChannelInput on the ChannelMutation builder.
@@ -77,19 +101,20 @@ func (i *CreateChannelInput) Mutate(m *ChannelMutation) {
 		m.SetBaseURL(*v)
 	}
 	m.SetName(i.Name)
-	if v := i.Status; v != nil {
-		m.SetStatus(*v)
-	}
-	if v := i.Credentials; v != nil {
-		m.SetCredentials(v)
-	}
+	m.SetCredentials(i.Credentials)
 	if v := i.SupportedModels; v != nil {
 		m.SetSupportedModels(v)
+	}
+	if v := i.AutoSyncSupportedModels; v != nil {
+		m.SetAutoSyncSupportedModels(*v)
 	}
 	if v := i.Tags; v != nil {
 		m.SetTags(v)
 	}
 	m.SetDefaultTestModel(i.DefaultTestModel)
+	if v := i.Policies; v != nil {
+		m.SetPolicies(*v)
+	}
 	if v := i.Settings; v != nil {
 		m.SetSettings(v)
 	}
@@ -109,24 +134,27 @@ func (c *ChannelCreate) SetInput(i CreateChannelInput) *ChannelCreate {
 
 // UpdateChannelInput represents a mutation input for updating channels.
 type UpdateChannelInput struct {
-	ClearBaseURL          bool
-	BaseURL               *string
-	Name                  *string
-	Status                *channel.Status
-	Credentials           *objects.ChannelCredentials
-	SupportedModels       []string
-	AppendSupportedModels []string
-	ClearTags             bool
-	Tags                  []string
-	AppendTags            []string
-	DefaultTestModel      *string
-	ClearSettings         bool
-	Settings              *objects.ChannelSettings
-	OrderingWeight        *int
-	ClearErrorMessage     bool
-	ErrorMessage          *string
-	ClearRemark           bool
-	Remark                *string
+	ClearBaseURL            bool
+	BaseURL                 *string
+	Name                    *string
+	Status                  *channel.Status
+	Credentials             *objects.ChannelCredentials
+	SupportedModels         []string
+	AppendSupportedModels   []string
+	AutoSyncSupportedModels *bool
+	ClearTags               bool
+	Tags                    []string
+	AppendTags              []string
+	DefaultTestModel        *string
+	ClearPolicies           bool
+	Policies                *objects.ChannelPolicies
+	ClearSettings           bool
+	Settings                *objects.ChannelSettings
+	OrderingWeight          *int
+	ClearErrorMessage       bool
+	ErrorMessage            *string
+	ClearRemark             bool
+	Remark                  *string
 }
 
 // Mutate applies the UpdateChannelInput on the ChannelMutation builder.
@@ -144,13 +172,16 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 		m.SetStatus(*v)
 	}
 	if v := i.Credentials; v != nil {
-		m.SetCredentials(v)
+		m.SetCredentials(*v)
 	}
 	if v := i.SupportedModels; v != nil {
 		m.SetSupportedModels(v)
 	}
 	if i.AppendSupportedModels != nil {
 		m.AppendSupportedModels(i.SupportedModels)
+	}
+	if v := i.AutoSyncSupportedModels; v != nil {
+		m.SetAutoSyncSupportedModels(*v)
 	}
 	if i.ClearTags {
 		m.ClearTags()
@@ -163,6 +194,12 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 	}
 	if v := i.DefaultTestModel; v != nil {
 		m.SetDefaultTestModel(*v)
+	}
+	if i.ClearPolicies {
+		m.ClearPolicies()
+	}
+	if v := i.Policies; v != nil {
+		m.SetPolicies(*v)
 	}
 	if i.ClearSettings {
 		m.ClearSettings()
@@ -201,11 +238,10 @@ func (c *ChannelUpdateOne) SetInput(i UpdateChannelInput) *ChannelUpdateOne {
 
 // CreateChannelOverrideTemplateInput represents a mutation input for creating channeloverridetemplates.
 type CreateChannelOverrideTemplateInput struct {
-	Name               string
-	Description        *string
-	ChannelType        string
-	OverrideParameters *string
-	OverrideHeaders    []objects.HeaderEntry
+	Name                     string
+	Description              *string
+	HeaderOverrideOperations []objects.OverrideOperation
+	BodyOverrideOperations   []objects.OverrideOperation
 }
 
 // Mutate applies the CreateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
@@ -214,12 +250,11 @@ func (i *CreateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMu
 	if v := i.Description; v != nil {
 		m.SetDescription(*v)
 	}
-	m.SetChannelType(i.ChannelType)
-	if v := i.OverrideParameters; v != nil {
-		m.SetOverrideParameters(*v)
+	if v := i.HeaderOverrideOperations; v != nil {
+		m.SetHeaderOverrideOperations(v)
 	}
-	if v := i.OverrideHeaders; v != nil {
-		m.SetOverrideHeaders(v)
+	if v := i.BodyOverrideOperations; v != nil {
+		m.SetBodyOverrideOperations(v)
 	}
 }
 
@@ -231,13 +266,15 @@ func (c *ChannelOverrideTemplateCreate) SetInput(i CreateChannelOverrideTemplate
 
 // UpdateChannelOverrideTemplateInput represents a mutation input for updating channeloverridetemplates.
 type UpdateChannelOverrideTemplateInput struct {
-	Name                  *string
-	ClearDescription      bool
-	Description           *string
-	ChannelType           *string
-	OverrideParameters    *string
-	OverrideHeaders       []objects.HeaderEntry
-	AppendOverrideHeaders []objects.HeaderEntry
+	Name                           *string
+	ClearDescription               bool
+	Description                    *string
+	ClearHeaderOverrideOperations  bool
+	HeaderOverrideOperations       []objects.OverrideOperation
+	AppendHeaderOverrideOperations []objects.OverrideOperation
+	ClearBodyOverrideOperations    bool
+	BodyOverrideOperations         []objects.OverrideOperation
+	AppendBodyOverrideOperations   []objects.OverrideOperation
 }
 
 // Mutate applies the UpdateChannelOverrideTemplateInput on the ChannelOverrideTemplateMutation builder.
@@ -251,17 +288,23 @@ func (i *UpdateChannelOverrideTemplateInput) Mutate(m *ChannelOverrideTemplateMu
 	if v := i.Description; v != nil {
 		m.SetDescription(*v)
 	}
-	if v := i.ChannelType; v != nil {
-		m.SetChannelType(*v)
+	if i.ClearHeaderOverrideOperations {
+		m.ClearHeaderOverrideOperations()
 	}
-	if v := i.OverrideParameters; v != nil {
-		m.SetOverrideParameters(*v)
+	if v := i.HeaderOverrideOperations; v != nil {
+		m.SetHeaderOverrideOperations(v)
 	}
-	if v := i.OverrideHeaders; v != nil {
-		m.SetOverrideHeaders(v)
+	if i.AppendHeaderOverrideOperations != nil {
+		m.AppendHeaderOverrideOperations(i.HeaderOverrideOperations)
 	}
-	if i.AppendOverrideHeaders != nil {
-		m.AppendOverrideHeaders(i.OverrideHeaders)
+	if i.ClearBodyOverrideOperations {
+		m.ClearBodyOverrideOperations()
+	}
+	if v := i.BodyOverrideOperations; v != nil {
+		m.SetBodyOverrideOperations(v)
+	}
+	if i.AppendBodyOverrideOperations != nil {
+		m.AppendBodyOverrideOperations(i.BodyOverrideOperations)
 	}
 }
 
@@ -341,6 +384,98 @@ func (c *DataStorageUpdateOne) SetInput(i UpdateDataStorageInput) *DataStorageUp
 	return c
 }
 
+// CreateModelInput represents a mutation input for creating models.
+type CreateModelInput struct {
+	Developer string
+	ModelID   string
+	Type      *model.Type
+	Name      string
+	Icon      string
+	Group     string
+	ModelCard *objects.ModelCard
+	Settings  *objects.ModelSettings
+	Remark    *string
+}
+
+// Mutate applies the CreateModelInput on the ModelMutation builder.
+func (i *CreateModelInput) Mutate(m *ModelMutation) {
+	m.SetDeveloper(i.Developer)
+	m.SetModelID(i.ModelID)
+	if v := i.Type; v != nil {
+		m.SetType(*v)
+	}
+	m.SetName(i.Name)
+	m.SetIcon(i.Icon)
+	m.SetGroup(i.Group)
+	if v := i.ModelCard; v != nil {
+		m.SetModelCard(v)
+	}
+	if v := i.Settings; v != nil {
+		m.SetSettings(v)
+	}
+	if v := i.Remark; v != nil {
+		m.SetRemark(*v)
+	}
+}
+
+// SetInput applies the change-set in the CreateModelInput on the ModelCreate builder.
+func (c *ModelCreate) SetInput(i CreateModelInput) *ModelCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdateModelInput represents a mutation input for updating models.
+type UpdateModelInput struct {
+	Name        *string
+	Icon        *string
+	Group       *string
+	ModelCard   *objects.ModelCard
+	Settings    *objects.ModelSettings
+	Status      *model.Status
+	ClearRemark bool
+	Remark      *string
+}
+
+// Mutate applies the UpdateModelInput on the ModelMutation builder.
+func (i *UpdateModelInput) Mutate(m *ModelMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if v := i.Icon; v != nil {
+		m.SetIcon(*v)
+	}
+	if v := i.Group; v != nil {
+		m.SetGroup(*v)
+	}
+	if v := i.ModelCard; v != nil {
+		m.SetModelCard(v)
+	}
+	if v := i.Settings; v != nil {
+		m.SetSettings(v)
+	}
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	if i.ClearRemark {
+		m.ClearRemark()
+	}
+	if v := i.Remark; v != nil {
+		m.SetRemark(*v)
+	}
+}
+
+// SetInput applies the change-set in the UpdateModelInput on the ModelUpdate builder.
+func (c *ModelUpdate) SetInput(i UpdateModelInput) *ModelUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdateModelInput on the ModelUpdateOne builder.
+func (c *ModelUpdateOne) SetInput(i UpdateModelInput) *ModelUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
 // CreateProjectInput represents a mutation input for creating projects.
 type CreateProjectInput struct {
 	Name        string
@@ -413,17 +548,109 @@ func (c *ProjectUpdateOne) SetInput(i UpdateProjectInput) *ProjectUpdateOne {
 	return c
 }
 
+// CreatePromptInput represents a mutation input for creating prompts.
+type CreatePromptInput struct {
+	Name        string
+	Description *string
+	Role        string
+	Content     string
+	Status      *prompt.Status
+	Settings    objects.PromptSettings
+	ProjectIDs  []int
+}
+
+// Mutate applies the CreatePromptInput on the PromptMutation builder.
+func (i *CreatePromptInput) Mutate(m *PromptMutation) {
+	m.SetName(i.Name)
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	m.SetRole(i.Role)
+	m.SetContent(i.Content)
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	m.SetSettings(i.Settings)
+	if v := i.ProjectIDs; len(v) > 0 {
+		m.AddProjectIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the CreatePromptInput on the PromptCreate builder.
+func (c *PromptCreate) SetInput(i CreatePromptInput) *PromptCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdatePromptInput represents a mutation input for updating prompts.
+type UpdatePromptInput struct {
+	Name             *string
+	Description      *string
+	Role             *string
+	Content          *string
+	Status           *prompt.Status
+	Settings         *objects.PromptSettings
+	ClearProjects    bool
+	AddProjectIDs    []int
+	RemoveProjectIDs []int
+}
+
+// Mutate applies the UpdatePromptInput on the PromptMutation builder.
+func (i *UpdatePromptInput) Mutate(m *PromptMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	if v := i.Role; v != nil {
+		m.SetRole(*v)
+	}
+	if v := i.Content; v != nil {
+		m.SetContent(*v)
+	}
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	if v := i.Settings; v != nil {
+		m.SetSettings(*v)
+	}
+	if i.ClearProjects {
+		m.ClearProjects()
+	}
+	if v := i.AddProjectIDs; len(v) > 0 {
+		m.AddProjectIDs(v...)
+	}
+	if v := i.RemoveProjectIDs; len(v) > 0 {
+		m.RemoveProjectIDs(v...)
+	}
+}
+
+// SetInput applies the change-set in the UpdatePromptInput on the PromptUpdate builder.
+func (c *PromptUpdate) SetInput(i UpdatePromptInput) *PromptUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdatePromptInput on the PromptUpdateOne builder.
+func (c *PromptUpdateOne) SetInput(i UpdatePromptInput) *PromptUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
 // CreateRequestInput represents a mutation input for creating requests.
 type CreateRequestInput struct {
 	Source                     *request.Source
 	ModelID                    string
 	Format                     *string
+	RequestHeaders             objects.JSONRawMessage
 	RequestBody                objects.JSONRawMessage
 	ResponseBody               objects.JSONRawMessage
 	ResponseChunks             []objects.JSONRawMessage
 	ExternalID                 *string
 	Status                     request.Status
 	Stream                     *bool
+	ClientIP                   *string
 	MetricsLatencyMs           *int64
 	MetricsFirstTokenLatencyMs *int64
 	APIKeyID                   *int
@@ -442,6 +669,9 @@ func (i *CreateRequestInput) Mutate(m *RequestMutation) {
 	if v := i.Format; v != nil {
 		m.SetFormat(*v)
 	}
+	if v := i.RequestHeaders; v != nil {
+		m.SetRequestHeaders(v)
+	}
 	if v := i.RequestBody; v != nil {
 		m.SetRequestBody(v)
 	}
@@ -457,6 +687,9 @@ func (i *CreateRequestInput) Mutate(m *RequestMutation) {
 	m.SetStatus(i.Status)
 	if v := i.Stream; v != nil {
 		m.SetStream(*v)
+	}
+	if v := i.ClientIP; v != nil {
+		m.SetClientIP(*v)
 	}
 	if v := i.MetricsLatencyMs; v != nil {
 		m.SetMetricsLatencyMs(*v)
@@ -487,6 +720,9 @@ func (c *RequestCreate) SetInput(i CreateRequestInput) *RequestCreate {
 
 // UpdateRequestInput represents a mutation input for updating requests.
 type UpdateRequestInput struct {
+	ClearRequestHeaders             bool
+	RequestHeaders                  objects.JSONRawMessage
+	AppendRequestHeaders            objects.JSONRawMessage
 	ClearResponseBody               bool
 	ResponseBody                    objects.JSONRawMessage
 	AppendResponseBody              objects.JSONRawMessage
@@ -506,6 +742,15 @@ type UpdateRequestInput struct {
 
 // Mutate applies the UpdateRequestInput on the RequestMutation builder.
 func (i *UpdateRequestInput) Mutate(m *RequestMutation) {
+	if i.ClearRequestHeaders {
+		m.ClearRequestHeaders()
+	}
+	if v := i.RequestHeaders; v != nil {
+		m.SetRequestHeaders(v)
+	}
+	if i.AppendRequestHeaders != nil {
+		m.AppendRequestHeaders(i.RequestHeaders)
+	}
 	if i.ClearResponseBody {
 		m.ClearResponseBody()
 	}
@@ -789,6 +1034,7 @@ func (c *TraceUpdateOne) SetInput(i UpdateTraceInput) *TraceUpdateOne {
 
 // CreateUsageLogInput represents a mutation input for creating usagelogs.
 type CreateUsageLogInput struct {
+	APIKeyID                           *int
 	ModelID                            string
 	PromptTokens                       *int64
 	CompletionTokens                   *int64
@@ -796,12 +1042,17 @@ type CreateUsageLogInput struct {
 	PromptAudioTokens                  *int64
 	PromptCachedTokens                 *int64
 	PromptWriteCachedTokens            *int64
+	PromptWriteCachedTokens5m          *int64
+	PromptWriteCachedTokens1h          *int64
 	CompletionAudioTokens              *int64
 	CompletionReasoningTokens          *int64
 	CompletionAcceptedPredictionTokens *int64
 	CompletionRejectedPredictionTokens *int64
 	Source                             *usagelog.Source
 	Format                             *string
+	TotalCost                          *float64
+	CostItems                          []objects.CostItem
+	CostPriceReferenceID               *string
 	RequestID                          int
 	ProjectID                          int
 	ChannelID                          *int
@@ -809,6 +1060,9 @@ type CreateUsageLogInput struct {
 
 // Mutate applies the CreateUsageLogInput on the UsageLogMutation builder.
 func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
+	if v := i.APIKeyID; v != nil {
+		m.SetAPIKeyID(*v)
+	}
 	m.SetModelID(i.ModelID)
 	if v := i.PromptTokens; v != nil {
 		m.SetPromptTokens(*v)
@@ -828,6 +1082,12 @@ func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.PromptWriteCachedTokens; v != nil {
 		m.SetPromptWriteCachedTokens(*v)
 	}
+	if v := i.PromptWriteCachedTokens5m; v != nil {
+		m.SetPromptWriteCachedTokens5m(*v)
+	}
+	if v := i.PromptWriteCachedTokens1h; v != nil {
+		m.SetPromptWriteCachedTokens1h(*v)
+	}
 	if v := i.CompletionAudioTokens; v != nil {
 		m.SetCompletionAudioTokens(*v)
 	}
@@ -845,6 +1105,15 @@ func (i *CreateUsageLogInput) Mutate(m *UsageLogMutation) {
 	}
 	if v := i.Format; v != nil {
 		m.SetFormat(*v)
+	}
+	if v := i.TotalCost; v != nil {
+		m.SetTotalCost(*v)
+	}
+	if v := i.CostItems; v != nil {
+		m.SetCostItems(v)
+	}
+	if v := i.CostPriceReferenceID; v != nil {
+		m.SetCostPriceReferenceID(*v)
 	}
 	m.SetRequestID(i.RequestID)
 	m.SetProjectID(i.ProjectID)
@@ -870,6 +1139,10 @@ type UpdateUsageLogInput struct {
 	PromptCachedTokens                      *int64
 	ClearPromptWriteCachedTokens            bool
 	PromptWriteCachedTokens                 *int64
+	ClearPromptWriteCachedTokens5m          bool
+	PromptWriteCachedTokens5m               *int64
+	ClearPromptWriteCachedTokens1h          bool
+	PromptWriteCachedTokens1h               *int64
 	ClearCompletionAudioTokens              bool
 	CompletionAudioTokens                   *int64
 	ClearCompletionReasoningTokens          bool
@@ -878,8 +1151,13 @@ type UpdateUsageLogInput struct {
 	CompletionAcceptedPredictionTokens      *int64
 	ClearCompletionRejectedPredictionTokens bool
 	CompletionRejectedPredictionTokens      *int64
-	ClearChannel                            bool
-	ChannelID                               *int
+	ClearTotalCost                          bool
+	TotalCost                               *float64
+	ClearCostItems                          bool
+	CostItems                               []objects.CostItem
+	AppendCostItems                         []objects.CostItem
+	ClearCostPriceReferenceID               bool
+	CostPriceReferenceID                    *string
 }
 
 // Mutate applies the UpdateUsageLogInput on the UsageLogMutation builder.
@@ -911,6 +1189,18 @@ func (i *UpdateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.PromptWriteCachedTokens; v != nil {
 		m.SetPromptWriteCachedTokens(*v)
 	}
+	if i.ClearPromptWriteCachedTokens5m {
+		m.ClearPromptWriteCachedTokens5m()
+	}
+	if v := i.PromptWriteCachedTokens5m; v != nil {
+		m.SetPromptWriteCachedTokens5m(*v)
+	}
+	if i.ClearPromptWriteCachedTokens1h {
+		m.ClearPromptWriteCachedTokens1h()
+	}
+	if v := i.PromptWriteCachedTokens1h; v != nil {
+		m.SetPromptWriteCachedTokens1h(*v)
+	}
 	if i.ClearCompletionAudioTokens {
 		m.ClearCompletionAudioTokens()
 	}
@@ -935,11 +1225,26 @@ func (i *UpdateUsageLogInput) Mutate(m *UsageLogMutation) {
 	if v := i.CompletionRejectedPredictionTokens; v != nil {
 		m.SetCompletionRejectedPredictionTokens(*v)
 	}
-	if i.ClearChannel {
-		m.ClearChannel()
+	if i.ClearTotalCost {
+		m.ClearTotalCost()
 	}
-	if v := i.ChannelID; v != nil {
-		m.SetChannelID(*v)
+	if v := i.TotalCost; v != nil {
+		m.SetTotalCost(*v)
+	}
+	if i.ClearCostItems {
+		m.ClearCostItems()
+	}
+	if v := i.CostItems; v != nil {
+		m.SetCostItems(v)
+	}
+	if i.AppendCostItems != nil {
+		m.AppendCostItems(i.CostItems)
+	}
+	if i.ClearCostPriceReferenceID {
+		m.ClearCostPriceReferenceID()
+	}
+	if v := i.CostPriceReferenceID; v != nil {
+		m.SetCostPriceReferenceID(*v)
 	}
 }
 

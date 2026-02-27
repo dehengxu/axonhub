@@ -10,10 +10,11 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/predicate"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
+	"github.com/looplj/axonhub/internal/objects"
 )
 
 // UsageLogUpdate is the builder for updating UsageLog entities.
@@ -33,26 +34,6 @@ func (_u *UsageLogUpdate) Where(ps ...predicate.UsageLog) *UsageLogUpdate {
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *UsageLogUpdate) SetUpdatedAt(v time.Time) *UsageLogUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetChannelID sets the "channel_id" field.
-func (_u *UsageLogUpdate) SetChannelID(v int) *UsageLogUpdate {
-	_u.mutation.SetChannelID(v)
-	return _u
-}
-
-// SetNillableChannelID sets the "channel_id" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableChannelID(v *int) *UsageLogUpdate {
-	if v != nil {
-		_u.SetChannelID(*v)
-	}
-	return _u
-}
-
-// ClearChannelID clears the value of the "channel_id" field.
-func (_u *UsageLogUpdate) ClearChannelID() *UsageLogUpdate {
-	_u.mutation.ClearChannelID()
 	return _u
 }
 
@@ -200,6 +181,60 @@ func (_u *UsageLogUpdate) ClearPromptWriteCachedTokens() *UsageLogUpdate {
 	return _u
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdate) SetPromptWriteCachedTokens5m(v int64) *UsageLogUpdate {
+	_u.mutation.ResetPromptWriteCachedTokens5m()
+	_u.mutation.SetPromptWriteCachedTokens5m(v)
+	return _u
+}
+
+// SetNillablePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillablePromptWriteCachedTokens5m(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetPromptWriteCachedTokens5m(*v)
+	}
+	return _u
+}
+
+// AddPromptWriteCachedTokens5m adds value to the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdate) AddPromptWriteCachedTokens5m(v int64) *UsageLogUpdate {
+	_u.mutation.AddPromptWriteCachedTokens5m(v)
+	return _u
+}
+
+// ClearPromptWriteCachedTokens5m clears the value of the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdate) ClearPromptWriteCachedTokens5m() *UsageLogUpdate {
+	_u.mutation.ClearPromptWriteCachedTokens5m()
+	return _u
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdate) SetPromptWriteCachedTokens1h(v int64) *UsageLogUpdate {
+	_u.mutation.ResetPromptWriteCachedTokens1h()
+	_u.mutation.SetPromptWriteCachedTokens1h(v)
+	return _u
+}
+
+// SetNillablePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillablePromptWriteCachedTokens1h(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetPromptWriteCachedTokens1h(*v)
+	}
+	return _u
+}
+
+// AddPromptWriteCachedTokens1h adds value to the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdate) AddPromptWriteCachedTokens1h(v int64) *UsageLogUpdate {
+	_u.mutation.AddPromptWriteCachedTokens1h(v)
+	return _u
+}
+
+// ClearPromptWriteCachedTokens1h clears the value of the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdate) ClearPromptWriteCachedTokens1h() *UsageLogUpdate {
+	_u.mutation.ClearPromptWriteCachedTokens1h()
+	return _u
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (_u *UsageLogUpdate) SetCompletionAudioTokens(v int64) *UsageLogUpdate {
 	_u.mutation.ResetCompletionAudioTokens()
@@ -308,20 +343,74 @@ func (_u *UsageLogUpdate) ClearCompletionRejectedPredictionTokens() *UsageLogUpd
 	return _u
 }
 
-// SetChannel sets the "channel" edge to the Channel entity.
-func (_u *UsageLogUpdate) SetChannel(v *Channel) *UsageLogUpdate {
-	return _u.SetChannelID(v.ID)
+// SetTotalCost sets the "total_cost" field.
+func (_u *UsageLogUpdate) SetTotalCost(v float64) *UsageLogUpdate {
+	_u.mutation.ResetTotalCost()
+	_u.mutation.SetTotalCost(v)
+	return _u
+}
+
+// SetNillableTotalCost sets the "total_cost" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableTotalCost(v *float64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetTotalCost(*v)
+	}
+	return _u
+}
+
+// AddTotalCost adds value to the "total_cost" field.
+func (_u *UsageLogUpdate) AddTotalCost(v float64) *UsageLogUpdate {
+	_u.mutation.AddTotalCost(v)
+	return _u
+}
+
+// ClearTotalCost clears the value of the "total_cost" field.
+func (_u *UsageLogUpdate) ClearTotalCost() *UsageLogUpdate {
+	_u.mutation.ClearTotalCost()
+	return _u
+}
+
+// SetCostItems sets the "cost_items" field.
+func (_u *UsageLogUpdate) SetCostItems(v []objects.CostItem) *UsageLogUpdate {
+	_u.mutation.SetCostItems(v)
+	return _u
+}
+
+// AppendCostItems appends value to the "cost_items" field.
+func (_u *UsageLogUpdate) AppendCostItems(v []objects.CostItem) *UsageLogUpdate {
+	_u.mutation.AppendCostItems(v)
+	return _u
+}
+
+// ClearCostItems clears the value of the "cost_items" field.
+func (_u *UsageLogUpdate) ClearCostItems() *UsageLogUpdate {
+	_u.mutation.ClearCostItems()
+	return _u
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (_u *UsageLogUpdate) SetCostPriceReferenceID(v string) *UsageLogUpdate {
+	_u.mutation.SetCostPriceReferenceID(v)
+	return _u
+}
+
+// SetNillableCostPriceReferenceID sets the "cost_price_reference_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableCostPriceReferenceID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetCostPriceReferenceID(*v)
+	}
+	return _u
+}
+
+// ClearCostPriceReferenceID clears the value of the "cost_price_reference_id" field.
+func (_u *UsageLogUpdate) ClearCostPriceReferenceID() *UsageLogUpdate {
+	_u.mutation.ClearCostPriceReferenceID()
+	return _u
 }
 
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdate) Mutation() *UsageLogMutation {
 	return _u.mutation
-}
-
-// ClearChannel clears the "channel" edge to the Channel entity.
-func (_u *UsageLogUpdate) ClearChannel() *UsageLogUpdate {
-	_u.mutation.ClearChannel()
-	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -398,6 +487,9 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(usagelog.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if _u.mutation.APIKeyIDCleared() {
+		_spec.ClearField(usagelog.FieldAPIKeyID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.PromptTokens(); ok {
 		_spec.SetField(usagelog.FieldPromptTokens, field.TypeInt64, value)
 	}
@@ -443,6 +535,24 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.PromptWriteCachedTokensCleared() {
 		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.PromptWriteCachedTokens5m(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromptWriteCachedTokens5m(); ok {
+		_spec.AddField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64, value)
+	}
+	if _u.mutation.PromptWriteCachedTokens5mCleared() {
+		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromptWriteCachedTokens1h(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromptWriteCachedTokens1h(); ok {
+		_spec.AddField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64, value)
+	}
+	if _u.mutation.PromptWriteCachedTokens1hCleared() {
+		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CompletionAudioTokens(); ok {
 		_spec.SetField(usagelog.FieldCompletionAudioTokens, field.TypeInt64, value)
 	}
@@ -479,34 +589,31 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.CompletionRejectedPredictionTokensCleared() {
 		_spec.ClearField(usagelog.FieldCompletionRejectedPredictionTokens, field.TypeInt64)
 	}
-	if _u.mutation.ChannelCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   usagelog.ChannelTable,
-			Columns: []string{usagelog.ChannelColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channel.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.TotalCost(); ok {
+		_spec.SetField(usagelog.FieldTotalCost, field.TypeFloat64, value)
 	}
-	if nodes := _u.mutation.ChannelIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   usagelog.ChannelTable,
-			Columns: []string{usagelog.ChannelColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channel.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := _u.mutation.AddedTotalCost(); ok {
+		_spec.AddField(usagelog.FieldTotalCost, field.TypeFloat64, value)
+	}
+	if _u.mutation.TotalCostCleared() {
+		_spec.ClearField(usagelog.FieldTotalCost, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.CostItems(); ok {
+		_spec.SetField(usagelog.FieldCostItems, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCostItems(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usagelog.FieldCostItems, value)
+		})
+	}
+	if _u.mutation.CostItemsCleared() {
+		_spec.ClearField(usagelog.FieldCostItems, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CostPriceReferenceID(); ok {
+		_spec.SetField(usagelog.FieldCostPriceReferenceID, field.TypeString, value)
+	}
+	if _u.mutation.CostPriceReferenceIDCleared() {
+		_spec.ClearField(usagelog.FieldCostPriceReferenceID, field.TypeString)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
@@ -533,26 +640,6 @@ type UsageLogUpdateOne struct {
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *UsageLogUpdateOne) SetUpdatedAt(v time.Time) *UsageLogUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetChannelID sets the "channel_id" field.
-func (_u *UsageLogUpdateOne) SetChannelID(v int) *UsageLogUpdateOne {
-	_u.mutation.SetChannelID(v)
-	return _u
-}
-
-// SetNillableChannelID sets the "channel_id" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableChannelID(v *int) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetChannelID(*v)
-	}
-	return _u
-}
-
-// ClearChannelID clears the value of the "channel_id" field.
-func (_u *UsageLogUpdateOne) ClearChannelID() *UsageLogUpdateOne {
-	_u.mutation.ClearChannelID()
 	return _u
 }
 
@@ -700,6 +787,60 @@ func (_u *UsageLogUpdateOne) ClearPromptWriteCachedTokens() *UsageLogUpdateOne {
 	return _u
 }
 
+// SetPromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdateOne) SetPromptWriteCachedTokens5m(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetPromptWriteCachedTokens5m()
+	_u.mutation.SetPromptWriteCachedTokens5m(v)
+	return _u
+}
+
+// SetNillablePromptWriteCachedTokens5m sets the "prompt_write_cached_tokens_5m" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillablePromptWriteCachedTokens5m(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetPromptWriteCachedTokens5m(*v)
+	}
+	return _u
+}
+
+// AddPromptWriteCachedTokens5m adds value to the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdateOne) AddPromptWriteCachedTokens5m(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddPromptWriteCachedTokens5m(v)
+	return _u
+}
+
+// ClearPromptWriteCachedTokens5m clears the value of the "prompt_write_cached_tokens_5m" field.
+func (_u *UsageLogUpdateOne) ClearPromptWriteCachedTokens5m() *UsageLogUpdateOne {
+	_u.mutation.ClearPromptWriteCachedTokens5m()
+	return _u
+}
+
+// SetPromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdateOne) SetPromptWriteCachedTokens1h(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetPromptWriteCachedTokens1h()
+	_u.mutation.SetPromptWriteCachedTokens1h(v)
+	return _u
+}
+
+// SetNillablePromptWriteCachedTokens1h sets the "prompt_write_cached_tokens_1h" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillablePromptWriteCachedTokens1h(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetPromptWriteCachedTokens1h(*v)
+	}
+	return _u
+}
+
+// AddPromptWriteCachedTokens1h adds value to the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdateOne) AddPromptWriteCachedTokens1h(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddPromptWriteCachedTokens1h(v)
+	return _u
+}
+
+// ClearPromptWriteCachedTokens1h clears the value of the "prompt_write_cached_tokens_1h" field.
+func (_u *UsageLogUpdateOne) ClearPromptWriteCachedTokens1h() *UsageLogUpdateOne {
+	_u.mutation.ClearPromptWriteCachedTokens1h()
+	return _u
+}
+
 // SetCompletionAudioTokens sets the "completion_audio_tokens" field.
 func (_u *UsageLogUpdateOne) SetCompletionAudioTokens(v int64) *UsageLogUpdateOne {
 	_u.mutation.ResetCompletionAudioTokens()
@@ -808,20 +949,74 @@ func (_u *UsageLogUpdateOne) ClearCompletionRejectedPredictionTokens() *UsageLog
 	return _u
 }
 
-// SetChannel sets the "channel" edge to the Channel entity.
-func (_u *UsageLogUpdateOne) SetChannel(v *Channel) *UsageLogUpdateOne {
-	return _u.SetChannelID(v.ID)
+// SetTotalCost sets the "total_cost" field.
+func (_u *UsageLogUpdateOne) SetTotalCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.ResetTotalCost()
+	_u.mutation.SetTotalCost(v)
+	return _u
+}
+
+// SetNillableTotalCost sets the "total_cost" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableTotalCost(v *float64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetTotalCost(*v)
+	}
+	return _u
+}
+
+// AddTotalCost adds value to the "total_cost" field.
+func (_u *UsageLogUpdateOne) AddTotalCost(v float64) *UsageLogUpdateOne {
+	_u.mutation.AddTotalCost(v)
+	return _u
+}
+
+// ClearTotalCost clears the value of the "total_cost" field.
+func (_u *UsageLogUpdateOne) ClearTotalCost() *UsageLogUpdateOne {
+	_u.mutation.ClearTotalCost()
+	return _u
+}
+
+// SetCostItems sets the "cost_items" field.
+func (_u *UsageLogUpdateOne) SetCostItems(v []objects.CostItem) *UsageLogUpdateOne {
+	_u.mutation.SetCostItems(v)
+	return _u
+}
+
+// AppendCostItems appends value to the "cost_items" field.
+func (_u *UsageLogUpdateOne) AppendCostItems(v []objects.CostItem) *UsageLogUpdateOne {
+	_u.mutation.AppendCostItems(v)
+	return _u
+}
+
+// ClearCostItems clears the value of the "cost_items" field.
+func (_u *UsageLogUpdateOne) ClearCostItems() *UsageLogUpdateOne {
+	_u.mutation.ClearCostItems()
+	return _u
+}
+
+// SetCostPriceReferenceID sets the "cost_price_reference_id" field.
+func (_u *UsageLogUpdateOne) SetCostPriceReferenceID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetCostPriceReferenceID(v)
+	return _u
+}
+
+// SetNillableCostPriceReferenceID sets the "cost_price_reference_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableCostPriceReferenceID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetCostPriceReferenceID(*v)
+	}
+	return _u
+}
+
+// ClearCostPriceReferenceID clears the value of the "cost_price_reference_id" field.
+func (_u *UsageLogUpdateOne) ClearCostPriceReferenceID() *UsageLogUpdateOne {
+	_u.mutation.ClearCostPriceReferenceID()
+	return _u
 }
 
 // Mutation returns the UsageLogMutation object of the builder.
 func (_u *UsageLogUpdateOne) Mutation() *UsageLogMutation {
 	return _u.mutation
-}
-
-// ClearChannel clears the "channel" edge to the Channel entity.
-func (_u *UsageLogUpdateOne) ClearChannel() *UsageLogUpdateOne {
-	_u.mutation.ClearChannel()
-	return _u
 }
 
 // Where appends a list predicates to the UsageLogUpdate builder.
@@ -928,6 +1123,9 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(usagelog.FieldUpdatedAt, field.TypeTime, value)
 	}
+	if _u.mutation.APIKeyIDCleared() {
+		_spec.ClearField(usagelog.FieldAPIKeyID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.PromptTokens(); ok {
 		_spec.SetField(usagelog.FieldPromptTokens, field.TypeInt64, value)
 	}
@@ -973,6 +1171,24 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	if _u.mutation.PromptWriteCachedTokensCleared() {
 		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.PromptWriteCachedTokens5m(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromptWriteCachedTokens5m(); ok {
+		_spec.AddField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64, value)
+	}
+	if _u.mutation.PromptWriteCachedTokens5mCleared() {
+		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens5m, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.PromptWriteCachedTokens1h(); ok {
+		_spec.SetField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedPromptWriteCachedTokens1h(); ok {
+		_spec.AddField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64, value)
+	}
+	if _u.mutation.PromptWriteCachedTokens1hCleared() {
+		_spec.ClearField(usagelog.FieldPromptWriteCachedTokens1h, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CompletionAudioTokens(); ok {
 		_spec.SetField(usagelog.FieldCompletionAudioTokens, field.TypeInt64, value)
 	}
@@ -1009,34 +1225,31 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	if _u.mutation.CompletionRejectedPredictionTokensCleared() {
 		_spec.ClearField(usagelog.FieldCompletionRejectedPredictionTokens, field.TypeInt64)
 	}
-	if _u.mutation.ChannelCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   usagelog.ChannelTable,
-			Columns: []string{usagelog.ChannelColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channel.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := _u.mutation.TotalCost(); ok {
+		_spec.SetField(usagelog.FieldTotalCost, field.TypeFloat64, value)
 	}
-	if nodes := _u.mutation.ChannelIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   usagelog.ChannelTable,
-			Columns: []string{usagelog.ChannelColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channel.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := _u.mutation.AddedTotalCost(); ok {
+		_spec.AddField(usagelog.FieldTotalCost, field.TypeFloat64, value)
+	}
+	if _u.mutation.TotalCostCleared() {
+		_spec.ClearField(usagelog.FieldTotalCost, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.CostItems(); ok {
+		_spec.SetField(usagelog.FieldCostItems, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedCostItems(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usagelog.FieldCostItems, value)
+		})
+	}
+	if _u.mutation.CostItemsCleared() {
+		_spec.ClearField(usagelog.FieldCostItems, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.CostPriceReferenceID(); ok {
+		_spec.SetField(usagelog.FieldCostPriceReferenceID, field.TypeString, value)
+	}
+	if _u.mutation.CostPriceReferenceIDCleared() {
+		_spec.ClearField(usagelog.FieldCostPriceReferenceID, field.TypeString)
 	}
 	_spec.AddModifiers(_u.modifiers...)
 	_node = &UsageLog{config: _u.config}

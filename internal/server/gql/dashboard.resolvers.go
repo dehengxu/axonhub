@@ -14,39 +14,50 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"github.com/looplj/axonhub/internal/ent"
+	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/request"
+	"github.com/looplj/axonhub/internal/ent/requestexecution"
+	"github.com/looplj/axonhub/internal/ent/schema/schematype"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
+	"github.com/looplj/axonhub/internal/pkg/xtime"
 	"github.com/looplj/axonhub/internal/scopes"
 	"github.com/samber/lo"
 )
 
 // DashboardOverview is the resolver for the dashboardOverview field.
+// Note: This resolver provides high-level dashboard metrics.
+// For detailed request statistics, see RequestStats resolver documentation.
 func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOverview, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	// Initialize response with defaults to handle partial failures gracefully
 	stats := &DashboardOverview{
-		TotalUsers:          0,
 		TotalRequests:       0,
 		FailedRequests:      0,
 		AverageResponseTime: nil,
 	}
 
-	// Get total counts with defensive error handling
-	if totalUsers, err := r.client.User.Query().Count(ctx); err != nil {
-		log.Warn(ctx, "failed to count users", log.Cause(err))
-	} else {
-		stats.TotalUsers = totalUsers
+	// Get total and failed requests in a single query by status grouping
+	var statusCounts []struct {
+		Status request.Status `json:"status"`
+		Count  int            `json:"count"`
 	}
-
-	if totalRequests, err := r.client.Request.Query().Count(ctx); err != nil {
-		log.Warn(ctx, "failed to count requests", log.Cause(err))
+	if err := r.client.Request.Query().
+		GroupBy(request.FieldStatus).
+		Aggregate(ent.Count()).
+		Scan(ctx, &statusCounts); err != nil {
+		log.Warn(ctx, "failed to count requests by status", log.Cause(err))
 	} else {
-		stats.TotalRequests = totalRequests
+		for _, sc := range statusCounts {
+			stats.TotalRequests += sc.Count
+			if sc.Status == request.StatusFailed {
+				stats.FailedRequests = sc.Count
+			}
+		}
 	}
 
 	// Get request stats using the dedicated resolver
@@ -56,18 +67,11 @@ func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOvervi
 		stats.RequestStats = &RequestStats{
 			RequestsToday:     0,
 			RequestsThisWeek:  0,
+			RequestsLastWeek:  0,
 			RequestsThisMonth: 0,
 		}
 	} else {
 		stats.RequestStats = requestStats
-	}
-
-	if failedRequests, err := r.client.Request.Query().
-		Where(request.StatusEQ(request.StatusFailed)).
-		Count(ctx); err != nil {
-		log.Warn(ctx, "failed to count failed requests", log.Cause(err))
-	} else {
-		stats.FailedRequests = failedRequests
 	}
 
 	// TODO: Calculate average response time from request execution data
@@ -77,6 +81,9 @@ func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOvervi
 }
 
 // RequestStats is the resolver for the requestStats field.
+// Note: For result-only statistics (e.g., successful request counts), use the usage_logs table.
+// For process tracking (e.g., failed requests), use request/request_execution tables.
+// For channel-level statistics, use request_execution table.
 func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
@@ -84,35 +91,39 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 	stats := &RequestStats{
 		RequestsToday:     0,
 		RequestsThisWeek:  0,
+		RequestsLastWeek:  0,
 		RequestsThisMonth: 0,
 	}
 
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	weekAgo := today.AddDate(0, 0, -7)
-	monthAgo := today.AddDate(0, -1, 0)
+	loc := r.systemService.TimeLocation(ctx)
+	period := xtime.GetCalendarPeriods(loc)
 
-	// Get requests for today
-	if requestsToday, err := r.client.Request.Query().
-		Where(request.CreatedAtGTE(today)).
+	if requestsToday, err := r.client.UsageLog.Query().
+		Where(usagelog.CreatedAtGTE(period.Today.Start)).
 		Count(ctx); err != nil {
 		log.Warn(ctx, "failed to count today's requests", log.Cause(err))
 	} else {
 		stats.RequestsToday = requestsToday
 	}
 
-	// Get requests for this week
-	if requestsThisWeek, err := r.client.Request.Query().
-		Where(request.CreatedAtGTE(weekAgo)).
+	if requestsThisWeek, err := r.client.UsageLog.Query().
+		Where(usagelog.CreatedAtGTE(period.ThisWeek.Start)).
 		Count(ctx); err != nil {
 		log.Warn(ctx, "failed to count this week's requests", log.Cause(err))
 	} else {
 		stats.RequestsThisWeek = requestsThisWeek
 	}
 
-	// Get requests for this month
-	if requestsThisMonth, err := r.client.Request.Query().
-		Where(request.CreatedAtGTE(monthAgo)).
+	if requestsLastWeek, err := r.client.UsageLog.Query().
+		Where(usagelog.CreatedAtGTE(period.LastWeek.Start), usagelog.CreatedAtLT(period.LastWeek.End)).
+		Count(ctx); err != nil {
+		log.Warn(ctx, "failed to count last week's requests", log.Cause(err))
+	} else {
+		stats.RequestsLastWeek = requestsLastWeek
+	}
+
+	if requestsThisMonth, err := r.client.UsageLog.Query().
+		Where(usagelog.CreatedAtGTE(period.ThisMonth.Start)).
 		Count(ctx); err != nil {
 		log.Warn(ctx, "failed to count this month's requests", log.Cause(err))
 	} else {
@@ -123,74 +134,61 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 }
 
 // RequestStatsByChannel is the resolver for the requestStatsByChannel field.
+// Note: Uses usage_logs table for result-only statistics aggregated by channel.
+// For channel-level process tracking (e.g., success/failure rates), use request_execution table.
 func (r *queryResolver) RequestStatsByChannel(ctx context.Context) ([]*RequestStatsByChannel, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
-	// Use efficient aggregation query to avoid loading all data into memory
+	// Use efficient aggregation query with JOIN to get channel details and filter out deleted channels
 	type channelStats struct {
-		ChannelID int `json:"channel_id"`
-		Count     int `json:"request_count"`
+		ChannelName string `json:"channel_name"`
+		Count       int    `json:"count"`
 	}
 
 	var results []channelStats
 
-	// Aggregate by channel_id directly in the database using requests table
-	err := r.client.Request.Query().
-		Where(request.ChannelIDNotNil()). // Only include requests with channel ID set
-		GroupBy(request.FieldChannelID).
-		Aggregate(ent.As(ent.Count(), "request_count")).
+	// Aggregate by channel directly in the database using usage_logs table joined with channels
+	err := r.client.UsageLog.Query().
+		Modify(func(s *sql.Selector) {
+			channelTable := sql.Table(channel.Table)
+			s.Join(channelTable).On(
+				s.C(usagelog.FieldChannelID),
+				channelTable.C(channel.FieldID),
+			)
+
+			// Filter: only non-deleted channels
+			s.Where(sql.EQ(channelTable.C(channel.FieldDeletedAt), 0))
+
+			// Group by channel fields to get names and types directly
+			s.GroupBy(channelTable.C(channel.FieldName))
+
+			// Select fields: channel name, type and the count of logs
+			s.Select(
+				sql.As(channelTable.C(channel.FieldName), "channel_name"),
+				sql.As(sql.Count(s.C(usagelog.FieldID)), "count"),
+			)
+
+			// Order by count descending and limit to top 10
+			s.OrderBy(sql.Desc("count")).Limit(10)
+		}).
 		Scan(ctx, &results)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get requests by channel: %w", err)
 	}
 
-	if len(results) == 0 {
-		return []*RequestStatsByChannel{}, nil
-	}
-
-	// Order by request count and keep only top 10
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Count > results[j].Count
-	})
-
-	if len(results) > 10 {
-		results = results[:10]
-	}
-
-	// Get only the channels we need
-	channelIDs := lo.Map(results, func(item channelStats, _ int) int {
-		return item.ChannelID
-	})
-
-	channels, err := r.client.Channel.Query().
-		Where(channel.IDIn(channelIDs...)).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get channels: %w", err)
-	}
-
-	// Create efficient lookup map
-	channelMap := lo.SliceToMap(channels, func(ch *ent.Channel) (int, *ent.Channel) {
-		return ch.ID, ch
-	})
-
-	// Build response efficiently
-	var response []*RequestStatsByChannel
-
-	for _, result := range results {
-		if ch, exists := channelMap[result.ChannelID]; exists {
-			response = append(response, &RequestStatsByChannel{
-				ChannelName: ch.Name,
-				ChannelType: string(ch.Type),
-				Count:       result.Count,
-			})
+	// Build response directly from aggregated results
+	return lo.Map(results, func(item channelStats, _ int) *RequestStatsByChannel {
+		return &RequestStatsByChannel{
+			ChannelName: item.ChannelName,
+			Count:       item.Count,
 		}
-	}
-
-	return response, nil
+	}), nil
 }
 
 // RequestStatsByModel is the resolver for the requestStatsByModel field.
+// Note: Uses usage_logs table for result-only statistics aggregated by model.
+// This provides successful request counts per model.
 func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStatsByModel, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
@@ -201,8 +199,8 @@ func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStat
 
 	var results []modelStats
 
-	err := r.client.Request.Query().
-		GroupBy(request.FieldModelID).
+	err := r.client.UsageLog.Query().
+		GroupBy(usagelog.FieldModelID).
 		Aggregate(ent.As(ent.Count(), "request_count")).
 		Scan(ctx, &results)
 	if err != nil {
@@ -228,52 +226,235 @@ func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStat
 	return stats, nil
 }
 
-// DailyRequestStats is the resolver for the dailyRequestStats field.
-func (r *queryResolver) DailyRequestStats(ctx context.Context, days *int) ([]*DailyRequestStats, error) {
+// RequestStatsByAPIKey is the resolver for the requestStatsByAPIKey field.
+// Note: Uses usage_logs table for result-only statistics aggregated by API key.
+// This provides successful request counts per API key.
+func (r *queryResolver) RequestStatsByAPIKey(ctx context.Context) ([]*RequestStatsByAPIKey, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
-	daysCount := 30
-	if days != nil {
-		daysCount = *days
-		if daysCount <= 0 || daysCount > 365 {
-			return nil, fmt.Errorf("invalid days parameter: must be between 1 and 365")
+	type apiKeyStats struct {
+		APIKeyID int `json:"api_key_id"`
+		Count    int `json:"request_count"`
+	}
+
+	var results []apiKeyStats
+
+	// Database-level aggregation
+	err := r.client.UsageLog.Query().
+		Where(usagelog.APIKeyIDNotNil()).
+		GroupBy(usagelog.FieldAPIKeyID).
+		Aggregate(ent.As(ent.Count(), "request_count")).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get requests by API key: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*RequestStatsByAPIKey{}, nil
+	}
+
+	// Sort by count (descending) and limit to top 10
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Count > results[j].Count
+	})
+
+	if len(results) > 10 {
+		results = results[:10]
+	}
+
+	// Extract API key IDs
+	apiKeyIDs := lo.Map(results, func(item apiKeyStats, _ int) int {
+		return item.APIKeyID
+	})
+
+	// Fetch API key details
+	apiKeys, err := r.client.APIKey.Query().
+		Where(apikey.IDIn(apiKeyIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API keys: %w", err)
+	}
+
+	// Create lookup map
+	apiKeyMap := lo.SliceToMap(apiKeys, func(ak *ent.APIKey) (int, *ent.APIKey) {
+		return ak.ID, ak
+	})
+
+	// Build response
+	var response []*RequestStatsByAPIKey
+
+	for _, result := range results {
+		if ak, exists := apiKeyMap[result.APIKeyID]; exists {
+			response = append(response, &RequestStatsByAPIKey{
+				APIKeyID:   objects.GUID{Type: "APIKey", ID: result.APIKeyID},
+				APIKeyName: ak.Name,
+				Count:      result.Count,
+			})
 		}
 	}
 
-	now := time.Now()
-	startDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -daysCount+1)
+	return response, nil
+}
+
+// TokenStatsByAPIKey is the resolver for the tokenStatsByAPIKey field.
+// Note: Uses usage_logs table for token consumption statistics aggregated by API key.
+// This provides actual token usage (input, output, cached, reasoning) per API key.
+func (r *queryResolver) TokenStatsByAPIKey(ctx context.Context) ([]*TokenStatsByAPIKey, error) {
+	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	type tokenStats struct {
+		APIKeyID        int   `json:"api_key_id"`
+		InputTokens     int64 `json:"input_tokens"`
+		OutputTokens    int64 `json:"output_tokens"`
+		CachedTokens    int64 `json:"cached_tokens"`
+		ReasoningTokens int64 `json:"reasoning_tokens"`
+	}
+
+	var results []tokenStats
+
+	// Database-level aggregation with JOIN
+	err := r.client.UsageLog.Query().
+		Modify(func(s *sql.Selector) {
+			// Join to requests table to get api_key_id
+			requestTable := sql.Table(request.Table)
+			s.Join(requestTable).On(
+				s.C(usagelog.FieldRequestID),
+				requestTable.C(request.FieldID),
+			)
+
+			// Filter: only requests with non-null api_key_id
+			s.Where(sql.NotNull(requestTable.C(request.FieldAPIKeyID)))
+
+			// Group by api_key_id
+			s.GroupBy(requestTable.C(request.FieldAPIKeyID))
+
+			// Select aggregations
+			s.Select(
+				sql.As(requestTable.C(request.FieldAPIKeyID), "api_key_id"),
+				sql.As(sql.Sum(s.C(usagelog.FieldPromptTokens)), "input_tokens"),
+				sql.As(sql.Sum(s.C(usagelog.FieldCompletionTokens)), "output_tokens"),
+				sql.As(fmt.Sprintf("COALESCE(SUM(%s), 0)", s.C(usagelog.FieldPromptCachedTokens)), "cached_tokens"),
+				sql.As(fmt.Sprintf("COALESCE(SUM(%s), 0)", s.C(usagelog.FieldCompletionReasoningTokens)), "reasoning_tokens"),
+			)
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tokens by API key: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*TokenStatsByAPIKey{}, nil
+	}
+
+	// Sort by total tokens (descending) and limit to top 3
+	sort.Slice(results, func(i, j int) bool {
+		totalI := results[i].InputTokens + results[i].OutputTokens +
+			results[i].CachedTokens + results[i].ReasoningTokens
+		totalJ := results[j].InputTokens + results[j].OutputTokens +
+			results[j].CachedTokens + results[j].ReasoningTokens
+
+		return totalI > totalJ
+	})
+
+	if len(results) > 3 {
+		results = results[:3]
+	}
+
+	// Extract API key IDs
+	apiKeyIDs := lo.Map(results, func(item tokenStats, _ int) int {
+		return item.APIKeyID
+	})
+
+	// Fetch API key details
+	apiKeys, err := r.client.APIKey.Query().
+		Where(apikey.IDIn(apiKeyIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get API keys: %w", err)
+	}
+
+	// Create lookup map
+	apiKeyMap := lo.SliceToMap(apiKeys, func(ak *ent.APIKey) (int, *ent.APIKey) {
+		return ak.ID, ak
+	})
+
+	// Build response
+	var response []*TokenStatsByAPIKey
+
+	for _, result := range results {
+		if ak, exists := apiKeyMap[result.APIKeyID]; exists {
+			totalTokens := result.InputTokens + result.OutputTokens +
+				result.CachedTokens + result.ReasoningTokens
+
+			response = append(response, &TokenStatsByAPIKey{
+				APIKeyID:        objects.GUID{Type: "APIKey", ID: result.APIKeyID},
+				APIKeyName:      ak.Name,
+				InputTokens:     int(result.InputTokens),
+				OutputTokens:    int(result.OutputTokens),
+				CachedTokens:    int(result.CachedTokens),
+				ReasoningTokens: int(result.ReasoningTokens),
+				TotalTokens:     int(totalTokens),
+			})
+		}
+	}
+
+	return response, nil
+}
+
+// DailyRequestStats is the resolver for the dailyRequestStats field.
+// Note: Uses usage_logs table for daily aggregated statistics (count, tokens, cost).
+// Provides result-only daily metrics for the last 30 days.
+func (r *queryResolver) DailyRequestStats(ctx context.Context) ([]*DailyRequestStats, error) {
+	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	daysCount := 30
+
+	loc := r.systemService.TimeLocation(ctx)
+	nowUTC := xtime.UTCNow()
+	nowLocal := nowUTC.In(loc)
+	startDateLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -daysCount+1)
+	startDateUTC := startDateLocal.UTC()
+	_, offsetSeconds := nowLocal.Zone()
 
 	// Use GROUP BY aggregation for efficient database-level computation
 	type dailyStats struct {
-		Date  string `json:"date"`
-		Count int    `json:"total_count"`
+		Date   string  `json:"date"`
+		Count  int     `json:"total_count"`
+		Tokens int     `json:"total_tokens"`
+		Cost   float64 `json:"total_cost"`
 	}
 
 	var results []dailyStats
 
 	// Use raw SQL for complex GROUP BY with conditional counting
-	err := r.client.Request.Query().
+	err := r.client.UsageLog.Query().
+		Where(
+			usagelog.CreatedAtGTE(startDateUTC),
+			usagelog.CreatedAtLT(nowUTC),
+		).
 		Modify(func(s *sql.Selector) {
 			// Build a dialect-specific date expression that returns a string 'YYYY-MM-DD'
 			var dateExpr string
+			// Use qualified column name to avoid ambiguity when joining
+			createdAtCol := s.C(usagelog.FieldCreatedAt)
 
 			switch s.Dialect() {
 			case dialect.SQLite:
-				// The stored format looks like: "YYYY-MM-DD HH:MM:SS.SSSSSS +0800 CST m=+..."
-				// SQLite cannot parse this with strftime; take the leading date directly.
-				dateExpr = "substr(created_at, 1, 10)"
+				dateExpr = fmt.Sprintf("strftime('%%Y-%%m-%%d', datetime(substr(%s, 1, 19), '%+d seconds'))", createdAtCol, offsetSeconds)
 			case dialect.MySQL:
-				dateExpr = "DATE_FORMAT(created_at, '%Y-%m-%d')"
+				dateExpr = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(%s, '+00:00', '%s'), '%%Y-%%m-%%d')", createdAtCol, loc.String())
 			case dialect.Postgres:
-				dateExpr = "to_char(created_at, 'YYYY-MM-DD')"
+				dateExpr = fmt.Sprintf("to_char(%s AT TIME ZONE '%s', 'YYYY-MM-DD')", createdAtCol, loc.String())
 			default:
 				// Fallback to ANSI-ish cast; many DBs accept this, but not guaranteed
-				dateExpr = "DATE(created_at)"
+				dateExpr = fmt.Sprintf("DATE(%s)", createdAtCol)
 			}
 
 			s.Select(
 				sql.As(dateExpr, "date"),
-				sql.As(sql.Count("*"), "total_count"),
+				sql.As(sql.Count(s.C(usagelog.FieldID)), "total_count"),
+				sql.As(sql.Sum(s.C(usagelog.FieldTotalTokens)), "total_tokens"),
+				sql.As(fmt.Sprintf("COALESCE(SUM(%s), 0)", s.C(usagelog.FieldTotalCost)), "total_cost"),
 			).
 				GroupBy(dateExpr).
 				OrderBy("date")
@@ -292,20 +473,24 @@ func (r *queryResolver) DailyRequestStats(ctx context.Context, days *int) ([]*Da
 	response := make([]*DailyRequestStats, 0, daysCount)
 
 	for i := range daysCount {
-		date := startDate.AddDate(0, 0, i)
+		date := startDateLocal.AddDate(0, 0, i)
 		dateStr := date.Format("2006-01-02")
 
 		if stats, exists := statsMap[dateStr]; exists {
 			// Use aggregated data from database
 			response = append(response, &DailyRequestStats{
-				Date:  dateStr,
-				Count: stats.Count,
+				Date:   dateStr,
+				Count:  stats.Count,
+				Tokens: stats.Tokens,
+				Cost:   stats.Cost,
 			})
 		} else {
 			// Fill missing dates with zero values
 			response = append(response, &DailyRequestStats{
-				Date:  dateStr,
-				Count: 0,
+				Date:   dateStr,
+				Count:  0,
+				Tokens: 0,
+				Cost:   0,
 			})
 		}
 	}
@@ -314,16 +499,12 @@ func (r *queryResolver) DailyRequestStats(ctx context.Context, days *int) ([]*Da
 }
 
 // TopRequestsProjects is the resolver for the topRequestsProjects field.
-func (r *queryResolver) TopRequestsProjects(ctx context.Context, limit *int) ([]*TopRequestsProjects, error) {
+// Note: Uses usage_logs table for project-level request statistics.
+// Provides result-only request counts per project.
+func (r *queryResolver) TopRequestsProjects(ctx context.Context) ([]*TopRequestsProjects, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	limitCount := 10
-	if limit != nil {
-		limitCount = *limit
-		if limitCount <= 0 || limitCount > 100 {
-			return nil, fmt.Errorf("invalid limit parameter: must be between 1 and 100")
-		}
-	}
 
 	type projectRequestCount struct {
 		ProjectID    int `json:"project_id"`
@@ -333,14 +514,14 @@ func (r *queryResolver) TopRequestsProjects(ctx context.Context, limit *int) ([]
 	var results []projectRequestCount
 
 	// Use database aggregation without ordering (GroupBy doesn't support Order)
-	err := r.client.Request.Query().
+	err := r.client.UsageLog.Query().
 		Limit(limitCount).
 		Modify(func(s *sql.Selector) {
 			s.Select(
-				request.FieldProjectID,
+				usagelog.FieldProjectID,
 				sql.As(sql.Count("*"), "request_count"),
 			).
-				GroupBy(request.FieldProjectID).
+				GroupBy(usagelog.FieldProjectID).
 				OrderBy(sql.Desc("request_count"))
 		}).
 		Scan(ctx, &results)
@@ -386,6 +567,8 @@ func (r *queryResolver) TopRequestsProjects(ctx context.Context, limit *int) ([]
 }
 
 // TokenStats is the resolver for the tokenStats field.
+// Note: Uses usage_logs table for token consumption statistics (today, this week, this month).
+// Provides result-only token metrics aggregated by calendar periods.
 func (r *queryResolver) TokenStats(ctx context.Context) (*TokenStats, error) {
 	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
 
@@ -402,10 +585,8 @@ func (r *queryResolver) TokenStats(ctx context.Context) (*TokenStats, error) {
 		TotalCachedTokensThisMonth: 0,
 	}
 
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	weekAgo := today.AddDate(0, 0, -7)
-	monthAgo := today.AddDate(0, -1, 0)
+	loc := r.systemService.TimeLocation(ctx)
+	period := xtime.GetCalendarPeriods(loc)
 
 	// Helper function to get token sums for a specific time period
 	getTokenSums := func(since time.Time) (input, output, cached int) {
@@ -423,7 +604,7 @@ func (r *queryResolver) TokenStats(ctx context.Context) (*TokenStats, error) {
 				s.Select(
 					sql.As(sql.Sum(usagelog.FieldPromptTokens), "input_tokens"),
 					sql.As(sql.Sum(usagelog.FieldCompletionTokens), "output_tokens"),
-					sql.As(sql.Sum(usagelog.FieldPromptCachedTokens), "cached_tokens"),
+					sql.As(fmt.Sprintf("COALESCE(SUM(%s), 0)", s.C(usagelog.FieldPromptCachedTokens)), "cached_tokens"),
 				)
 			}).
 			Scan(ctx, &records)
@@ -448,19 +629,19 @@ func (r *queryResolver) TokenStats(ctx context.Context) (*TokenStats, error) {
 	}
 
 	// Get token stats for today
-	input, output, cached := getTokenSums(today)
+	input, output, cached := getTokenSums(period.Today.Start)
 	stats.TotalInputTokensToday = input
 	stats.TotalOutputTokensToday = output
 	stats.TotalCachedTokensToday = cached
 
-	// Get token stats for this week
-	input, output, cached = getTokenSums(weekAgo)
+	// Get token stats for this week (calendar week from Monday)
+	input, output, cached = getTokenSums(period.ThisWeek.Start)
 	stats.TotalInputTokensThisWeek = input
 	stats.TotalOutputTokensThisWeek = output
 	stats.TotalCachedTokensThisWeek = cached
 
-	// Get token stats for this month
-	input, output, cached = getTokenSums(monthAgo)
+	// Get token stats for this month (calendar month from 1st)
+	input, output, cached = getTokenSums(period.ThisMonth.Start)
 	stats.TotalInputTokensThisMonth = input
 	stats.TotalOutputTokensThisMonth = output
 	stats.TotalCachedTokensThisMonth = cached
@@ -655,4 +836,102 @@ func (r *queryResolver) ModelTokenStats(ctx context.Context, models []string, pe
 			Dates:  dates,
 		},
 	}, nil
+}
+
+// ChannelSuccessRates is the resolver for the channelSuccessRates field.
+// Note: Uses request_execution table for channel-level process tracking.
+// This provides success/failure rates per channel, suitable for monitoring channel health.
+// For result-only channel statistics, use RequestStatsByChannel instead.
+func (r *queryResolver) ChannelSuccessRates(ctx context.Context) ([]*ChannelSuccessRate, error) {
+	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	limitCount := 5
+
+	type channelExecutionStats struct {
+		ChannelID    int `json:"channel_id"`
+		SuccessCount int `json:"success_count"`
+		FailedCount  int `json:"failed_count"`
+	}
+
+	var results []channelExecutionStats
+
+	// Use raw SQL to aggregate execution stats by channel
+	err := r.client.RequestExecution.Query().
+		Modify(func(s *sql.Selector) {
+			s.Select(
+				requestexecution.FieldChannelID,
+				sql.As("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)", "success_count"),
+				sql.As("SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)", "failed_count"),
+			).
+				Where(sql.NotNull(requestexecution.FieldChannelID)).
+				GroupBy(requestexecution.FieldChannelID)
+		}).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel execution stats: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*ChannelSuccessRate{}, nil
+	}
+
+	// Build response with success rate calculation
+	var response []*ChannelSuccessRate
+
+	for _, result := range results {
+		totalCount := result.SuccessCount + result.FailedCount
+
+		var successRate float64
+		if totalCount > 0 {
+			successRate = float64(result.SuccessCount) / float64(totalCount) * 100
+		}
+
+		response = append(response, &ChannelSuccessRate{
+			ChannelID:    objects.GUID{Type: "Channel", ID: result.ChannelID},
+			ChannelName:  "",
+			ChannelType:  "",
+			SuccessCount: result.SuccessCount,
+			FailedCount:  result.FailedCount,
+			TotalCount:   totalCount,
+			SuccessRate:  successRate,
+		})
+	}
+
+	// Order by total count (descending)
+	sort.Slice(response, func(i, j int) bool {
+		return response[i].TotalCount > response[j].TotalCount
+	})
+
+	// Apply limit
+	if len(response) > limitCount {
+		response = response[:limitCount]
+	}
+
+	// Get channel details for the top channels
+	channelIDs := lo.Map(response, func(item *ChannelSuccessRate, _ int) int {
+		return item.ChannelID.ID
+	})
+
+	ctx = schematype.SkipSoftDelete(ctx)
+
+	channels, err := r.client.Channel.Query().
+		Where(channel.IDIn(channelIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get channel details: %w", err)
+	}
+
+	channelMap := lo.SliceToMap(channels, func(ch *ent.Channel) (int, *ent.Channel) {
+		return ch.ID, ch
+	})
+
+	// Fill in channel details
+	for _, item := range response {
+		if ch, exists := channelMap[item.ChannelID.ID]; exists {
+			item.ChannelName = ch.Name
+			item.ChannelType = string(ch.Type)
+		}
+	}
+
+	return response, nil
 }

@@ -45,10 +45,14 @@ const (
 	FieldErrorMessage = "error_message"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldStream holds the string denoting the stream field in the database.
+	FieldStream = "stream"
 	// FieldMetricsLatencyMs holds the string denoting the metrics_latency_ms field in the database.
 	FieldMetricsLatencyMs = "metrics_latency_ms"
 	// FieldMetricsFirstTokenLatencyMs holds the string denoting the metrics_first_token_latency_ms field in the database.
 	FieldMetricsFirstTokenLatencyMs = "metrics_first_token_latency_ms"
+	// FieldRequestHeaders holds the string denoting the request_headers field in the database.
+	FieldRequestHeaders = "request_headers"
 	// EdgeRequest holds the string denoting the request edge name in mutations.
 	EdgeRequest = "request"
 	// EdgeChannel holds the string denoting the channel edge name in mutations.
@@ -97,8 +101,10 @@ var Columns = []string{
 	FieldResponseChunks,
 	FieldErrorMessage,
 	FieldStatus,
+	FieldStream,
 	FieldMetricsLatencyMs,
 	FieldMetricsFirstTokenLatencyMs,
+	FieldRequestHeaders,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -122,6 +128,8 @@ var (
 	DefaultProjectID int
 	// DefaultFormat holds the default value on creation for the "format" field.
 	DefaultFormat string
+	// DefaultStream holds the default value on creation for the "stream" field.
+	DefaultStream bool
 )
 
 // Status defines the type for the "status" enum field.
@@ -211,6 +219,11 @@ func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByStream orders the results by the stream field.
+func ByStream(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStream, opts...).ToFunc()
 }
 
 // ByMetricsLatencyMs orders the results by the metrics_latency_ms field.

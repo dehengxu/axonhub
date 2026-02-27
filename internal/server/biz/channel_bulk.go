@@ -42,14 +42,18 @@ func (svc *ChannelService) BulkUpdateChannelOrdering(ctx context.Context, items 
 
 // BulkCreateChannelsInput represents input for bulk creating channels.
 type BulkCreateChannelsInput struct {
-	Type             channel.Type
-	Name             string
-	Tags             []string
-	BaseURL          *string
-	APIKeys          []string
-	SupportedModels  []string
-	DefaultTestModel string
-	Settings         *objects.ChannelSettings
+	Type                    channel.Type
+	Name                    string
+	Tags                    []string
+	BaseURL                 *string
+	APIKeys                 []string
+	SupportedModels         []string
+	AutoSyncSupportedModels *bool
+	DefaultTestModel        string
+	Policies                *objects.ChannelPolicies
+	Settings                *objects.ChannelSettings
+	OrderingWeight          *int
+	Remark                  *string
 }
 
 // BulkCreateChannels creates multiple channels with the same configuration but different API keys.
@@ -101,14 +105,18 @@ func (svc *ChannelService) BulkCreateChannels(ctx context.Context, input BulkCre
 
 		// Create channel input
 		createInput := ent.CreateChannelInput{
-			Type:             input.Type,
-			BaseURL:          input.BaseURL,
-			Name:             channelName,
-			Credentials:      &objects.ChannelCredentials{APIKey: apiKey},
-			SupportedModels:  input.SupportedModels,
-			Tags:             tagsToUse,
-			DefaultTestModel: input.DefaultTestModel,
-			Settings:         input.Settings,
+			Type:                    input.Type,
+			BaseURL:                 input.BaseURL,
+			Name:                    channelName,
+			Credentials:             objects.ChannelCredentials{APIKeys: []string{apiKey}},
+			SupportedModels:         input.SupportedModels,
+			AutoSyncSupportedModels: input.AutoSyncSupportedModels,
+			Tags:                    tagsToUse,
+			DefaultTestModel:        input.DefaultTestModel,
+			Policies:                input.Policies,
+			Settings:                input.Settings,
+			OrderingWeight:          input.OrderingWeight,
+			Remark:                  input.Remark,
 		}
 
 		// Create the channel without reload
@@ -245,7 +253,7 @@ func (svc *ChannelService) BulkImportChannels(ctx context.Context, items []*Bulk
 		}
 
 		// Prepare credentials (API key is now required)
-		credentials := &objects.ChannelCredentials{
+		credentials := objects.ChannelCredentials{
 			APIKey: *item.APIKey,
 		}
 

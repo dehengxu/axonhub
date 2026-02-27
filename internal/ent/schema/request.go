@@ -24,19 +24,17 @@ func (Request) Mixin() []ent.Mixin {
 
 func (Request) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("api_key_id").
-			StorageKey("requests_by_api_key_id"),
-		index.Fields("project_id").
-			StorageKey("requests_by_project_id"),
-		index.Fields("channel_id").
-			StorageKey("requests_by_channel_id"),
-		index.Fields("trace_id").
-			StorageKey("requests_by_trace_id"),
+		index.Fields("api_key_id", "created_at").
+			StorageKey("requests_by_api_key_id_created_at"),
+		index.Fields("project_id", "created_at").
+			StorageKey("requests_by_project_id_created_at"),
+		index.Fields("channel_id", "created_at").
+			StorageKey("requests_by_channel_id_created_at"),
+		index.Fields("trace_id", "created_at").
+			StorageKey("requests_by_trace_id_created_at"),
 		// Performance indexes for dashboard queries
 		index.Fields("created_at").
 			StorageKey("requests_by_created_at"),
-		index.Fields("status").
-			StorageKey("requests_by_status"),
 	}
 }
 
@@ -62,6 +60,10 @@ func (Request) Fields() []ent.Field {
 		field.String("model_id").Immutable(),
 		// The format of the request, e.g: openai/chat_completions, claude/messages, openai/response.
 		field.String("format").Immutable().Default("openai/chat_completions"),
+		// Request headers
+		field.JSON("request_headers", objects.JSONRawMessage{}).
+			Optional().
+			Comment("Request headers"),
 		// The original request from the user.
 		// e.g: the user request via OpenAI request format, but the actual request to the provider with Claude format, the request_body is the OpenAI request format.
 		field.JSON("request_body", objects.JSONRawMessage{}).
@@ -85,6 +87,7 @@ func (Request) Fields() []ent.Field {
 		field.Enum("status").Values("pending", "processing", "completed", "failed", "canceled"),
 		// Whether the request is a streaming request
 		field.Bool("stream").Default(false).Immutable(),
+		field.String("client_ip").Default("").Immutable(),
 		// Total latency in milliseconds from request start to completion
 		field.Int64("metrics_latency_ms").Optional().Nillable(),
 		// First token latency in milliseconds (only for streaming requests)
@@ -145,14 +148,14 @@ func (Request) Policy() ent.Policy {
 		Query: scopes.QueryPolicy{
 			scopes.APIKeyScopeQueryRule(scopes.ScopeWriteRequests),
 			scopes.UserProjectScopeReadRule(scopes.ScopeReadRequests),
-			scopes.OwnerRule(), // owner 用户可以访问所有请求
-			scopes.UserReadScopeRule(scopes.ScopeReadRequests), // 需要 requests 读取权限
+			scopes.OwnerRule(),
+			scopes.UserReadScopeRule(scopes.ScopeReadRequests),
 		},
 		Mutation: scopes.MutationPolicy{
 			scopes.APIKeyScopeMutationRule(scopes.ScopeWriteRequests),
 			scopes.UserProjectScopeWriteRule(scopes.ScopeWriteRequests),
-			scopes.OwnerRule(), // owner 用户可以修改所有请求
-			scopes.UserWriteScopeRule(scopes.ScopeWriteRequests), // 需要 requests 写入权限
+			scopes.OwnerRule(),
+			scopes.UserWriteScopeRule(scopes.ScopeWriteRequests),
 		},
 	}
 }

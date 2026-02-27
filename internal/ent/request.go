@@ -42,6 +42,8 @@ type Request struct {
 	ModelID string `json:"model_id,omitempty"`
 	// Format holds the value of the "format" field.
 	Format string `json:"format,omitempty"`
+	// Request headers
+	RequestHeaders objects.JSONRawMessage `json:"request_headers,omitempty"`
 	// RequestBody holds the value of the "request_body" field.
 	RequestBody objects.JSONRawMessage `json:"request_body,omitempty"`
 	// ResponseBody holds the value of the "response_body" field.
@@ -56,6 +58,8 @@ type Request struct {
 	Status request.Status `json:"status,omitempty"`
 	// Stream holds the value of the "stream" field.
 	Stream bool `json:"stream,omitempty"`
+	// ClientIP holds the value of the "client_ip" field.
+	ClientIP string `json:"client_ip,omitempty"`
 	// MetricsLatencyMs holds the value of the "metrics_latency_ms" field.
 	MetricsLatencyMs *int64 `json:"metrics_latency_ms,omitempty"`
 	// MetricsFirstTokenLatencyMs holds the value of the "metrics_first_token_latency_ms" field.
@@ -170,13 +174,13 @@ func (*Request) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case request.FieldRequestBody, request.FieldResponseBody, request.FieldResponseChunks:
+		case request.FieldRequestHeaders, request.FieldRequestBody, request.FieldResponseBody, request.FieldResponseChunks:
 			values[i] = new([]byte)
 		case request.FieldStream:
 			values[i] = new(sql.NullBool)
 		case request.FieldID, request.FieldAPIKeyID, request.FieldProjectID, request.FieldTraceID, request.FieldDataStorageID, request.FieldChannelID, request.FieldMetricsLatencyMs, request.FieldMetricsFirstTokenLatencyMs:
 			values[i] = new(sql.NullInt64)
-		case request.FieldSource, request.FieldModelID, request.FieldFormat, request.FieldExternalID, request.FieldStatus:
+		case request.FieldSource, request.FieldModelID, request.FieldFormat, request.FieldExternalID, request.FieldStatus, request.FieldClientIP:
 			values[i] = new(sql.NullString)
 		case request.FieldCreatedAt, request.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -255,6 +259,14 @@ func (_m *Request) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Format = value.String
 			}
+		case request.FieldRequestHeaders:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field request_headers", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.RequestHeaders); err != nil {
+					return fmt.Errorf("unmarshal field request_headers: %w", err)
+				}
+			}
 		case request.FieldRequestBody:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field request_body", values[i])
@@ -302,6 +314,12 @@ func (_m *Request) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field stream", values[i])
 			} else if value.Valid {
 				_m.Stream = value.Bool
+			}
+		case request.FieldClientIP:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_ip", values[i])
+			} else if value.Valid {
+				_m.ClientIP = value.String
 			}
 		case request.FieldMetricsLatencyMs:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -415,6 +433,9 @@ func (_m *Request) String() string {
 	builder.WriteString("format=")
 	builder.WriteString(_m.Format)
 	builder.WriteString(", ")
+	builder.WriteString("request_headers=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RequestHeaders))
+	builder.WriteString(", ")
 	builder.WriteString("request_body=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequestBody))
 	builder.WriteString(", ")
@@ -435,6 +456,9 @@ func (_m *Request) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("stream=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Stream))
+	builder.WriteString(", ")
+	builder.WriteString("client_ip=")
+	builder.WriteString(_m.ClientIP)
 	builder.WriteString(", ")
 	if v := _m.MetricsLatencyMs; v != nil {
 		builder.WriteString("metrics_latency_ms=")

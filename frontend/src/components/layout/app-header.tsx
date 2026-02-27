@@ -1,25 +1,58 @@
-import { useBrandSettings } from '@/features/system/data/system'
-import { LanguageSwitch } from '@/components/language-switch'
-import { ThemeSwitch } from '@/components/theme-switch'
-import { ProfileDropdown } from '@/components/profile-dropdown'
-import { ProjectSwitcher } from './project-switcher'
-import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useState, useCallback } from 'react';
+import { Link } from '@tanstack/react-router';
+import { IconSettings } from '@tabler/icons-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { LanguageSwitch } from '@/components/language-switch';
+import { PermissionGuard } from '@/components/permission-guard';
+import { ProfileDropdown } from '@/components/profile-dropdown';
+import { ThemeSwitch } from '@/components/theme-switch';
+import { QuotaBadges } from '@/components/quota-badges';
+import { checkProviderQuotas } from '@/features/system/data/quotas';
+import { useBrandSettings } from '@/features/system/data/system';
+import { ProjectSwitcher } from './project-switcher';
+import { toast } from 'sonner';
 
 export function AppHeader() {
-  const { data: brandSettings } = useBrandSettings()
-  const displayName = brandSettings?.brandName || 'AxonHub'
+  const { data: brandSettings } = useBrandSettings();
+  const { t } = useTranslation();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const displayName = brandSettings?.brandName || 'AxonHub';
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      return checkProviderQuotas();
+    },
+    onSuccess: () => {
+      void queryClient.refetchQueries({ queryKey: ['provider-quotas'] });
+      toast.success(t('system.providerQuota.refresh.success'));
+    },
+    onError: (error: any) => {
+      toast.error(error.message || t('system.providerQuota.refresh.failure'));
+    },
+  });
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    refreshMutation.mutate(undefined, {
+      onSettled: () => setIsRefreshing(false),
+    });
+  }, [refreshMutation]);
 
   return (
-    <header className='fixed top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+    <header className='bg-background/95 supports-[backdrop-filter]:bg-background/60 fixed top-0 z-50 w-full backdrop-blur'>
       <div className='flex h-14 items-center justify-between'>
         {/* Logo + Project Switcher - 左侧对齐 */}
         <div className='flex items-center gap-2 pl-6'>
           {/* Sidebar Toggle - 与侧边栏图标垂直对齐 */}
-          <SidebarTrigger className='size-8 -ml-4' />
-          
+          <SidebarTrigger className='-ml-4 size-8' />
+
           {/* Logo */}
           <div className='flex items-center gap-2'>
-            <div className='flex size-8 items-center justify-center rounded overflow-hidden shrink-0'>
+            <div className='flex size-8 shrink-0 items-center justify-center overflow-hidden rounded'>
               {brandSettings?.brandLogo ? (
                 <img
                   src={brandSettings.brandLogo}
@@ -28,24 +61,18 @@ export function AppHeader() {
                   height={24}
                   className='size-8 object-cover'
                   onError={(e) => {
-                    e.currentTarget.src = '/logo.jpg'
+                    e.currentTarget.src = '/logo.jpg';
                   }}
                 />
               ) : (
-                <img
-                  src='/logo.jpg'
-                  alt='Default Logo'
-                  width={24}
-                  height={24}
-                  className='size-8 object-cover'
-                />
+                <img src='/logo.jpg' alt='Default Logo' width={24} height={24} className='size-8 object-cover' />
               )}
             </div>
-            <span className='font-semibold text-sm leading-none'>{displayName}</span>
+            <span className='text-sm leading-none font-semibold'>{displayName}</span>
           </div>
 
           {/* Separator */}
-          <div className='h-3.5 w-px bg-border mx-0.5' />
+          <div className='bg-border mx-0.5 h-3.5 w-px' />
 
           {/* Project Switcher */}
           <ProjectSwitcher />
@@ -53,11 +80,21 @@ export function AppHeader() {
 
         {/* 右侧控件 */}
         <div className='flex items-center gap-2 pr-6'>
+          {/* Quota Badges */}
+          <QuotaBadges onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+
+          <PermissionGuard requiredSystemScope='read_system'>
+            <Link to='/system'>
+              <Button variant='ghost' size='icon' className='size-8'>
+                <IconSettings className='h-4 w-4' />
+              </Button>
+            </Link>
+          </PermissionGuard>
           <LanguageSwitch />
           <ThemeSwitch />
           <ProfileDropdown />
         </div>
       </div>
     </header>
-  )
+  );
 }

@@ -13,8 +13,10 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelprobe"
 	"github.com/looplj/axonhub/internal/ent/predicate"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -111,8 +113,34 @@ func (_u *ChannelUpdate) SetNillableStatus(v *channel.Status) *ChannelUpdate {
 }
 
 // SetCredentials sets the "credentials" field.
-func (_u *ChannelUpdate) SetCredentials(v *objects.ChannelCredentials) *ChannelUpdate {
+func (_u *ChannelUpdate) SetCredentials(v objects.ChannelCredentials) *ChannelUpdate {
 	_u.mutation.SetCredentials(v)
+	return _u
+}
+
+// SetNillableCredentials sets the "credentials" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableCredentials(v *objects.ChannelCredentials) *ChannelUpdate {
+	if v != nil {
+		_u.SetCredentials(*v)
+	}
+	return _u
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (_u *ChannelUpdate) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpdate {
+	_u.mutation.SetDisabledAPIKeys(v)
+	return _u
+}
+
+// AppendDisabledAPIKeys appends value to the "disabled_api_keys" field.
+func (_u *ChannelUpdate) AppendDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpdate {
+	_u.mutation.AppendDisabledAPIKeys(v)
+	return _u
+}
+
+// ClearDisabledAPIKeys clears the value of the "disabled_api_keys" field.
+func (_u *ChannelUpdate) ClearDisabledAPIKeys() *ChannelUpdate {
+	_u.mutation.ClearDisabledAPIKeys()
 	return _u
 }
 
@@ -125,6 +153,20 @@ func (_u *ChannelUpdate) SetSupportedModels(v []string) *ChannelUpdate {
 // AppendSupportedModels appends value to the "supported_models" field.
 func (_u *ChannelUpdate) AppendSupportedModels(v []string) *ChannelUpdate {
 	_u.mutation.AppendSupportedModels(v)
+	return _u
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (_u *ChannelUpdate) SetAutoSyncSupportedModels(v bool) *ChannelUpdate {
+	_u.mutation.SetAutoSyncSupportedModels(v)
+	return _u
+}
+
+// SetNillableAutoSyncSupportedModels sets the "auto_sync_supported_models" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableAutoSyncSupportedModels(v *bool) *ChannelUpdate {
+	if v != nil {
+		_u.SetAutoSyncSupportedModels(*v)
+	}
 	return _u
 }
 
@@ -157,6 +199,26 @@ func (_u *ChannelUpdate) SetNillableDefaultTestModel(v *string) *ChannelUpdate {
 	if v != nil {
 		_u.SetDefaultTestModel(*v)
 	}
+	return _u
+}
+
+// SetPolicies sets the "policies" field.
+func (_u *ChannelUpdate) SetPolicies(v objects.ChannelPolicies) *ChannelUpdate {
+	_u.mutation.SetPolicies(v)
+	return _u
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelUpdate {
+	if v != nil {
+		_u.SetPolicies(*v)
+	}
+	return _u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (_u *ChannelUpdate) ClearPolicies() *ChannelUpdate {
+	_u.mutation.ClearPolicies()
 	return _u
 }
 
@@ -278,23 +340,53 @@ func (_u *ChannelUpdate) AddUsageLogs(v ...*UsageLog) *ChannelUpdate {
 	return _u.AddUsageLogIDs(ids...)
 }
 
-// SetChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID.
-func (_u *ChannelUpdate) SetChannelPerformanceID(id int) *ChannelUpdate {
-	_u.mutation.SetChannelPerformanceID(id)
+// AddChannelProbeIDs adds the "channel_probes" edge to the ChannelProbe entity by IDs.
+func (_u *ChannelUpdate) AddChannelProbeIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.AddChannelProbeIDs(ids...)
 	return _u
 }
 
-// SetNillableChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID if the given value is not nil.
-func (_u *ChannelUpdate) SetNillableChannelPerformanceID(id *int) *ChannelUpdate {
+// AddChannelProbes adds the "channel_probes" edges to the ChannelProbe entity.
+func (_u *ChannelUpdate) AddChannelProbes(v ...*ChannelProbe) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelProbeIDs(ids...)
+}
+
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_u *ChannelUpdate) AddChannelModelPriceIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.AddChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdate) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_u *ChannelUpdate) SetProviderQuotaStatusID(id int) *ChannelUpdate {
+	_u.mutation.SetProviderQuotaStatusID(id)
+	return _u
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableProviderQuotaStatusID(id *int) *ChannelUpdate {
 	if id != nil {
-		_u = _u.SetChannelPerformanceID(*id)
+		_u = _u.SetProviderQuotaStatusID(*id)
 	}
 	return _u
 }
 
-// SetChannelPerformance sets the "channel_performance" edge to the ChannelPerformance entity.
-func (_u *ChannelUpdate) SetChannelPerformance(v *ChannelPerformance) *ChannelUpdate {
-	return _u.SetChannelPerformanceID(v.ID)
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdate) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelUpdate {
+	return _u.SetProviderQuotaStatusID(v.ID)
 }
 
 // Mutation returns the ChannelMutation object of the builder.
@@ -365,9 +457,51 @@ func (_u *ChannelUpdate) RemoveUsageLogs(v ...*UsageLog) *ChannelUpdate {
 	return _u.RemoveUsageLogIDs(ids...)
 }
 
-// ClearChannelPerformance clears the "channel_performance" edge to the ChannelPerformance entity.
-func (_u *ChannelUpdate) ClearChannelPerformance() *ChannelUpdate {
-	_u.mutation.ClearChannelPerformance()
+// ClearChannelProbes clears all "channel_probes" edges to the ChannelProbe entity.
+func (_u *ChannelUpdate) ClearChannelProbes() *ChannelUpdate {
+	_u.mutation.ClearChannelProbes()
+	return _u
+}
+
+// RemoveChannelProbeIDs removes the "channel_probes" edge to ChannelProbe entities by IDs.
+func (_u *ChannelUpdate) RemoveChannelProbeIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.RemoveChannelProbeIDs(ids...)
+	return _u
+}
+
+// RemoveChannelProbes removes "channel_probes" edges to ChannelProbe entities.
+func (_u *ChannelUpdate) RemoveChannelProbes(v ...*ChannelProbe) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelProbeIDs(ids...)
+}
+
+// ClearChannelModelPrices clears all "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdate) ClearChannelModelPrices() *ChannelUpdate {
+	_u.mutation.ClearChannelModelPrices()
+	return _u
+}
+
+// RemoveChannelModelPriceIDs removes the "channel_model_prices" edge to ChannelModelPrice entities by IDs.
+func (_u *ChannelUpdate) RemoveChannelModelPriceIDs(ids ...int) *ChannelUpdate {
+	_u.mutation.RemoveChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// RemoveChannelModelPrices removes "channel_model_prices" edges to ChannelModelPrice entities.
+func (_u *ChannelUpdate) RemoveChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelModelPriceIDs(ids...)
+}
+
+// ClearProviderQuotaStatus clears the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdate) ClearProviderQuotaStatus() *ChannelUpdate {
+	_u.mutation.ClearProviderQuotaStatus()
 	return _u
 }
 
@@ -465,6 +599,17 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Credentials(); ok {
 		_spec.SetField(channel.FieldCredentials, field.TypeJSON, value)
 	}
+	if value, ok := _u.mutation.DisabledAPIKeys(); ok {
+		_spec.SetField(channel.FieldDisabledAPIKeys, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedDisabledAPIKeys(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, channel.FieldDisabledAPIKeys, value)
+		})
+	}
+	if _u.mutation.DisabledAPIKeysCleared() {
+		_spec.ClearField(channel.FieldDisabledAPIKeys, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.SupportedModels(); ok {
 		_spec.SetField(channel.FieldSupportedModels, field.TypeJSON, value)
 	}
@@ -472,6 +617,9 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, channel.FieldSupportedModels, value)
 		})
+	}
+	if value, ok := _u.mutation.AutoSyncSupportedModels(); ok {
+		_spec.SetField(channel.FieldAutoSyncSupportedModels, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(channel.FieldTags, field.TypeJSON, value)
@@ -486,6 +634,12 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.DefaultTestModel(); ok {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+	}
+	if _u.mutation.PoliciesCleared() {
+		_spec.ClearField(channel.FieldPolicies, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
@@ -646,28 +800,118 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.ChannelPerformanceCleared() {
+	if _u.mutation.ChannelProbesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
+			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   channel.ChannelPerformanceTable,
-			Columns: []string{channel.ChannelPerformanceColumn},
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channelperformance.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.ChannelPerformanceIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedChannelProbesIDs(); len(nodes) > 0 && !_u.mutation.ChannelProbesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelProbesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedChannelModelPricesIDs(); len(nodes) > 0 && !_u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderQuotaStatusCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
 			Inverse: false,
-			Table:   channel.ChannelPerformanceTable,
-			Columns: []string{channel.ChannelPerformanceColumn},
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channelperformance.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -773,8 +1017,34 @@ func (_u *ChannelUpdateOne) SetNillableStatus(v *channel.Status) *ChannelUpdateO
 }
 
 // SetCredentials sets the "credentials" field.
-func (_u *ChannelUpdateOne) SetCredentials(v *objects.ChannelCredentials) *ChannelUpdateOne {
+func (_u *ChannelUpdateOne) SetCredentials(v objects.ChannelCredentials) *ChannelUpdateOne {
 	_u.mutation.SetCredentials(v)
+	return _u
+}
+
+// SetNillableCredentials sets the "credentials" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableCredentials(v *objects.ChannelCredentials) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetCredentials(*v)
+	}
+	return _u
+}
+
+// SetDisabledAPIKeys sets the "disabled_api_keys" field.
+func (_u *ChannelUpdateOne) SetDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpdateOne {
+	_u.mutation.SetDisabledAPIKeys(v)
+	return _u
+}
+
+// AppendDisabledAPIKeys appends value to the "disabled_api_keys" field.
+func (_u *ChannelUpdateOne) AppendDisabledAPIKeys(v []objects.DisabledAPIKey) *ChannelUpdateOne {
+	_u.mutation.AppendDisabledAPIKeys(v)
+	return _u
+}
+
+// ClearDisabledAPIKeys clears the value of the "disabled_api_keys" field.
+func (_u *ChannelUpdateOne) ClearDisabledAPIKeys() *ChannelUpdateOne {
+	_u.mutation.ClearDisabledAPIKeys()
 	return _u
 }
 
@@ -787,6 +1057,20 @@ func (_u *ChannelUpdateOne) SetSupportedModels(v []string) *ChannelUpdateOne {
 // AppendSupportedModels appends value to the "supported_models" field.
 func (_u *ChannelUpdateOne) AppendSupportedModels(v []string) *ChannelUpdateOne {
 	_u.mutation.AppendSupportedModels(v)
+	return _u
+}
+
+// SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
+func (_u *ChannelUpdateOne) SetAutoSyncSupportedModels(v bool) *ChannelUpdateOne {
+	_u.mutation.SetAutoSyncSupportedModels(v)
+	return _u
+}
+
+// SetNillableAutoSyncSupportedModels sets the "auto_sync_supported_models" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableAutoSyncSupportedModels(v *bool) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetAutoSyncSupportedModels(*v)
+	}
 	return _u
 }
 
@@ -819,6 +1103,26 @@ func (_u *ChannelUpdateOne) SetNillableDefaultTestModel(v *string) *ChannelUpdat
 	if v != nil {
 		_u.SetDefaultTestModel(*v)
 	}
+	return _u
+}
+
+// SetPolicies sets the "policies" field.
+func (_u *ChannelUpdateOne) SetPolicies(v objects.ChannelPolicies) *ChannelUpdateOne {
+	_u.mutation.SetPolicies(v)
+	return _u
+}
+
+// SetNillablePolicies sets the "policies" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillablePolicies(v *objects.ChannelPolicies) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetPolicies(*v)
+	}
+	return _u
+}
+
+// ClearPolicies clears the value of the "policies" field.
+func (_u *ChannelUpdateOne) ClearPolicies() *ChannelUpdateOne {
+	_u.mutation.ClearPolicies()
 	return _u
 }
 
@@ -940,23 +1244,53 @@ func (_u *ChannelUpdateOne) AddUsageLogs(v ...*UsageLog) *ChannelUpdateOne {
 	return _u.AddUsageLogIDs(ids...)
 }
 
-// SetChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID.
-func (_u *ChannelUpdateOne) SetChannelPerformanceID(id int) *ChannelUpdateOne {
-	_u.mutation.SetChannelPerformanceID(id)
+// AddChannelProbeIDs adds the "channel_probes" edge to the ChannelProbe entity by IDs.
+func (_u *ChannelUpdateOne) AddChannelProbeIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.AddChannelProbeIDs(ids...)
 	return _u
 }
 
-// SetNillableChannelPerformanceID sets the "channel_performance" edge to the ChannelPerformance entity by ID if the given value is not nil.
-func (_u *ChannelUpdateOne) SetNillableChannelPerformanceID(id *int) *ChannelUpdateOne {
+// AddChannelProbes adds the "channel_probes" edges to the ChannelProbe entity.
+func (_u *ChannelUpdateOne) AddChannelProbes(v ...*ChannelProbe) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelProbeIDs(ids...)
+}
+
+// AddChannelModelPriceIDs adds the "channel_model_prices" edge to the ChannelModelPrice entity by IDs.
+func (_u *ChannelUpdateOne) AddChannelModelPriceIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.AddChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// AddChannelModelPrices adds the "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdateOne) AddChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddChannelModelPriceIDs(ids...)
+}
+
+// SetProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID.
+func (_u *ChannelUpdateOne) SetProviderQuotaStatusID(id int) *ChannelUpdateOne {
+	_u.mutation.SetProviderQuotaStatusID(id)
+	return _u
+}
+
+// SetNillableProviderQuotaStatusID sets the "provider_quota_status" edge to the ProviderQuotaStatus entity by ID if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableProviderQuotaStatusID(id *int) *ChannelUpdateOne {
 	if id != nil {
-		_u = _u.SetChannelPerformanceID(*id)
+		_u = _u.SetProviderQuotaStatusID(*id)
 	}
 	return _u
 }
 
-// SetChannelPerformance sets the "channel_performance" edge to the ChannelPerformance entity.
-func (_u *ChannelUpdateOne) SetChannelPerformance(v *ChannelPerformance) *ChannelUpdateOne {
-	return _u.SetChannelPerformanceID(v.ID)
+// SetProviderQuotaStatus sets the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdateOne) SetProviderQuotaStatus(v *ProviderQuotaStatus) *ChannelUpdateOne {
+	return _u.SetProviderQuotaStatusID(v.ID)
 }
 
 // Mutation returns the ChannelMutation object of the builder.
@@ -1027,9 +1361,51 @@ func (_u *ChannelUpdateOne) RemoveUsageLogs(v ...*UsageLog) *ChannelUpdateOne {
 	return _u.RemoveUsageLogIDs(ids...)
 }
 
-// ClearChannelPerformance clears the "channel_performance" edge to the ChannelPerformance entity.
-func (_u *ChannelUpdateOne) ClearChannelPerformance() *ChannelUpdateOne {
-	_u.mutation.ClearChannelPerformance()
+// ClearChannelProbes clears all "channel_probes" edges to the ChannelProbe entity.
+func (_u *ChannelUpdateOne) ClearChannelProbes() *ChannelUpdateOne {
+	_u.mutation.ClearChannelProbes()
+	return _u
+}
+
+// RemoveChannelProbeIDs removes the "channel_probes" edge to ChannelProbe entities by IDs.
+func (_u *ChannelUpdateOne) RemoveChannelProbeIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.RemoveChannelProbeIDs(ids...)
+	return _u
+}
+
+// RemoveChannelProbes removes "channel_probes" edges to ChannelProbe entities.
+func (_u *ChannelUpdateOne) RemoveChannelProbes(v ...*ChannelProbe) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelProbeIDs(ids...)
+}
+
+// ClearChannelModelPrices clears all "channel_model_prices" edges to the ChannelModelPrice entity.
+func (_u *ChannelUpdateOne) ClearChannelModelPrices() *ChannelUpdateOne {
+	_u.mutation.ClearChannelModelPrices()
+	return _u
+}
+
+// RemoveChannelModelPriceIDs removes the "channel_model_prices" edge to ChannelModelPrice entities by IDs.
+func (_u *ChannelUpdateOne) RemoveChannelModelPriceIDs(ids ...int) *ChannelUpdateOne {
+	_u.mutation.RemoveChannelModelPriceIDs(ids...)
+	return _u
+}
+
+// RemoveChannelModelPrices removes "channel_model_prices" edges to ChannelModelPrice entities.
+func (_u *ChannelUpdateOne) RemoveChannelModelPrices(v ...*ChannelModelPrice) *ChannelUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveChannelModelPriceIDs(ids...)
+}
+
+// ClearProviderQuotaStatus clears the "provider_quota_status" edge to the ProviderQuotaStatus entity.
+func (_u *ChannelUpdateOne) ClearProviderQuotaStatus() *ChannelUpdateOne {
+	_u.mutation.ClearProviderQuotaStatus()
 	return _u
 }
 
@@ -1157,6 +1533,17 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 	if value, ok := _u.mutation.Credentials(); ok {
 		_spec.SetField(channel.FieldCredentials, field.TypeJSON, value)
 	}
+	if value, ok := _u.mutation.DisabledAPIKeys(); ok {
+		_spec.SetField(channel.FieldDisabledAPIKeys, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedDisabledAPIKeys(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, channel.FieldDisabledAPIKeys, value)
+		})
+	}
+	if _u.mutation.DisabledAPIKeysCleared() {
+		_spec.ClearField(channel.FieldDisabledAPIKeys, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.SupportedModels(); ok {
 		_spec.SetField(channel.FieldSupportedModels, field.TypeJSON, value)
 	}
@@ -1164,6 +1551,9 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, channel.FieldSupportedModels, value)
 		})
+	}
+	if value, ok := _u.mutation.AutoSyncSupportedModels(); ok {
+		_spec.SetField(channel.FieldAutoSyncSupportedModels, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(channel.FieldTags, field.TypeJSON, value)
@@ -1178,6 +1568,12 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 	}
 	if value, ok := _u.mutation.DefaultTestModel(); ok {
 		_spec.SetField(channel.FieldDefaultTestModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Policies(); ok {
+		_spec.SetField(channel.FieldPolicies, field.TypeJSON, value)
+	}
+	if _u.mutation.PoliciesCleared() {
+		_spec.ClearField(channel.FieldPolicies, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Settings(); ok {
 		_spec.SetField(channel.FieldSettings, field.TypeJSON, value)
@@ -1338,28 +1734,118 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.ChannelPerformanceCleared() {
+	if _u.mutation.ChannelProbesCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
+			Rel:     sqlgraph.O2M,
 			Inverse: false,
-			Table:   channel.ChannelPerformanceTable,
-			Columns: []string{channel.ChannelPerformanceColumn},
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channelperformance.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if nodes := _u.mutation.ChannelPerformanceIDs(); len(nodes) > 0 {
+	if nodes := _u.mutation.RemovedChannelProbesIDs(); len(nodes) > 0 && !_u.mutation.ChannelProbesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelProbesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelProbesTable,
+			Columns: []string{channel.ChannelProbesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelprobe.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedChannelModelPricesIDs(); len(nodes) > 0 && !_u.mutation.ChannelModelPricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ChannelModelPricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   channel.ChannelModelPricesTable,
+			Columns: []string{channel.ChannelModelPricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(channelmodelprice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ProviderQuotaStatusCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2O,
 			Inverse: false,
-			Table:   channel.ChannelPerformanceTable,
-			Columns: []string{channel.ChannelPerformanceColumn},
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(channelperformance.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ProviderQuotaStatusIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   channel.ProviderQuotaStatusTable,
+			Columns: []string{channel.ProviderQuotaStatusColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(providerquotastatus.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

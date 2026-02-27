@@ -73,6 +73,8 @@ linters:
     - nilnil
     - thelper
     - dogsled
+    - unqueryvet
+    - predeclared
     
 
   # all available settings of specific linters
@@ -192,7 +194,11 @@ linters:
       # Force newlines in end of case at this limit (0 = never).
       force-case-trailing-whitespace: 0
 
+  
   exclusions:
+    # Exclude all linters from running on ent files.
+    paths:
+      - internal/ent
     # Excluding configuration per-path, per-linter, per-text and per-source
     rules:
       # Exclude some linters from running on tools files.
@@ -232,6 +238,7 @@ linters:
           - errname
           - noinlineerr
           - nilnil
+          - exhaustive
 
       - path: _mock\.go$
         linters:
@@ -241,6 +248,10 @@ linters:
       - linters:
           - staticcheck
         text: "SA9003:"
+
+      - linters:
+          - staticcheck
+        text: "SA1019:"
 
       - linters:
           - staticcheck
@@ -287,7 +298,7 @@ formatters:
     - gofmt
     - gofumpt
     - goimports
-    - golines
+    # - golines
   settings:
     gci:
       # Section configuration to compare against.
@@ -355,6 +366,10 @@ formatters:
     # Default: []
     paths:
       - ".resolvers.go"
+      - "axonhub.resolvers.go"
+      - "ent.resolvers.go"
+      - "internal/ent"
+      - "internal/server/gql/ent.resolvers.go"
   
 
 issues:
@@ -372,7 +387,7 @@ issues:
   # large codebase. It's not practical to fix all existing issues at the moment
   # of integration: much better don't allow issues in new code.
   # Default is false.
-  new: false
+  new: true
 
   # Auto-fix enabled issues. Default is false.
   fix: true

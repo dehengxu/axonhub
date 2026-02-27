@@ -16,14 +16,24 @@ type Tx struct {
 	APIKey *APIKeyClient
 	// Channel is the client for interacting with the Channel builders.
 	Channel *ChannelClient
+	// ChannelModelPrice is the client for interacting with the ChannelModelPrice builders.
+	ChannelModelPrice *ChannelModelPriceClient
+	// ChannelModelPriceVersion is the client for interacting with the ChannelModelPriceVersion builders.
+	ChannelModelPriceVersion *ChannelModelPriceVersionClient
 	// ChannelOverrideTemplate is the client for interacting with the ChannelOverrideTemplate builders.
 	ChannelOverrideTemplate *ChannelOverrideTemplateClient
-	// ChannelPerformance is the client for interacting with the ChannelPerformance builders.
-	ChannelPerformance *ChannelPerformanceClient
+	// ChannelProbe is the client for interacting with the ChannelProbe builders.
+	ChannelProbe *ChannelProbeClient
 	// DataStorage is the client for interacting with the DataStorage builders.
 	DataStorage *DataStorageClient
+	// Model is the client for interacting with the Model builders.
+	Model *ModelClient
 	// Project is the client for interacting with the Project builders.
 	Project *ProjectClient
+	// Prompt is the client for interacting with the Prompt builders.
+	Prompt *PromptClient
+	// ProviderQuotaStatus is the client for interacting with the ProviderQuotaStatus builders.
+	ProviderQuotaStatus *ProviderQuotaStatusClient
 	// Request is the client for interacting with the Request builders.
 	Request *RequestClient
 	// RequestExecution is the client for interacting with the RequestExecution builders.
@@ -177,10 +187,15 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.APIKey = NewAPIKeyClient(tx.config)
 	tx.Channel = NewChannelClient(tx.config)
+	tx.ChannelModelPrice = NewChannelModelPriceClient(tx.config)
+	tx.ChannelModelPriceVersion = NewChannelModelPriceVersionClient(tx.config)
 	tx.ChannelOverrideTemplate = NewChannelOverrideTemplateClient(tx.config)
-	tx.ChannelPerformance = NewChannelPerformanceClient(tx.config)
+	tx.ChannelProbe = NewChannelProbeClient(tx.config)
 	tx.DataStorage = NewDataStorageClient(tx.config)
+	tx.Model = NewModelClient(tx.config)
 	tx.Project = NewProjectClient(tx.config)
+	tx.Prompt = NewPromptClient(tx.config)
+	tx.ProviderQuotaStatus = NewProviderQuotaStatusClient(tx.config)
 	tx.Request = NewRequestClient(tx.config)
 	tx.RequestExecution = NewRequestExecutionClient(tx.config)
 	tx.Role = NewRoleClient(tx.config)

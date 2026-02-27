@@ -1,21 +1,21 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect, useCallback } from 'react'
-import { Loader2 } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
-import { useRetryPolicy, useUpdateRetryPolicy, type RetryPolicyInput } from '../data/system'
+import React, { useState, useEffect, useCallback } from 'react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { useRetryPolicy, useUpdateRetryPolicy, type RetryPolicyInput } from '../data/system';
 
 export function RetrySettings() {
-  const { t } = useTranslation()
-  const { data: retryPolicy, isLoading } = useRetryPolicy()
-  const updateRetryPolicy = useUpdateRetryPolicy()
+  const { t } = useTranslation();
+  const { data: retryPolicy, isLoading } = useRetryPolicy();
+  const updateRetryPolicy = useUpdateRetryPolicy();
 
   const [formData, setFormData] = useState<RetryPolicyInput>({
     enabled: true,
@@ -23,7 +23,11 @@ export function RetrySettings() {
     maxSingleChannelRetries: 2,
     retryDelayMs: 1000,
     loadBalancerStrategy: 'adaptive',
-  })
+    autoDisableChannel: {
+      enabled: false,
+      statuses: [],
+    },
+  });
 
   useEffect(() => {
     if (retryPolicy) {
@@ -33,31 +37,75 @@ export function RetrySettings() {
         maxSingleChannelRetries: retryPolicy.maxSingleChannelRetries,
         retryDelayMs: retryPolicy.retryDelayMs,
         loadBalancerStrategy: retryPolicy.loadBalancerStrategy,
-      })
+        autoDisableChannel: {
+          enabled: retryPolicy.autoDisableChannel?.enabled || false,
+          statuses: retryPolicy.autoDisableChannel?.statuses || [],
+        },
+      });
     }
-  }, [retryPolicy])
+  }, [retryPolicy]);
 
   const handleInputChange = useCallback((field: keyof RetryPolicyInput, value: string | boolean | number) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
-    }))
-  }, [])
+    }));
+  }, []);
+
+  const handleAutoDisableChannelChange = useCallback((field: 'enabled', value: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      autoDisableChannel: {
+        ...prev.autoDisableChannel,
+        [field]: value,
+      },
+    }));
+  }, []);
+
+  const handleStatusChange = useCallback((index: number, field: 'status' | 'times', value: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      autoDisableChannel: {
+        ...prev.autoDisableChannel,
+        statuses: prev.autoDisableChannel?.statuses?.map((s, i) => (i === index ? { ...s, [field]: value } : s)) || [],
+      },
+    }));
+  }, []);
+
+  const addStatus = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
+      autoDisableChannel: {
+        ...prev.autoDisableChannel,
+        statuses: [...(prev.autoDisableChannel?.statuses || []), { status: 500, times: 3 }],
+      },
+    }));
+  }, []);
+
+  const removeStatus = useCallback((index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      autoDisableChannel: {
+        ...prev.autoDisableChannel,
+        statuses: prev.autoDisableChannel?.statuses?.filter((_, i) => i !== index) || [],
+      },
+    }));
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
-      e.preventDefault()
-      await updateRetryPolicy.mutateAsync(formData)
+      e.preventDefault();
+      await updateRetryPolicy.mutateAsync(formData);
     },
     [updateRetryPolicy, formData]
-  )
+  );
 
   if (isLoading) {
     return (
       <div className='flex items-center justify-center p-8'>
         <Loader2 className='h-8 w-8 animate-spin' />
       </div>
-    )
+    );
   }
 
   return (
@@ -96,15 +144,16 @@ export function RetrySettings() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value='adaptive'>{t('system.retry.loadBalancerStrategy.options.adaptive')}</SelectItem>
-                    <SelectItem value='weighted'>{t('system.retry.loadBalancerStrategy.options.weighted')}</SelectItem>
+                    <SelectItem value='failover'>{t('system.retry.loadBalancerStrategy.options.failover')}</SelectItem>
+                    <SelectItem value='circuit-breaker'>{t('system.retry.loadBalancerStrategy.options.circuitBreaker')}</SelectItem>
                   </SelectContent>
                 </Select>
-                
+
                 {/* Strategy Documentation */}
                 {formData.loadBalancerStrategy && (
-                  <div className='mt-3 p-3 bg-muted/50 rounded-md border'>
-                    <div className='text-xs text-muted-foreground leading-relaxed'>
-                      {t('system.retry.loadBalancerStrategy.documentation.' + formData.loadBalancerStrategy)}
+                  <div className='bg-muted/50 mt-3 rounded-md border p-3'>
+                    <div className='text-muted-foreground text-xs leading-relaxed'>
+                      {t(`system.retry.loadBalancerStrategy.documentation.${formData.loadBalancerStrategy}`)}
                     </div>
                   </div>
                 )}
@@ -158,6 +207,70 @@ export function RetrySettings() {
                   <span className='text-muted-foreground text-sm'>ms</span>
                 </div>
               </div>
+
+              <Separator />
+
+              {/* Auto Disable Channel */}
+              <div className='space-y-4'>
+                <div className='flex items-center justify-between'>
+                  <div className='space-y-0.5'>
+                    <Label htmlFor='auto-disable-channel' className='text-base'>
+                      {t('system.retry.autoDisableChannel.label')}
+                    </Label>
+                    <div className='text-muted-foreground text-sm'>{t('system.retry.autoDisableChannel.description')}</div>
+                  </div>
+                  <Switch
+                    id='auto-disable-channel'
+                    checked={formData.autoDisableChannel?.enabled || false}
+                    onCheckedChange={(checked) => handleAutoDisableChannelChange('enabled', checked)}
+                  />
+                </div>
+
+                {formData.autoDisableChannel?.enabled && (
+                  <div className='space-y-3'>
+                    <div className='flex items-center justify-between'>
+                      <Label className='text-sm font-medium'>{t('system.retry.autoDisableChannel.statuses.label')}</Label>
+                      <Button type='button' variant='outline' size='sm' onClick={addStatus}>
+                        <Plus className='mr-1 h-4 w-4' />
+                        {t('system.retry.autoDisableChannel.statuses.add')}
+                      </Button>
+                    </div>
+
+                    {formData.autoDisableChannel?.statuses && formData.autoDisableChannel.statuses.length > 0 ? (
+                      <div className='space-y-2'>
+                        {formData.autoDisableChannel.statuses.map((statusItem, index) => (
+                          <div key={index} className='flex items-center space-x-2'>
+                            <Input
+                              type='number'
+                              placeholder={t('system.retry.autoDisableChannel.statuses.statusPlaceholder')}
+                              value={statusItem.status}
+                              onChange={(e) => handleStatusChange(index, 'status', parseInt(e.target.value) || 0)}
+                              className='w-24'
+                              min='400'
+                              max='599'
+                            />
+                            <span className='text-muted-foreground text-sm'>{t('system.retry.autoDisableChannel.statuses.times')}</span>
+                            <Input
+                              type='number'
+                              placeholder={t('system.retry.autoDisableChannel.statuses.timesPlaceholder')}
+                              value={statusItem.times}
+                              onChange={(e) => handleStatusChange(index, 'times', parseInt(e.target.value) || 0)}
+                              className='w-24'
+                              min='1'
+                              max='100'
+                            />
+                            <Button type='button' variant='ghost' size='icon' onClick={() => removeStatus(index)}>
+                              <Trash2 className='h-4 w-4' />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className='text-muted-foreground text-sm'>{t('system.retry.autoDisableChannel.statuses.empty')}</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -172,5 +285,5 @@ export function RetrySettings() {
         </form>
       </CardContent>
     </Card>
-  )
+  );
 }

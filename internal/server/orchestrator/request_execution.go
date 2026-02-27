@@ -6,13 +6,13 @@ import (
 
 	"github.com/tidwall/gjson"
 
-	"github.com/looplj/axonhub/internal/llm"
-	"github.com/looplj/axonhub/internal/llm/pipeline"
 	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
 	"github.com/looplj/axonhub/internal/pkg/xcontext"
 	"github.com/looplj/axonhub/internal/pkg/xerrors"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/pipeline"
 )
 
 // persistRequestExecutionMiddleware ensures a request execution exists and handles error updates.
@@ -45,21 +45,29 @@ func (m *persistRequestExecutionMiddleware) OnOutboundRawRequest(ctx context.Con
 		return request, nil
 	}
 
-	llmRequest := state.LlmRequest
-	if llmRequest == nil {
-		return request, nil
-	}
+	candidate := state.ChannelModelsCandidates[state.CurrentCandidateIndex]
+	entry := candidate.Models[state.CurrentModelIndex]
 
 	requestExec, err := state.RequestService.CreateRequestExecution(
 		ctx,
 		channel,
-		llmRequest.Model,
+		entry.ActualModel,
 		state.Request,
 		*request,
 		m.outbound.APIFormat(),
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Update request with channel ID after channel selection
+	if state.Request != nil && state.Request.ChannelID != channel.ID {
+		err := state.RequestService.UpdateRequestChannelID(ctx, state.Request.ID, channel.ID)
+		if err != nil {
+			return nil, err
+		}
+		// Update the in-memory state to prevent duplicate updates and ensure consistency
+		state.Request.ChannelID = channel.ID
 	}
 
 	state.RequestExec = requestExec
@@ -135,6 +143,21 @@ func (m *persistRequestExecutionMiddleware) OnOutboundRawError(ctx context.Conte
 	state := m.outbound.state
 	if state == nil || state.RequestExec == nil {
 		return
+	}
+
+	// Log error with channel information for better debugging
+	channel := m.outbound.GetCurrentChannel()
+	if channel != nil {
+		logFields := []log.Field{
+			log.Cause(err),
+			log.Int("channel_id", channel.ID),
+			log.String("channel_name", channel.Name),
+		}
+		if modelID := m.outbound.GetCurrentModelID(); modelID != "" {
+			logFields = append(logFields, log.String("model_id", modelID))
+		}
+
+		log.Warn(ctx, "request process failed", logFields...)
 	}
 
 	// Use context without cancellation to ensure persistence even if client canceled

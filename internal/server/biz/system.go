@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -20,6 +22,7 @@ import (
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
+	"github.com/looplj/axonhub/internal/pkg/xtime"
 )
 
 const (
@@ -60,7 +63,60 @@ const (
 	// SystemKeyOnboarded is the key used to store the onboarding status and version.
 	// The value is JSON-encoded OnboardingInfo struct.
 	SystemKeyOnboarded = "system_onboarded"
+
+	// SystemKeyModelSettings is the key used to store model-related settings.
+	// The value is JSON-encoded SystemModelSettings struct.
+	SystemKeyModelSettings = "system_model_settings"
+
+	// SystemKeyChannelSettings is the key used to store channel settings.
+	// The value is JSON-encoded SystemChannelSettings struct.
+	SystemKeyChannelSettings = "system_channel_settings"
+
+	// SystemKeyGeneralSettings is the key used to store general settings.
+	// The value is JSON-encoded SystemGeneralSettings struct.
+	SystemKeyGeneralSettings = "system_general_settings"
+
+	// SystemKeyAutoBackupSettings is the key used to store auto backup configuration.
+	// The value is JSON-encoded AutoBackupSettings struct.
+	SystemKeyAutoBackupSettings = "system_auto_backup_settings"
 )
+
+// SystemGeneralSettings represents general system configuration settings.
+type SystemGeneralSettings struct {
+	// CurrencyCode is the code used for currency display (e.g., USD, RMB).
+	CurrencyCode string `json:"currency_code"`
+	Timezone     string `json:"timezone"`
+}
+
+// BackupFrequency represents how often automatic backups should run.
+type BackupFrequency string
+
+const (
+	BackupFrequencyDaily   BackupFrequency = "daily"
+	BackupFrequencyWeekly  BackupFrequency = "weekly"
+	BackupFrequencyMonthly BackupFrequency = "monthly"
+)
+
+// AutoBackupSettings represents automatic backup configuration.
+type AutoBackupSettings struct {
+	// Enabled controls whether automatic backup is active
+	Enabled bool `json:"enabled"`
+	// Frequency defines how often backups are created
+	Frequency BackupFrequency `json:"frequency"`
+	// DataStorageID is the ID of the data storage to backup to
+	DataStorageID int `json:"data_storage_id"`
+	// BackupOptions defines what to include in the backup
+	IncludeChannels    bool `json:"include_channels"`
+	IncludeModels      bool `json:"include_models"`
+	IncludeAPIKeys     bool `json:"include_api_keys"`
+	IncludeModelPrices bool `json:"include_model_prices"`
+	// RetentionDays defines how many days to keep backups (0 = keep all)
+	RetentionDays int `json:"retention_days"`
+	// LastBackupAt is the timestamp of the last successful backup
+	LastBackupAt *time.Time `json:"last_backup_at,omitempty"`
+	// LastBackupError is the error message from the last backup attempt (if any)
+	LastBackupError string `json:"last_backup_error,omitempty"`
+}
 
 // StoragePolicy represents the storage policy configuration.
 type StoragePolicy struct {
@@ -77,8 +133,21 @@ type CleanupOption struct {
 	CleanupDays  int    `json:"cleanup_days"`
 }
 
+const (
+	// LoadBalancerStrategyAdaptive is a dynamic load balancer strategy that adapts to the current load.
+	LoadBalancerStrategyAdaptive = "adaptive"
+
+	// LoadBalancerStrategyFailover is a deterministic load balancer strategy that fails over to the next available channel based on the weight of the channels.
+	LoadBalancerStrategyFailover = "failover"
+
+	// LoadBalancerStrategyCircuitBreaker is a dynamic load balancer strategy that monitors the health of channels and fails over to a backup channel when the primary channel is unhealthy.
+	LoadBalancerStrategyCircuitBreaker = "circuit-breaker"
+)
+
 // RetryPolicy represents the retry policy configuration.
 type RetryPolicy struct {
+	// Enabled controls whether retry policy is active
+	Enabled bool `json:"enabled"`
 	// MaxChannelRetries defines the maximum number of different channels to retry
 	MaxChannelRetries int `json:"max_channel_retries"`
 	// MaxSingleChannelRetries defines the maximum number of retries for a single channel
@@ -86,20 +155,159 @@ type RetryPolicy struct {
 	// RetryDelayMs defines the delay between retries in milliseconds
 	RetryDelayMs int `json:"retry_delay_ms"`
 	// LoadBalancerStrategy defines which channel load balancer strategy to use.
-	// Supported values: "adaptive", "weighted".
+	// Supported values: "adaptive", "failover", "circuit-breaker".
 	LoadBalancerStrategy string `json:"load_balancer_strategy"`
-	// Enabled controls whether retry policy is active
-	Enabled bool `json:"enabled"`
+
+	// AutoDisableChannel controls whether to auto-disable a channel or API key when it exceeds the maximum number of retries.
+	// For compatibility with legacy setting, the name is AutoDisableChannel.
+	// If the channel has more than one key, the API key will be disabled instead of the channel.
+	AutoDisableChannel AutoDisableChannel `json:"auto_disable_channel"`
 }
 
-// OnboardingInfo represents the onboarding status and version information.
-type OnboardingInfo struct {
-	// Onboarded indicates whether the user has completed onboarding
-	Onboarded bool `json:"onboarded"`
-	// Version is the system version when onboarding was completed
-	Version string `json:"version"`
-	// CompletedAt is the timestamp when onboarding was completed
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+type AutoDisableChannel struct {
+	// Enabled controls whether auto-disable channel is active
+	Enabled bool `json:"enabled"`
+
+	// Statuses defines the status codes and times to auto-disable a channel
+	Statuses []AutoDisableChannelStatus `json:"statuses"`
+}
+
+type AutoDisableChannelStatus struct {
+	// Status is the HTTP status code to trigger auto-disable.
+	Status int `json:"status"`
+
+	// Times is the number of times the status code occurs before auto-disable the channel.
+	Times int `json:"times"`
+}
+
+// SystemModelSettings represents model-related configuration settings.
+type SystemModelSettings struct {
+	// FallbackToChannelsOnModelNotFound controls whether to fall back to legacy channel
+	// selection when the requested model is not found in AxonHub Model associations.
+	// When true, if a model has no associations or doesn't exist, the system will
+	// attempt to find enabled channels that support the requested model directly.
+	// When false, such requests will return an error instead of falling back.
+	FallbackToChannelsOnModelNotFound bool `json:"fallback_to_channels_on_model_not_found"`
+
+	// QueryAllChannelModels controls whether models API returns all models from channels
+	// or only configured models (models with explicit Model entity configuration).
+	// When true, the models API will return all models supported by enabled channels.
+	// When false, only models that have explicit Model entity configuration will be returned.
+	QueryAllChannelModels bool `json:"query_all_channel_models"`
+}
+
+type SystemChannelSettings struct {
+	Probe ChannelProbeSetting `json:"probe"`
+}
+
+// ProbeFrequency represents the frequency of channel probing.
+type ProbeFrequency string
+
+const (
+	ProbeFrequency1Min  ProbeFrequency = "1m"
+	ProbeFrequency5Min  ProbeFrequency = "5m"
+	ProbeFrequency30Min ProbeFrequency = "30m"
+	ProbeFrequency1Hour ProbeFrequency = "1h"
+)
+
+// ChannelProbeSetting represents the channel probe configuration.
+type ChannelProbeSetting struct {
+	// Enabled controls whether channel probing is active
+	Enabled bool `json:"enabled"`
+	// Frequency defines how often to probe channels
+	Frequency ProbeFrequency `json:"frequency"`
+}
+
+// GetQueryRangeMinutes returns the query range in minutes based on the probe frequency.
+// 1m -> 10min, 5m -> 60min, 30m -> 720min (12h), 1h -> 1440min (24h).
+func (c *ChannelProbeSetting) GetQueryRangeMinutes() int {
+	switch c.Frequency {
+	case ProbeFrequency1Min:
+		return 10
+	case ProbeFrequency5Min:
+		return 60
+	case ProbeFrequency30Min:
+		return 720
+	case ProbeFrequency1Hour:
+		return 1440
+	default:
+		return 10
+	}
+}
+
+// GetIntervalMinutes returns the interval in minutes based on the probe frequency.
+func (c *ChannelProbeSetting) GetIntervalMinutes() int {
+	switch c.Frequency {
+	case ProbeFrequency1Min:
+		return 1
+	case ProbeFrequency5Min:
+		return 5
+	case ProbeFrequency30Min:
+		return 30
+	case ProbeFrequency1Hour:
+		return 60
+	default:
+		return 1
+	}
+}
+
+// GetCronExpr returns the cron expression based on the probe frequency.
+func (c *ChannelProbeSetting) GetCronExpr() string {
+	switch c.Frequency {
+	case ProbeFrequency1Min:
+		return "* * * * *"
+	case ProbeFrequency5Min:
+		return "*/5 * * * *"
+	case ProbeFrequency30Min:
+		return "*/30 * * * *"
+	case ProbeFrequency1Hour:
+		return "0 * * * *"
+	default:
+		return "* * * * *"
+	}
+}
+
+// MarshalGQL implements the graphql.Marshaler interface for ProbeFrequency.
+func (p ProbeFrequency) MarshalGQL(w io.Writer) {
+	var s string
+
+	switch p {
+	case ProbeFrequency1Min:
+		s = "ONE_MINUTE"
+	case ProbeFrequency5Min:
+		s = "FIVE_MINUTES"
+	case ProbeFrequency30Min:
+		s = "THIRTY_MINUTES"
+	case ProbeFrequency1Hour:
+		s = "ONE_HOUR"
+	default:
+		s = "ONE_MINUTE"
+	}
+
+	_, _ = io.WriteString(w, `"`+s+`"`)
+}
+
+// UnmarshalGQL implements the graphql.Unmarshaler interface for ProbeFrequency.
+func (p *ProbeFrequency) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("ProbeFrequency must be a string")
+	}
+
+	switch str {
+	case "ONE_MINUTE":
+		*p = ProbeFrequency1Min
+	case "FIVE_MINUTES":
+		*p = ProbeFrequency5Min
+	case "THIRTY_MINUTES":
+		*p = ProbeFrequency30Min
+	case "ONE_HOUR":
+		*p = ProbeFrequency1Hour
+	default:
+		return fmt.Errorf("invalid ProbeFrequency: %s", str)
+	}
+
+	return nil
 }
 
 type SystemServiceParams struct {
@@ -114,14 +322,19 @@ func NewSystemService(params SystemServiceParams) *SystemService {
 		AbstractService: &AbstractService{
 			db: params.Ent,
 		},
-		Cache: xcache.NewFromConfig[ent.System](params.CacheConfig),
+		CacheConfig: params.CacheConfig,
+		Cache:       xcache.NewFromConfig[ent.System](params.CacheConfig),
 	}
 }
 
 type SystemService struct {
 	*AbstractService
 
-	Cache xcache.Cache[ent.System]
+	CacheConfig xcache.Config
+	Cache       xcache.Cache[ent.System]
+
+	mu           sync.RWMutex
+	timeLocation *time.Location
 }
 
 func (s *SystemService) IsInitialized(ctx context.Context) (bool, error) {
@@ -140,7 +353,7 @@ func (s *SystemService) IsInitialized(ctx context.Context) (bool, error) {
 	return strings.EqualFold(sys.Value, "true"), nil
 }
 
-type InitializeSystemArgs struct {
+type InitializeSystemParams struct {
 	OwnerEmail     string
 	OwnerPassword  string
 	OwnerFirstName string
@@ -149,7 +362,7 @@ type InitializeSystemArgs struct {
 }
 
 // Initialize initializes the system with a secret key and sets the initialized flag.
-func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemArgs) (err error) {
+func (s *SystemService) Initialize(ctx context.Context, params *InitializeSystemParams) (err error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	// Check if system is already initialized
 	isInitialized, err := s.IsInitialized(ctx)
@@ -182,17 +395,17 @@ func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemAr
 
 	ctx = ent.NewContext(ctx, tx.Client())
 
-	hashedPassword, err := HashPassword(args.OwnerPassword)
+	hashedPassword, err := HashPassword(params.OwnerPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	// Create owner user.
 	user, err := tx.User.Create().
-		SetEmail(args.OwnerEmail).
+		SetEmail(params.OwnerEmail).
 		SetPassword(hashedPassword).
-		SetFirstName(args.OwnerFirstName).
-		SetLastName(args.OwnerLastName).
+		SetFirstName(params.OwnerFirstName).
+		SetLastName(params.OwnerLastName).
 		SetIsOwner(true).
 		SetScopes([]string{"*"}). // Give owner all scopes
 		Save(ctx)
@@ -225,7 +438,7 @@ func (s *SystemService) Initialize(ctx context.Context, args *InitializeSystemAr
 	}
 
 	// Set brand name.
-	err = s.setSystemValue(ctx, SystemKeyBrandName, args.BrandName)
+	err = s.setSystemValue(ctx, SystemKeyBrandName, params.BrandName)
 	if err != nil {
 		return fmt.Errorf("failed to set brand name: %w", err)
 	}
@@ -412,6 +625,33 @@ var defaultRetryPolicy = RetryPolicy{
 	Enabled:                 true,
 }
 
+var defaultModelSettings = SystemModelSettings{
+	FallbackToChannelsOnModelNotFound: true,
+	QueryAllChannelModels:             true,
+}
+
+var defaultChannelSetting = SystemChannelSettings{
+	Probe: ChannelProbeSetting{
+		Enabled:   true,
+		Frequency: ProbeFrequency5Min,
+	},
+}
+
+var defaultGeneralSettings = SystemGeneralSettings{
+	CurrencyCode: "USD",
+	Timezone:     "UTC",
+}
+
+var defaultAutoBackupSettings = AutoBackupSettings{
+	Enabled:            false,
+	Frequency:          BackupFrequencyDaily,
+	IncludeChannels:    true,
+	IncludeModels:      true,
+	IncludeAPIKeys:     false,
+	IncludeModelPrices: true,
+	RetentionDays:      30,
+}
+
 // StoragePolicy retrieves the storage policy configuration.
 func (s *SystemService) StoragePolicy(ctx context.Context) (*StoragePolicy, error) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
@@ -473,6 +713,10 @@ func (s *SystemService) RetryPolicy(ctx context.Context) (*RetryPolicy, error) {
 	if policy.LoadBalancerStrategy == "" {
 		policy.LoadBalancerStrategy = defaultRetryPolicy.LoadBalancerStrategy
 	}
+	// The weighted load balancer strategy is deprecated. Use the failover strategy instead.
+	if policy.LoadBalancerStrategy == "weighted" {
+		policy.LoadBalancerStrategy = LoadBalancerStrategyFailover
+	}
 
 	return &policy, nil
 }
@@ -506,6 +750,199 @@ func (s *SystemService) SetRetryPolicy(ctx context.Context, policy *RetryPolicy)
 	}
 
 	return s.setSystemValue(ctx, SystemKeyRetryPolicy, string(jsonBytes))
+}
+
+// ModelSettings retrieves the model settings configuration.
+func (s *SystemService) ModelSettings(ctx context.Context) (*SystemModelSettings, error) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	value, err := s.getSystemValue(ctx, SystemKeyModelSettings)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultModelSettings), nil
+		}
+
+		return nil, fmt.Errorf("failed to get model settings: %w", err)
+	}
+
+	var settings SystemModelSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal model settings: %w", err)
+	}
+
+	return &settings, nil
+}
+
+// ModelSettingsOrDefault retrieves the model settings or returns the default if not available.
+func (s *SystemService) ModelSettingsOrDefault(ctx context.Context) *SystemModelSettings {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	settings, err := s.ModelSettings(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultModelSettings)
+		}
+
+		log.Warn(ctx, "failed to get model settings", log.Cause(err))
+
+		return lo.ToPtr(defaultModelSettings)
+	}
+
+	return settings
+}
+
+// SetModelSettings sets the model settings configuration.
+func (s *SystemService) SetModelSettings(ctx context.Context, settings SystemModelSettings) error {
+	jsonBytes, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal model settings: %w", err)
+	}
+
+	return s.setSystemValue(ctx, SystemKeyModelSettings, string(jsonBytes))
+}
+
+// ChannelSetting retrieves the channel setting configuration.
+func (s *SystemService) ChannelSetting(ctx context.Context) (*SystemChannelSettings, error) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	value, err := s.getSystemValue(ctx, SystemKeyChannelSettings)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultChannelSetting), nil
+		}
+
+		return nil, fmt.Errorf("failed to get channel setting: %w", err)
+	}
+
+	var setting SystemChannelSettings
+	if err := json.Unmarshal([]byte(value), &setting); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal channel setting: %w", err)
+	}
+
+	return &setting, nil
+}
+
+// ChannelSettingOrDefault retrieves the channel setting or returns the default if not available.
+func (s *SystemService) ChannelSettingOrDefault(ctx context.Context) *SystemChannelSettings {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	setting, err := s.ChannelSetting(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultChannelSetting)
+		}
+
+		log.Warn(ctx, "failed to get channel setting", log.Cause(err))
+
+		return lo.ToPtr(defaultChannelSetting)
+	}
+
+	return setting
+}
+
+// SetChannelSetting sets the channel setting configuration.
+func (s *SystemService) SetChannelSetting(ctx context.Context, setting SystemChannelSettings) error {
+	jsonBytes, err := json.Marshal(setting)
+	if err != nil {
+		return fmt.Errorf("failed to marshal channel setting: %w", err)
+	}
+
+	return s.setSystemValue(ctx, SystemKeyChannelSettings, string(jsonBytes))
+}
+
+func (s *SystemService) TimeLocation(ctx context.Context) *time.Location {
+	s.mu.RLock()
+
+	if s.timeLocation != nil {
+		defer s.mu.RUnlock()
+		return s.timeLocation
+	}
+
+	s.mu.RUnlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double check
+	if s.timeLocation != nil {
+		return s.timeLocation
+	}
+
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	settings, err := s.GeneralSettings(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			s.timeLocation = time.UTC
+			return time.UTC
+		}
+
+		log.Warn(ctx, "failed to get general settings", log.Cause(err))
+
+		return time.UTC
+	}
+
+	if settings.Timezone == "" {
+		s.timeLocation = time.UTC
+		return time.UTC
+	}
+
+	if l, err := time.LoadLocation(settings.Timezone); err == nil {
+		s.timeLocation = l
+		return l
+	}
+
+	s.timeLocation = time.UTC
+
+	return time.UTC
+}
+
+// GeneralSettings retrieves the general settings configuration.
+func (s *SystemService) GeneralSettings(ctx context.Context) (*SystemGeneralSettings, error) {
+	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+
+	value, err := s.getSystemValue(ctx, SystemKeyGeneralSettings)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return lo.ToPtr(defaultGeneralSettings), nil
+		}
+
+		return nil, fmt.Errorf("failed to get general settings: %w", err)
+	}
+
+	var settings SystemGeneralSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal general settings: %w", err)
+	}
+
+	if settings.CurrencyCode == "" {
+		settings.CurrencyCode = defaultGeneralSettings.CurrencyCode
+	}
+
+	if settings.Timezone == "" {
+		settings.Timezone = defaultGeneralSettings.Timezone
+	}
+
+	return &settings, nil
+}
+
+// SetGeneralSettings sets the general settings configuration.
+func (s *SystemService) SetGeneralSettings(ctx context.Context, settings SystemGeneralSettings) error {
+	jsonBytes, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal general settings: %w", err)
+	}
+
+	err = s.setSystemValue(ctx, SystemKeyGeneralSettings, string(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("failed to set general settings: %w", err)
+	}
+
+	s.mu.Lock()
+	s.timeLocation = nil
+	s.mu.Unlock()
+
+	return nil
 }
 
 // DefaultDataStorageID retrieves the default data storage ID from system settings.
@@ -557,109 +994,49 @@ func (s *SystemService) SetVersion(ctx context.Context, version string) error {
 	return s.setSystemValue(ctx, SystemKeyVersion, version)
 }
 
-// OnboardingInfo retrieves the onboarding information from system settings.
-// Returns nil if not set.
-func (s *SystemService) OnboardingInfo(ctx context.Context) (*OnboardingInfo, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
-	value, err := s.getSystemValue(ctx, SystemKeyOnboarded)
+// AutoBackupSettings retrieves the auto backup settings configuration.
+func (s *SystemService) AutoBackupSettings(ctx context.Context) (*AutoBackupSettings, error) {
+	value, err := s.getSystemValue(ctx, SystemKeyAutoBackupSettings)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			return nil, nil
+			return lo.ToPtr(defaultAutoBackupSettings), nil
 		}
 
-		return nil, fmt.Errorf("failed to get onboarding info: %w", err)
+		return nil, fmt.Errorf("failed to get auto backup settings: %w", err)
 	}
 
-	var info OnboardingInfo
-	if err := json.Unmarshal([]byte(value), &info); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal onboarding info: %w", err)
+	var settings AutoBackupSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal auto backup settings: %w", err)
 	}
 
-	return &info, nil
+	return &settings, nil
 }
 
-// SetOnboardingInfo sets the onboarding information.
-func (s *SystemService) SetOnboardingInfo(ctx context.Context, info *OnboardingInfo) error {
-	jsonBytes, err := json.Marshal(info)
+// SetAutoBackupSettings sets the auto backup settings configuration.
+func (s *SystemService) SetAutoBackupSettings(ctx context.Context, settings AutoBackupSettings) error {
+	jsonBytes, err := json.Marshal(settings)
 	if err != nil {
-		return fmt.Errorf("failed to marshal onboarding info: %w", err)
+		return fmt.Errorf("failed to marshal auto backup settings: %w", err)
 	}
 
-	return s.setSystemValue(ctx, SystemKeyOnboarded, string(jsonBytes))
-}
-
-// IsOnboardingCompleted checks if onboarding has been completed for the current version.
-func (s *SystemService) IsOnboardingCompleted(ctx context.Context) (bool, error) {
-	info, err := s.OnboardingInfo(ctx)
+	err = s.setSystemValue(ctx, SystemKeyAutoBackupSettings, string(jsonBytes))
 	if err != nil {
-		return false, err
+		return fmt.Errorf("failed to set auto backup settings: %w", err)
 	}
 
-	if info == nil || !info.Onboarded {
-		return false, nil
-	}
+	return nil
+}
 
-	currentVersion, err := s.Version(ctx)
+// UpdateAutoBackupLastRun updates the last backup timestamp and error status.
+func (s *SystemService) UpdateAutoBackupLastRun(ctx context.Context, lastError string) error {
+	settings, err := s.AutoBackupSettings(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	// If onboarding was completed for a different version, it needs to be redone
-	return info.Version == currentVersion, nil
-}
+	settings.LastBackupAt = lo.ToPtr(xtime.UTCNow())
+	settings.LastBackupError = lastError
 
-// CompleteOnboarding marks onboarding as completed for the current version.
-func (s *SystemService) CompleteOnboarding(ctx context.Context) error {
-	currentVersion, err := s.Version(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current version: %w", err)
-	}
-
-	info := &OnboardingInfo{
-		Onboarded:   true,
-		Version:     currentVersion,
-		CompletedAt: lo.ToPtr(time.Now()),
-	}
-
-	return s.SetOnboardingInfo(ctx, info)
-}
-
-// VersionCheckResult contains the result of a version check.
-type VersionCheckResult struct {
-	CurrentVersion string `json:"current_version"`
-	LatestVersion  string `json:"latest_version"`
-	HasUpdate      bool   `json:"has_update"`
-	ReleaseURL     string `json:"release_url"`
-}
-
-// CheckForUpdate checks if there is a newer version available on GitHub.
-func (s *SystemService) CheckForUpdate(ctx context.Context) (*VersionCheckResult, error) {
-	currentVersion := build.Version
-
-	latestVersion, err := s.fetchLatestGitHubRelease(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch latest release: %w", err)
-	}
-
-	hasUpdate := s.isNewerVersion(currentVersion, latestVersion)
-	releaseURL := fmt.Sprintf("https://github.com/looplj/axonhub/releases/tag/%s", latestVersion)
-
-	return &VersionCheckResult{
-		CurrentVersion: currentVersion,
-		LatestVersion:  latestVersion,
-		HasUpdate:      hasUpdate,
-		ReleaseURL:     releaseURL,
-	}, nil
-}
-
-// fetchLatestGitHubRelease fetches the latest stable release tag from GitHub.
-// It skips beta and rc versions.
-func (s *SystemService) fetchLatestGitHubRelease(ctx context.Context) (string, error) {
-	return FetchLatestGitHubRelease(ctx)
-}
-
-// isNewerVersion compares two semantic versions and returns true if latest is newer than current.
-func (s *SystemService) isNewerVersion(current, latest string) bool {
-	return IsNewerVersion(current, latest)
+	return s.SetAutoBackupSettings(ctx, *settings)
 }

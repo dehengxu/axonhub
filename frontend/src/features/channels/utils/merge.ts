@@ -1,75 +1,103 @@
 // Utility functions for merging channel override configurations
 // Mirrors backend merge logic in internal/server/biz/channel_merge.go
-
-import type { ChannelSettings, HeaderEntry } from '../data/schema'
-
-const CLEAR_HEADER_DIRECTIVE = '__AXONHUB_CLEAR__'
+import type { ChannelSettings, OverrideOperation } from '../data/schema';
 
 /**
- * Normalizes empty or whitespace-only parameter strings to "{}".
+ * Normalizes empty or whitespace-only parameter strings to "[]".
  * This ensures consistent representation across the system.
  */
 export function normalizeOverrideParameters(params: string): string {
   if (!params || params.trim() === '') {
-    return '{}'
+    return '[]';
   }
-  return params
+  return params;
 }
 
 /**
- * Merges override headers with template headers.
- * - Template entries override existing ones with the same key (case-insensitive)
- * - Template entries with value "__AXONHUB_CLEAR__" remove the header
- * - Existing headers not mentioned in template are preserved
+ * Merges override header operations with template header operations.
+ * - For `set` ops: match by `path` (case-insensitive), template overrides existing
+ * - Other ops (delete, rename, copy): always appended from template
+ * - Existing ops not matched by template are preserved
  */
-export function mergeOverrideHeaders(existing: HeaderEntry[], template: HeaderEntry[]): HeaderEntry[] {
-  const result = [...existing]
+export function mergeOverrideHeaders(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
+  const result = [...existing];
 
-  for (const templateHeader of template) {
-    // Find existing header with same key (case-insensitive)
-    const index = result.findIndex((h) => h.key.toLowerCase() === templateHeader.key.toLowerCase())
-
-    if (templateHeader.value === CLEAR_HEADER_DIRECTIVE) {
-      // Remove header if it exists
+  for (const templateOp of template) {
+    if (templateOp.op === 'set' && templateOp.path) {
+      const index = result.findIndex(
+        (op) => op.op === 'set' && op.path?.toLowerCase() === templateOp.path?.toLowerCase()
+      );
       if (index >= 0) {
-        result.splice(index, 1)
+        result[index] = templateOp;
+      } else {
+        result.push(templateOp);
       }
-      continue
-    }
-
-    if (index >= 0) {
-      // Override existing header
-      result[index] = templateHeader
     } else {
-      // Add new header
-      result.push(templateHeader)
+      result.push(templateOp);
     }
   }
 
-  return result
+  return result;
+}
+
+/**
+ * Merges override body operations with template body operations.
+ * - For `set` and `delete` ops: match by `path`, template overrides existing
+ * - For `rename` and `copy` ops: always appended from template
+ * - Existing ops not matched by template are preserved
+ */
+export function mergeOverrideOperations(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
+  const result = [...existing];
+
+  for (const templateOp of template) {
+    // For rename and copy ops, always append
+    if (templateOp.op === 'rename' || templateOp.op === 'copy') {
+      result.push(templateOp);
+      continue;
+    }
+
+    // For set and delete ops, match by path
+    if ((templateOp.op === 'set' || templateOp.op === 'delete') && templateOp.path) {
+      const index = result.findIndex(
+        (op) => (op.op === 'set' || op.op === 'delete') && op.path === templateOp.path
+      );
+      if (index >= 0) {
+        result[index] = templateOp;
+      } else {
+        result.push(templateOp);
+      }
+    } else {
+      result.push(templateOp);
+    }
+  }
+
+  return result;
 }
 
 export function mergeChannelSettingsForUpdate(
   existing: ChannelSettings | null | undefined,
   patch: Partial<ChannelSettings>
 ): ChannelSettings {
-  const hasOwn = (key: keyof ChannelSettings) => Object.prototype.hasOwnProperty.call(patch, key)
+  const hasOwn = (key: keyof ChannelSettings) => Object.prototype.hasOwnProperty.call(patch, key);
   const pick = <K extends keyof ChannelSettings>(key: K, fallback: ChannelSettings[K]): ChannelSettings[K] => {
     if (!hasOwn(key)) {
-      return fallback
+      return fallback;
     }
-    const value = patch[key]
-    return (value === undefined ? fallback : (value as ChannelSettings[K]))
-  }
+    const value = patch[key];
+    return value === undefined ? fallback : (value as ChannelSettings[K]);
+  };
 
   return {
     extraModelPrefix: pick('extraModelPrefix', existing?.extraModelPrefix ?? ''),
     modelMappings: pick('modelMappings', existing?.modelMappings ?? []),
     autoTrimedModelPrefixes: pick('autoTrimedModelPrefixes', existing?.autoTrimedModelPrefixes ?? []),
-    overrideParameters: pick('overrideParameters', existing?.overrideParameters ?? ''),
-    overrideHeaders: pick('overrideHeaders', existing?.overrideHeaders ?? []),
+    hideOriginalModels: pick('hideOriginalModels', existing?.hideOriginalModels ?? false),
+    hideMappedModels: pick('hideMappedModels', existing?.hideMappedModels ?? false),
+    bodyOverrideOperations: pick('bodyOverrideOperations', existing?.bodyOverrideOperations ?? []),
+    headerOverrideOperations: pick('headerOverrideOperations', existing?.headerOverrideOperations ?? []),
     proxy: pick('proxy', existing?.proxy ?? null),
-  }
+    transformOptions: pick('transformOptions', existing?.transformOptions ?? undefined),
+  };
 }
 
 /**
@@ -80,39 +108,39 @@ export function mergeChannelSettingsForUpdate(
  */
 export function mergeOverrideParameters(existing: string, template: string): string {
   try {
-    const existingObj = parseJSONObject(existing)
-    const templateObj = parseJSONObject(template)
+    const existingObj = parseJSONObject(existing);
+    const templateObj = parseJSONObject(template);
 
-    const merged = deepMergeObjects(existingObj, templateObj)
+    const merged = deepMergeObjects(existingObj, templateObj);
 
     // Use compact format to match backend
-    return JSON.stringify(merged)
+    return JSON.stringify(merged);
   } catch (error) {
     // If parsing fails, return template
-    return template
+    return template;
   }
 }
 
 function parseJSONObject(input: string): Record<string, any> {
-  const trimmed = input.trim()
+  const trimmed = input.trim();
   if (!trimmed) {
-    return {}
+    return {};
   }
 
-  const parsed = JSON.parse(trimmed)
+  const parsed = JSON.parse(trimmed);
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Input must be a JSON object')
+    throw new Error('Input must be a JSON object');
   }
 
-  return parsed
+  return parsed;
 }
 
 function deepMergeObjects(base: Record<string, any>, override: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = { ...base }
+  const result: Record<string, any> = { ...base };
 
   for (const [key, overrideVal] of Object.entries(override)) {
-    const baseVal = result[key]
+    const baseVal = result[key];
 
     // If both values are objects (and not arrays), merge recursively
     if (
@@ -123,12 +151,12 @@ function deepMergeObjects(base: Record<string, any>, override: Record<string, an
       typeof overrideVal === 'object' &&
       !Array.isArray(overrideVal)
     ) {
-      result[key] = deepMergeObjects(baseVal, overrideVal)
+      result[key] = deepMergeObjects(baseVal, overrideVal);
     } else {
       // Otherwise, override with template value
-      result[key] = overrideVal
+      result[key] = overrideVal;
     }
   }
 
-  return result
+  return result;
 }

@@ -11,7 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/objects"
 )
 
@@ -35,13 +35,19 @@ type Channel struct {
 	// Status holds the value of the "status" field.
 	Status channel.Status `json:"status,omitempty"`
 	// Credentials holds the value of the "credentials" field.
-	Credentials *objects.ChannelCredentials `json:"-"`
+	Credentials objects.ChannelCredentials `json:"-"`
+	// Disabled API keys with metadata (sensitive; requires channel write permission)
+	DisabledAPIKeys []objects.DisabledAPIKey `json:"-"`
 	// SupportedModels holds the value of the "supported_models" field.
 	SupportedModels []string `json:"supported_models,omitempty"`
+	// AutoSyncSupportedModels holds the value of the "auto_sync_supported_models" field.
+	AutoSyncSupportedModels bool `json:"auto_sync_supported_models,omitempty"`
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
 	// DefaultTestModel holds the value of the "default_test_model" field.
 	DefaultTestModel string `json:"default_test_model,omitempty"`
+	// Policies holds the value of the "policies" field.
+	Policies objects.ChannelPolicies `json:"policies,omitempty"`
 	// Settings holds the value of the "settings" field.
 	Settings *objects.ChannelSettings `json:"settings,omitempty"`
 	// Ordering weight for display sorting
@@ -64,17 +70,23 @@ type ChannelEdges struct {
 	Executions []*RequestExecution `json:"executions,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
-	// ChannelPerformance holds the value of the channel_performance edge.
-	ChannelPerformance *ChannelPerformance `json:"channel_performance,omitempty"`
+	// ChannelProbes holds the value of the channel_probes edge.
+	ChannelProbes []*ChannelProbe `json:"channel_probes,omitempty"`
+	// ChannelModelPrices holds the value of the channel_model_prices edge.
+	ChannelModelPrices []*ChannelModelPrice `json:"channel_model_prices,omitempty"`
+	// ProviderQuotaStatus holds the value of the provider_quota_status edge.
+	ProviderQuotaStatus *ProviderQuotaStatus `json:"provider_quota_status,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [6]bool
 	// totalCount holds the count of the edges above.
-	totalCount [4]map[string]int
+	totalCount [6]map[string]int
 
-	namedRequests   map[string][]*Request
-	namedExecutions map[string][]*RequestExecution
-	namedUsageLogs  map[string][]*UsageLog
+	namedRequests           map[string][]*Request
+	namedExecutions         map[string][]*RequestExecution
+	namedUsageLogs          map[string][]*UsageLog
+	namedChannelProbes      map[string][]*ChannelProbe
+	namedChannelModelPrices map[string][]*ChannelModelPrice
 }
 
 // RequestsOrErr returns the Requests value or an error if the edge
@@ -104,15 +116,33 @@ func (e ChannelEdges) UsageLogsOrErr() ([]*UsageLog, error) {
 	return nil, &NotLoadedError{edge: "usage_logs"}
 }
 
-// ChannelPerformanceOrErr returns the ChannelPerformance value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e ChannelEdges) ChannelPerformanceOrErr() (*ChannelPerformance, error) {
-	if e.ChannelPerformance != nil {
-		return e.ChannelPerformance, nil
-	} else if e.loadedTypes[3] {
-		return nil, &NotFoundError{label: channelperformance.Label}
+// ChannelProbesOrErr returns the ChannelProbes value or an error if the edge
+// was not loaded in eager-loading.
+func (e ChannelEdges) ChannelProbesOrErr() ([]*ChannelProbe, error) {
+	if e.loadedTypes[3] {
+		return e.ChannelProbes, nil
 	}
-	return nil, &NotLoadedError{edge: "channel_performance"}
+	return nil, &NotLoadedError{edge: "channel_probes"}
+}
+
+// ChannelModelPricesOrErr returns the ChannelModelPrices value or an error if the edge
+// was not loaded in eager-loading.
+func (e ChannelEdges) ChannelModelPricesOrErr() ([]*ChannelModelPrice, error) {
+	if e.loadedTypes[4] {
+		return e.ChannelModelPrices, nil
+	}
+	return nil, &NotLoadedError{edge: "channel_model_prices"}
+}
+
+// ProviderQuotaStatusOrErr returns the ProviderQuotaStatus value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ChannelEdges) ProviderQuotaStatusOrErr() (*ProviderQuotaStatus, error) {
+	if e.ProviderQuotaStatus != nil {
+		return e.ProviderQuotaStatus, nil
+	} else if e.loadedTypes[5] {
+		return nil, &NotFoundError{label: providerquotastatus.Label}
+	}
+	return nil, &NotLoadedError{edge: "provider_quota_status"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -120,8 +150,10 @@ func (*Channel) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case channel.FieldCredentials, channel.FieldSupportedModels, channel.FieldTags, channel.FieldSettings:
+		case channel.FieldCredentials, channel.FieldDisabledAPIKeys, channel.FieldSupportedModels, channel.FieldTags, channel.FieldPolicies, channel.FieldSettings:
 			values[i] = new([]byte)
+		case channel.FieldAutoSyncSupportedModels:
+			values[i] = new(sql.NullBool)
 		case channel.FieldID, channel.FieldDeletedAt, channel.FieldOrderingWeight:
 			values[i] = new(sql.NullInt64)
 		case channel.FieldType, channel.FieldBaseURL, channel.FieldName, channel.FieldStatus, channel.FieldDefaultTestModel, channel.FieldErrorMessage, channel.FieldRemark:
@@ -199,6 +231,14 @@ func (_m *Channel) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field credentials: %w", err)
 				}
 			}
+		case channel.FieldDisabledAPIKeys:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field disabled_api_keys", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.DisabledAPIKeys); err != nil {
+					return fmt.Errorf("unmarshal field disabled_api_keys: %w", err)
+				}
+			}
 		case channel.FieldSupportedModels:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field supported_models", values[i])
@@ -206,6 +246,12 @@ func (_m *Channel) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.SupportedModels); err != nil {
 					return fmt.Errorf("unmarshal field supported_models: %w", err)
 				}
+			}
+		case channel.FieldAutoSyncSupportedModels:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_sync_supported_models", values[i])
+			} else if value.Valid {
+				_m.AutoSyncSupportedModels = value.Bool
 			}
 		case channel.FieldTags:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -220,6 +266,14 @@ func (_m *Channel) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field default_test_model", values[i])
 			} else if value.Valid {
 				_m.DefaultTestModel = value.String
+			}
+		case channel.FieldPolicies:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field policies", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Policies); err != nil {
+					return fmt.Errorf("unmarshal field policies: %w", err)
+				}
 			}
 		case channel.FieldSettings:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -277,9 +331,19 @@ func (_m *Channel) QueryUsageLogs() *UsageLogQuery {
 	return NewChannelClient(_m.config).QueryUsageLogs(_m)
 }
 
-// QueryChannelPerformance queries the "channel_performance" edge of the Channel entity.
-func (_m *Channel) QueryChannelPerformance() *ChannelPerformanceQuery {
-	return NewChannelClient(_m.config).QueryChannelPerformance(_m)
+// QueryChannelProbes queries the "channel_probes" edge of the Channel entity.
+func (_m *Channel) QueryChannelProbes() *ChannelProbeQuery {
+	return NewChannelClient(_m.config).QueryChannelProbes(_m)
+}
+
+// QueryChannelModelPrices queries the "channel_model_prices" edge of the Channel entity.
+func (_m *Channel) QueryChannelModelPrices() *ChannelModelPriceQuery {
+	return NewChannelClient(_m.config).QueryChannelModelPrices(_m)
+}
+
+// QueryProviderQuotaStatus queries the "provider_quota_status" edge of the Channel entity.
+func (_m *Channel) QueryProviderQuotaStatus() *ProviderQuotaStatusQuery {
+	return NewChannelClient(_m.config).QueryProviderQuotaStatus(_m)
 }
 
 // Update returns a builder for updating this Channel.
@@ -328,14 +392,22 @@ func (_m *Channel) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("credentials=<sensitive>")
 	builder.WriteString(", ")
+	builder.WriteString("disabled_api_keys=<sensitive>")
+	builder.WriteString(", ")
 	builder.WriteString("supported_models=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SupportedModels))
+	builder.WriteString(", ")
+	builder.WriteString("auto_sync_supported_models=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AutoSyncSupportedModels))
 	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Tags))
 	builder.WriteString(", ")
 	builder.WriteString("default_test_model=")
 	builder.WriteString(_m.DefaultTestModel)
+	builder.WriteString(", ")
+	builder.WriteString("policies=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Policies))
 	builder.WriteString(", ")
 	builder.WriteString("settings=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
@@ -425,6 +497,54 @@ func (_m *Channel) appendNamedUsageLogs(name string, edges ...*UsageLog) {
 		_m.Edges.namedUsageLogs[name] = []*UsageLog{}
 	} else {
 		_m.Edges.namedUsageLogs[name] = append(_m.Edges.namedUsageLogs[name], edges...)
+	}
+}
+
+// NamedChannelProbes returns the ChannelProbes named value or an error if the edge was not
+// loaded in eager-loading with this name.
+func (_m *Channel) NamedChannelProbes(name string) ([]*ChannelProbe, error) {
+	if _m.Edges.namedChannelProbes == nil {
+		return nil, &NotLoadedError{edge: name}
+	}
+	nodes, ok := _m.Edges.namedChannelProbes[name]
+	if !ok {
+		return nil, &NotLoadedError{edge: name}
+	}
+	return nodes, nil
+}
+
+func (_m *Channel) appendNamedChannelProbes(name string, edges ...*ChannelProbe) {
+	if _m.Edges.namedChannelProbes == nil {
+		_m.Edges.namedChannelProbes = make(map[string][]*ChannelProbe)
+	}
+	if len(edges) == 0 {
+		_m.Edges.namedChannelProbes[name] = []*ChannelProbe{}
+	} else {
+		_m.Edges.namedChannelProbes[name] = append(_m.Edges.namedChannelProbes[name], edges...)
+	}
+}
+
+// NamedChannelModelPrices returns the ChannelModelPrices named value or an error if the edge was not
+// loaded in eager-loading with this name.
+func (_m *Channel) NamedChannelModelPrices(name string) ([]*ChannelModelPrice, error) {
+	if _m.Edges.namedChannelModelPrices == nil {
+		return nil, &NotLoadedError{edge: name}
+	}
+	nodes, ok := _m.Edges.namedChannelModelPrices[name]
+	if !ok {
+		return nil, &NotLoadedError{edge: name}
+	}
+	return nodes, nil
+}
+
+func (_m *Channel) appendNamedChannelModelPrices(name string, edges ...*ChannelModelPrice) {
+	if _m.Edges.namedChannelModelPrices == nil {
+		_m.Edges.namedChannelModelPrices = make(map[string][]*ChannelModelPrice)
+	}
+	if len(edges) == 0 {
+		_m.Edges.namedChannelModelPrices[name] = []*ChannelModelPrice{}
+	} else {
+		_m.Edges.namedChannelModelPrices[name] = append(_m.Edges.namedChannelModelPrices[name], edges...)
 	}
 }
 

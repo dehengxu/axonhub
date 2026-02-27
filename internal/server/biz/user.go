@@ -10,6 +10,7 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/privacy"
+	"github.com/looplj/axonhub/internal/ent/role"
 	"github.com/looplj/axonhub/internal/ent/user"
 	"github.com/looplj/axonhub/internal/ent/userproject"
 	"github.com/looplj/axonhub/internal/log"
@@ -346,21 +347,33 @@ func (s *UserService) RemoveUserFromProject(ctx context.Context, userID, project
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	client := s.entFromContext(ctx)
 
-	// Find the UserProject relationship
-	userProject, err := client.UserProject.Query().
-		Where(
-			userproject.UserID(userID),
-			userproject.ProjectID(projectID),
-		).
-		Only(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to find user project relationship: %w", err)
-	}
-
 	// Delete the relationship (soft delete if enabled)
-	err = client.UserProject.DeleteOne(userProject).Exec(ctx)
+	rowsAffected, err := client.UserProject.Delete().Where(
+		userproject.ProjectIDEQ(projectID),
+		userproject.UserIDEQ(userID),
+	).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to remove user from project: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return nil
+	}
+
+	projectRoleIDs, err := client.Role.Query().
+		Where(
+			role.ProjectIDEQ(projectID),
+			role.HasUsersWith(user.IDEQ(userID)),
+		).
+		IDs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query user project roles: %w", err)
+	}
+
+	if len(projectRoleIDs) > 0 {
+		if err := client.User.UpdateOneID(userID).RemoveRoleIDs(projectRoleIDs...).Exec(ctx); err != nil {
+			return fmt.Errorf("failed to remove user project roles: %w", err)
+		}
 	}
 
 	// Invalidate user cache
@@ -370,7 +383,7 @@ func (s *UserService) RemoveUserFromProject(ctx context.Context, userID, project
 }
 
 // UpdateProjectUser updates a user's project relationship including scopes and roles.
-func (s *UserService) UpdateProjectUser(ctx context.Context, userID, projectID int, scopes []string, addRoleIDs, removeRoleIDs []int) (*ent.UserProject, error) {
+func (s *UserService) UpdateProjectUser(ctx context.Context, userID, projectID int, isOwner *bool, scopes []string, addRoleIDs, removeRoleIDs []int) (*ent.UserProject, error) {
 	// Validate permissions before updating
 	if err := s.permissionValidator.CanEditUserPermissions(ctx, userID, &projectID); err != nil {
 		return nil, fmt.Errorf("permission denied: %w", err)
@@ -406,8 +419,12 @@ func (s *UserService) UpdateProjectUser(ctx context.Context, userID, projectID i
 		return nil, fmt.Errorf("failed to find user project relationship: %w", err)
 	}
 
-	// Update the UserProject (note: isOwner is immutable, so we can only update scopes)
+	// Update the UserProject (including isOwner, scopes, and roles)
 	mut := userProject.Update()
+
+	if isOwner != nil {
+		mut.SetIsOwner(*isOwner)
+	}
 
 	if scopes != nil {
 		mut.SetScopes(scopes)

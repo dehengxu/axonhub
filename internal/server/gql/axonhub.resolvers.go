@@ -18,10 +18,93 @@ import (
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/user"
 	"github.com/looplj/axonhub/internal/objects"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/scopes"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/samber/lo"
 )
+
+// AllModelEntries is the resolver for the allModelEntries field.
+func (r *channelResolver) AllModelEntries(ctx context.Context, obj *ent.Channel) ([]*biz.ChannelModelEntry, error) {
+	ch := biz.Channel{Channel: obj}
+	entries := ch.GetModelEntries()
+	result := lo.Values(entries)
+
+	return lo.ToSlicePtr(result), nil
+}
+
+// Credentials is the resolver for the credentials field.
+func (r *channelResolver) Credentials(ctx context.Context, obj *ent.Channel) (*objects.ChannelCredentials, error) {
+	hasScope := scopes.UserHasScope(ctx, scopes.ScopeWriteChannels)
+	if !hasScope {
+		return nil, nil
+	}
+
+	creds := obj.Credentials
+
+	if obj.Type == channel.TypeAntigravity || creds.IsOAuth() {
+		// For OAuth channels (e.g., antigravity, claudecode, codex), only return single API key.
+		// Clear APIKeys as OAuth only supports single credential.
+		creds.APIKeys = nil
+		return &creds, nil
+	}
+
+	// For non-OAuth channel types, use api keys array.
+	creds.APIKeys = creds.GetAllAPIKeys()
+	creds.APIKey = ""
+
+	return &creds, nil
+}
+
+// DisabledAPIKeys is the resolver for the disabledAPIKeys field.
+func (r *channelResolver) DisabledAPIKeys(ctx context.Context, obj *ent.Channel) ([]*objects.DisabledAPIKey, error) {
+	hasScope := scopes.UserHasScope(ctx, scopes.ScopeWriteChannels)
+	if !hasScope {
+		return nil, nil
+	}
+
+	if len(obj.DisabledAPIKeys) == 0 {
+		return []*objects.DisabledAPIKey{}, nil
+	}
+
+	return lo.ToSlicePtr(obj.DisabledAPIKeys), nil
+}
+
+// HeaderOverrideOperations is the resolver for the headerOverrideOperations field.
+func (r *channelSettingsResolver) HeaderOverrideOperations(ctx context.Context, obj *objects.ChannelSettings) ([]*objects.OverrideOperation, error) {
+	if obj == nil {
+		return []*objects.OverrideOperation{}, nil
+	}
+
+	if obj.HeaderOverrideOperations != nil {
+		return lo.ToSlicePtr(obj.HeaderOverrideOperations), nil
+	}
+
+	// Backward compatibility.
+	ops := objects.HeaderEntriesToOverrideOperations(obj.OverrideHeaders)
+
+	return lo.ToSlicePtr(ops), nil
+}
+
+// BodyOverrideOperations is the resolver for the bodyOverrideOperations field.
+func (r *channelSettingsResolver) BodyOverrideOperations(ctx context.Context, obj *objects.ChannelSettings) ([]*objects.OverrideOperation, error) {
+	if obj == nil {
+		return []*objects.OverrideOperation{}, nil
+	}
+
+	if obj.BodyOverrideOperations != nil {
+		return lo.ToSlicePtr(obj.BodyOverrideOperations), nil
+	}
+
+	// Backward compatibility.
+	ops, err := objects.ParseOverrideOperations(obj.OverrideParameters)
+	if err != nil {
+		//nolint:nilerr // Checked.
+		return []*objects.OverrideOperation{}, nil
+	}
+
+	return lo.ToSlicePtr(ops), nil
+}
 
 // CreateChannel is the resolver for the createChannel field.
 func (r *mutationResolver) CreateChannel(ctx context.Context, input ent.CreateChannelInput) (*ent.Channel, error) {
@@ -147,6 +230,52 @@ func (r *mutationResolver) BulkUpdateChannelOrdering(ctx context.Context, input 
 	}, nil
 }
 
+// DisableChannelAPIKey is the resolver for the disableChannelAPIKey field.
+func (r *mutationResolver) DisableChannelAPIKey(ctx context.Context, channelID objects.GUID, key string) (bool, error) {
+	if err := r.channelService.DisableAPIKey(ctx, channelID.ID, key, 0, "Manually disabled by user"); err != nil {
+		return false, fmt.Errorf("failed to disable channel API key: %w", err)
+	}
+
+	return true, nil
+}
+
+// EnableChannelAPIKey is the resolver for the enableChannelAPIKey field.
+func (r *mutationResolver) EnableChannelAPIKey(ctx context.Context, channelID objects.GUID, key string) (bool, error) {
+	if err := r.channelService.EnableAPIKey(ctx, channelID.ID, key); err != nil {
+		return false, fmt.Errorf("failed to enable channel API key: %w", err)
+	}
+
+	return true, nil
+}
+
+// EnableAllChannelAPIKeys is the resolver for the enableAllChannelAPIKeys field.
+func (r *mutationResolver) EnableAllChannelAPIKeys(ctx context.Context, channelID objects.GUID) (bool, error) {
+	if err := r.channelService.EnableAllAPIKeys(ctx, channelID.ID); err != nil {
+		return false, fmt.Errorf("failed to enable all channel API keys: %w", err)
+	}
+
+	return true, nil
+}
+
+// EnableSelectedChannelAPIKeys is the resolver for the enableSelectedChannelAPIKeys field.
+func (r *mutationResolver) EnableSelectedChannelAPIKeys(ctx context.Context, channelID objects.GUID, keys []string) (bool, error) {
+	if err := r.channelService.EnableSelectedAPIKeys(ctx, channelID.ID, keys); err != nil {
+		return false, fmt.Errorf("failed to enable selected channel API keys: %w", err)
+	}
+
+	return true, nil
+}
+
+// DeleteDisabledChannelAPIKeys is the resolver for the deleteDisabledChannelAPIKeys field.
+func (r *mutationResolver) DeleteDisabledChannelAPIKeys(ctx context.Context, channelID objects.GUID, keys []string) (*biz.DeleteDisabledAPIKeysResult, error) {
+	result, err := r.channelService.DeleteDisabledAPIKeys(ctx, channelID.ID, keys)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete disabled channel API keys: %w", err)
+	}
+
+	return result, nil
+}
+
 // CreateAPIKey is the resolver for the createAPIKey field.
 func (r *mutationResolver) CreateAPIKey(ctx context.Context, input ent.CreateAPIKeyInput) (*ent.APIKey, error) {
 	return r.apiKeyService.CreateAPIKey(ctx, input)
@@ -172,6 +301,18 @@ func (r *mutationResolver) BulkDisableAPIKeys(ctx context.Context, ids []*object
 	apiKeyIDs := objects.IntGuids(ids)
 
 	err := r.apiKeyService.BulkDisableAPIKeys(ctx, apiKeyIDs)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// BulkEnableAPIKeys is the resolver for the bulkEnableAPIKeys field.
+func (r *mutationResolver) BulkEnableAPIKeys(ctx context.Context, ids []*objects.GUID) (bool, error) {
+	apiKeyIDs := objects.IntGuids(ids)
+
+	err := r.apiKeyService.BulkEnableAPIKeys(ctx, apiKeyIDs)
 	if err != nil {
 		return false, err
 	}
@@ -274,7 +415,7 @@ func (r *mutationResolver) UpdateProjectUser(ctx context.Context, input UpdatePr
 	addRoleIDs := objects.IntGuids(input.AddRoleIDs)
 	removeRoleIDs := objects.IntGuids(input.RemoveRoleIDs)
 
-	return r.userService.UpdateProjectUser(ctx, input.UserID.ID, input.ProjectID.ID, input.Scopes, addRoleIDs, removeRoleIDs)
+	return r.userService.UpdateProjectUser(ctx, input.UserID.ID, input.ProjectID.ID, input.IsOwner, input.Scopes, addRoleIDs, removeRoleIDs)
 }
 
 // CreateDataStorage is the resolver for the createDataStorage field.
@@ -331,39 +472,6 @@ func (r *mutationResolver) ApplyChannelOverrideTemplate(ctx context.Context, inp
 	}, nil
 }
 
-// FetchModels is the resolver for the fetchModels field.
-func (r *queryResolver) FetchModels(ctx context.Context, input biz.FetchModelsInput) (*FetchModelsPayload, error) {
-	// Call the model fetcher service
-	result, err := r.modelFetcher.FetchModels(ctx, input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models: %w", err)
-	}
-
-	// Convert result to GraphQL payload
-	models := make([]*objects.ModelIdentify, len(result.Models))
-	for i := range result.Models {
-		models[i] = &result.Models[i]
-	}
-
-	return &FetchModelsPayload{
-		Models: models,
-		Error:  result.Error,
-	}, nil
-}
-
-// Models is the resolver for the models field.
-func (r *queryResolver) Models(ctx context.Context, input ModelsInput) ([]*biz.Model, error) {
-	// Convert GraphQL input to biz layer input
-	bizInput := biz.ListModelsInput{
-		StatusIn:       input.StatusIn,
-		IncludeMapping: lo.FromPtrOr(input.IncludeMapping, false),
-		IncludePrefix:  lo.FromPtrOr(input.IncludePrefix, false),
-	}
-
-	// Call the biz layer method directly
-	return r.channelService.ListModels(ctx, bizInput)
-}
-
 // AllChannelTags is the resolver for the allChannelTags field.
 func (r *queryResolver) AllChannelTags(ctx context.Context) ([]string, error) {
 	// Query all channels that are not archived
@@ -417,30 +525,52 @@ func (r *queryResolver) CountChannelsByType(ctx context.Context, input CountChan
 
 // QueryChannels is the resolver for the queryChannels field.
 func (r *queryResolver) QueryChannels(ctx context.Context, input biz.QueryChannelsInput) (*ent.ChannelConnection, error) {
-	if err := validatePaginationArgs(input.First, input.Last); err != nil {
-		return nil, err
+	if input.OrderBy != nil && input.OrderBy.Field.String() == "CREATED_AT" {
+		input.OrderBy.Field = ent.DefaultChannelOrder.Field
 	}
-
-	// Call the biz layer method directly
 	return r.channelService.QueryChannels(ctx, input)
 }
 
-// QueryChannelOverrideTemplates is the resolver for the queryChannelOverrideTemplates field.
-func (r *queryResolver) QueryChannelOverrideTemplates(ctx context.Context, input biz.QueryChannelOverrideTemplatesInput) (*ent.ChannelOverrideTemplateConnection, error) {
-	if err := validatePaginationArgs(input.First, input.Last); err != nil {
-		return nil, err
+// APIKeyQuotaUsages is the resolver for the apiKeyQuotaUsages field.
+func (r *queryResolver) APIKeyQuotaUsages(ctx context.Context, apiKeyID objects.GUID) ([]*APIKeyProfileQuotaUsage, error) {
+	apiKey, err := r.client.APIKey.Get(ctx, apiKeyID.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get api key: %w", err)
 	}
 
-	bizInput := biz.QueryChannelOverrideTemplatesInput{
-		After:       input.After,
-		First:       input.First,
-		Before:      input.Before,
-		Last:        input.Last,
-		ChannelType: input.ChannelType,
-		Search:      input.Search,
+	if apiKey.Profiles == nil || len(apiKey.Profiles.Profiles) == 0 {
+		return []*APIKeyProfileQuotaUsage{}, nil
 	}
 
-	return r.channelOverrideTemplateService.QueryTemplates(ctx, bizInput)
+	quotaService := biz.NewQuotaService(r.client, r.systemService)
+
+	result := make([]*APIKeyProfileQuotaUsage, 0, len(apiKey.Profiles.Profiles))
+	for _, profile := range apiKey.Profiles.Profiles {
+		if profile.Quota == nil {
+			continue
+		}
+
+		quotaRes, err := quotaService.GetQuota(ctx, apiKey.ID, profile.Quota)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get api key quota usage: %w", err)
+		}
+
+		result = append(result, &APIKeyProfileQuotaUsage{
+			ProfileName: profile.Name,
+			Quota:       profile.Quota,
+			Window: &APIKeyQuotaWindow{
+				Start: quotaRes.Window.Start,
+				End:   quotaRes.Window.End,
+			},
+			Usage: &APIKeyQuotaUsage{
+				RequestCount: int(quotaRes.Usage.RequestCount),
+				TotalTokens:  int(quotaRes.Usage.TotalTokens),
+				TotalCost:    quotaRes.Usage.TotalCost,
+			},
+		})
+	}
+
+	return result, nil
 }
 
 // ID is the resolver for the id field.
@@ -460,6 +590,11 @@ func (r *segmentResolver) ParentID(ctx context.Context, obj *biz.Segment) (*obje
 // FirstUserQuery is the resolver for the firstUserQuery field.
 func (r *threadResolver) FirstUserQuery(ctx context.Context, obj *ent.Thread) (*string, error) {
 	return r.threadService.FirstUserQuery(ctx, obj.ID)
+}
+
+// UsageMetadata is the resolver for the usageMetadata field.
+func (r *threadResolver) UsageMetadata(ctx context.Context, obj *ent.Thread) (*biz.UsageMetadata, error) {
+	return r.threadService.UsageMetadata(ctx, obj.ID)
 }
 
 // RootSegment is the resolver for the rootSegment field.
@@ -492,11 +627,20 @@ func (r *traceResolver) FirstText(ctx context.Context, obj *ent.Trace) (*string,
 	return r.traceService.FirstText(ctx, obj.ID)
 }
 
+// UsageMetadata is the resolver for the usageMetadata field.
+func (r *traceResolver) UsageMetadata(ctx context.Context, obj *ent.Trace) (*biz.UsageMetadata, error) {
+	return r.traceService.UsageMetadata(ctx, obj.ID)
+}
+
+// ChannelSettings returns ChannelSettingsResolver implementation.
+func (r *Resolver) ChannelSettings() ChannelSettingsResolver { return &channelSettingsResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
 // Segment returns SegmentResolver implementation.
 func (r *Resolver) Segment() SegmentResolver { return &segmentResolver{r} }
 
+type channelSettingsResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type segmentResolver struct{ *Resolver }

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType } from 'react';
 import {
   OpenAI,
   Anthropic,
@@ -19,16 +19,24 @@ import {
   Vercel,
   ModelScope,
   Bailian,
-} from '@lobehub/icons'
-import { CHANNEL_CONFIGS } from './config_channels'
-import { ApiFormat, ChannelType } from './schema'
+  Jina,
+  DeepInfra,
+  Github,
+  AiHubMix,
+  Cerebras,
+  Claude,
+  XiaomiMiMo
+} from '@lobehub/icons';
+import { NanoGPTIcon } from '../components/nanogpt-icon';
+import { CHANNEL_CONFIGS } from './config_channels';
+import { ApiFormat, ChannelType } from './schema';
 
 export interface ProviderConfig {
-  provider: string
-  icon: ComponentType<{ size?: number; className?: string }>
-  color: string
+  provider: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  color: string;
   /** Channel types supported by this provider, ordered by API format preference */
-  channelTypes: ChannelType[]
+  channelTypes: ChannelType[];
 }
 
 /**
@@ -46,7 +54,7 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'deepseek',
     icon: DeepSeek,
     color: 'bg-blue-100 text-blue-800 border-blue-200',
-    channelTypes: ['deepseek', 'deepseek_anthropic'],
+    channelTypes: ['deepseek_anthropic', 'deepseek'],
   },
   gemini: {
     provider: 'gemini',
@@ -64,13 +72,37 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'moonshot',
     icon: Moonshot,
     color: 'bg-black-100 text-black-800 border-black-200',
-    channelTypes: ['moonshot', 'moonshot_anthropic'],
+    channelTypes: ['moonshot_anthropic', 'moonshot'],
   },
   zhipu: {
     provider: 'zhipu',
     icon: Zhipu,
     color: 'bg-purple-100 text-purple-800 border-purple-200',
-    channelTypes: ['zhipu', 'zhipu_anthropic'],
+    channelTypes: ['zhipu_anthropic', 'zhipu'],
+  },
+  minimax: {
+    provider: 'minimax',
+    icon: Minimax,
+    color: 'bg-red-100 text-red-800 border-red-200',
+    channelTypes: ['minimax_anthropic', 'minimax'],
+  },
+  claudecode: {
+    provider: 'claudecode',
+    icon: Claude,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['claudecode'],
+  },
+  codex: {
+    provider: 'codex',
+    icon: OpenAI,
+    color: 'bg-[#32746D] text-white border-[#32746D]',
+    channelTypes: ['codex'],
+  },
+  antigravity: {
+    provider: 'antigravity',
+    icon: Google,
+    color: 'bg-green-100 text-green-800 border-green-200',
+    channelTypes: ['antigravity'],
   },
   zai: {
     provider: 'zai',
@@ -82,13 +114,7 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'doubao',
     icon: Doubao,
     color: 'bg-blue-100 text-blue-800 border-blue-200',
-    channelTypes: ['doubao', 'doubao_anthropic'],
-  },
-  minimax: {
-    provider: 'minimax',
-    icon: Minimax,
-    color: 'bg-red-100 text-red-800 border-red-200',
-    channelTypes: ['minimax', 'minimax_anthropic'],
+    channelTypes: ['doubao_anthropic', 'doubao'],
   },
   longcat: {
     provider: 'longcat',
@@ -96,23 +122,29 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-green-100 text-green-800 border-green-200',
     channelTypes: ['longcat', 'longcat_anthropic'],
   },
+  jina: {
+    provider: 'jina',
+    icon: Jina,
+    color: 'bg-purple-100 text-purple-800 border-purple-200',
+    channelTypes: ['jina'],
+  },
   xai: {
     provider: 'xai',
     icon: XAI,
     color: 'bg-black-100 text-black-800 border-black-200',
     channelTypes: ['xai'],
   },
-  openrouter: {
-    provider: 'openrouter',
-    icon: OpenRouter,
-    color: 'bg-gray-100 text-gray-800 border-gray-200',
-    channelTypes: ['openrouter'],
+  burncloud: {
+    provider: 'burncloud',
+    icon: BurnCloud,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['burncloud'],
   },
-  vercel: {
-    provider: 'vercel',
-    icon: Vercel,
-    color: 'bg-black-100 text-black-800 border-black-200',
-    channelTypes: ['vercel'],
+  github: {
+    provider: 'github',
+    icon: Github,
+    color: 'bg-gray-100 text-gray-800 border-gray-200',
+    channelTypes: ['github'],
   },
   ppio: {
     provider: 'ppio',
@@ -134,15 +166,9 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   },
   aihubmix: {
     provider: 'aihubmix',
-    icon: OpenAI,
+    icon: AiHubMix,
     color: 'bg-blue-100 text-blue-800 border-blue-200',
     channelTypes: ['aihubmix'],
-  },
-  burncloud: {
-    provider: 'burncloud',
-    icon: BurnCloud,
-    color: 'bg-orange-100 text-orange-800 border-orange-200',
-    channelTypes: ['burncloud'],
   },
   modelscope: {
     provider: 'modelscope',
@@ -156,7 +182,43 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-green-100 text-green-800 border-green-200',
     channelTypes: ['bailian'],
   },
-}
+  openrouter: {
+    provider: 'openrouter',
+    icon: OpenRouter,
+    color: 'bg-gray-100 text-gray-800 border-gray-200',
+    channelTypes: ['openrouter'],
+  },
+  xiaomi: {
+    provider: 'xiaomi',
+    icon: XiaomiMiMo,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['xiaomi'],
+  },
+  vercel: {
+    provider: 'vercel',
+    icon: Vercel,
+    color: 'bg-black-100 text-black-800 border-black-200',
+    channelTypes: ['vercel'],
+  },
+  deepinfra: {
+    provider: 'deepinfra',
+    icon: DeepInfra,
+    color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    channelTypes: ['deepinfra'],
+  },
+  cerebras: {
+    provider: 'cerebras',
+    icon: Cerebras,
+    color: 'bg-[#F15928] text-white border-[#F15928]',
+    channelTypes: ['cerebras'],
+  },
+  nanogpt: {
+    provider: 'nanogpt',
+    icon: NanoGPTIcon,
+    color: 'bg-gray-100 text-gray-800 border-gray-200',
+    channelTypes: ['nanogpt'],
+  },
+};
 
 /**
  * Get provider key from channel type
@@ -164,41 +226,41 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
 export const getProviderFromChannelType = (channelType: ChannelType): string | undefined => {
   for (const [providerKey, config] of Object.entries(PROVIDER_CONFIGS)) {
     if (config.channelTypes.includes(channelType)) {
-      return providerKey
+      return providerKey;
     }
   }
-  return undefined
-}
+  return undefined;
+};
 
 /**
  * Get channel type for a provider with specific API format
  */
 export const getChannelTypeForApiFormat = (provider: string, apiFormat: ApiFormat): ChannelType | undefined => {
-  const providerConfig = PROVIDER_CONFIGS[provider]
-  if (!providerConfig) return undefined
+  const providerConfig = PROVIDER_CONFIGS[provider];
+  if (!providerConfig) return undefined;
 
   for (const channelType of providerConfig.channelTypes) {
-    const channelConfig = CHANNEL_CONFIGS[channelType]
+    const channelConfig = CHANNEL_CONFIGS[channelType];
     if (channelConfig?.apiFormat === apiFormat) {
-      return channelType
+      return channelType;
     }
   }
-  return undefined
-}
+  return undefined;
+};
 
 /**
  * Get available API formats for a provider
  */
 export const getApiFormatsForProvider = (provider: string): ApiFormat[] => {
-  const providerConfig = PROVIDER_CONFIGS[provider]
-  if (!providerConfig) return []
+  const providerConfig = PROVIDER_CONFIGS[provider];
+  if (!providerConfig) return [];
 
-  const formats: ApiFormat[] = []
+  const formats: ApiFormat[] = [];
   for (const channelType of providerConfig.channelTypes) {
-    const channelConfig = CHANNEL_CONFIGS[channelType]
+    const channelConfig = CHANNEL_CONFIGS[channelType];
     if (channelConfig?.apiFormat && !formats.includes(channelConfig.apiFormat)) {
-      formats.push(channelConfig.apiFormat)
+      formats.push(channelConfig.apiFormat);
     }
   }
-  return formats
-}
+  return formats;
+};

@@ -14,6 +14,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
+	"github.com/looplj/axonhub/internal/pkg/xredis"
 )
 
 func TestSystemService_GetSecretKey_NotInitialized(t *testing.T) {
@@ -87,7 +88,7 @@ func TestSystemService_WithRedisCache(t *testing.T) {
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeRedis,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr: mr.Addr(),
 		},
 	}
@@ -124,7 +125,7 @@ func TestSystemService_WithTwoLevelCache(t *testing.T) {
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeTwoLevel,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr: mr.Addr(),
 		},
 	}
@@ -248,7 +249,7 @@ func TestSystemService_Initialize_WithCache(t *testing.T) {
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeRedis,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr: mr.Addr(),
 		},
 	}
@@ -260,7 +261,7 @@ func TestSystemService_Initialize_WithCache(t *testing.T) {
 	ctx = ent.NewContext(ctx, client)
 
 	// Test system initialization with cache
-	args := &InitializeSystemArgs{
+	params := &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com",
 		OwnerPassword:  "securepassword123",
 		OwnerFirstName: "System",
@@ -268,7 +269,7 @@ func TestSystemService_Initialize_WithCache(t *testing.T) {
 		BrandName:      "Test Brand",
 	}
 
-	err := service.Initialize(ctx, args)
+	err := service.Initialize(ctx, params)
 	require.NoError(t, err)
 
 	// Verify system is initialized
@@ -286,10 +287,10 @@ func TestSystemService_Initialize_WithCache(t *testing.T) {
 	// Verify brand name is set and cached
 	brandName, err := service.BrandName(ctx)
 	require.NoError(t, err)
-	require.Equal(t, args.BrandName, brandName)
+	require.Equal(t, params.BrandName, brandName)
 
 	// Test idempotency with cache
-	err = service.Initialize(ctx, args)
+	err = service.Initialize(ctx, params)
 	require.NoError(t, err)
 
 	// Values should remain the same
@@ -304,7 +305,7 @@ func TestSystemService_CacheExpiration(t *testing.T) {
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeRedis,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr:       mr.Addr(),
 			Expiration: 100 * time.Millisecond, // Very short for testing
 		},
@@ -372,9 +373,9 @@ func TestSystemService_BackwardCompatibility(t *testing.T) {
 	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
 	// Create old-style storage policy without new fields
-	oldPolicy := map[string]interface{}{
+	oldPolicy := map[string]any{
 		"store_chunks": true,
-		"cleanup_options": []map[string]interface{}{
+		"cleanup_options": []map[string]any{
 			{
 				"resource_type": "requests",
 				"enabled":       true,
@@ -490,7 +491,7 @@ func TestSystemService_Version_WithCache(t *testing.T) {
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeRedis,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr: mr.Addr(),
 		},
 	}
@@ -537,7 +538,7 @@ func TestSystemService_Initialize_DataMigrationIdempotency(t *testing.T) {
 	ctx = ent.NewContext(ctx, client)
 
 	// First initialization
-	err := service.Initialize(ctx, &InitializeSystemArgs{
+	err := service.Initialize(ctx, &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com",
 		OwnerPassword:  "password123",
 		OwnerFirstName: "System",
@@ -553,7 +554,7 @@ func TestSystemService_Initialize_DataMigrationIdempotency(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second initialization (should be idempotent)
-	err = service.Initialize(ctx, &InitializeSystemArgs{
+	err = service.Initialize(ctx, &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com",
 		OwnerPassword:  "password123",
 		OwnerFirstName: "System",
@@ -582,7 +583,7 @@ func TestSystemService_Initialize_CreatesDefaultProject(t *testing.T) {
 	ctx = ent.NewContext(ctx, client)
 
 	// Initialize system
-	err := service.Initialize(ctx, &InitializeSystemArgs{
+	err := service.Initialize(ctx, &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com",
 		OwnerPassword:  "password123",
 		OwnerFirstName: "System",
@@ -618,7 +619,7 @@ func TestSystemService_Initialize_SetsAllSystemKeys(t *testing.T) {
 	ctx = ent.NewContext(ctx, client)
 
 	// Initialize system
-	err := service.Initialize(ctx, &InitializeSystemArgs{
+	err := service.Initialize(ctx, &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com",
 		OwnerPassword:  "password123",
 		OwnerFirstName: "System",
@@ -711,7 +712,7 @@ func TestSystemService_Initialize_TransactionRollback(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to initialize with duplicate email (should fail due to unique constraint)
-	err = service.Initialize(ctx, &InitializeSystemArgs{
+	err = service.Initialize(ctx, &InitializeSystemParams{
 		OwnerEmail:     "owner@example.com", // Duplicate email
 		OwnerPassword:  "password123",
 		OwnerFirstName: "System",

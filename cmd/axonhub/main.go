@@ -16,7 +16,6 @@ import (
 
 	"github.com/looplj/axonhub/conf"
 	"github.com/looplj/axonhub/internal/build"
-	"github.com/looplj/axonhub/internal/dumper"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/metrics"
@@ -60,8 +59,6 @@ func startServer() {
 		}),
 		fx.Provide(conf.Load),
 		fx.Provide(metrics.NewProvider),
-		fx.Provide(dumper.New),
-		fx.Invoke(dumper.SetGlobal),
 		fx.Invoke(func(lc fx.Lifecycle, server *server.Server, provider *sdk.MeterProvider, ent *ent.Client) {
 			lc.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
@@ -214,6 +211,10 @@ func validateConfig(config conf.Config) []string {
 		errors = append(errors, "log.name cannot be empty")
 	}
 
+	if config.APIServer.CORS.Enabled && len(config.APIServer.CORS.AllowedOrigins) == 0 {
+		errors = append(errors, "server.cors.allowed_origins cannot be empty when CORS is enabled")
+	}
+
 	return errors
 }
 
@@ -237,7 +238,7 @@ func configGet() {
 		os.Exit(1)
 	}
 
-	var value interface{}
+	var value any
 
 	switch key {
 	case "server.port":

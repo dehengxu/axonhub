@@ -7,24 +7,30 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/fx"
 
-	"github.com/looplj/axonhub/internal/llm/transformer/anthropic"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
+	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/transformer/anthropic"
 )
 
 type AnthropicHandlersParams struct {
 	fx.In
 
 	ChannelService  *biz.ChannelService
+	ModelService    *biz.ModelService
 	RequestService  *biz.RequestService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
+	PromptService   *biz.PromptService
+	QuotaService    *biz.QuotaService
 	HttpClient      *httpclient.HttpClient
 }
 
 type AnthropicHandlers struct {
 	ChannelService         *biz.ChannelService
+	ModelService           *biz.ModelService
+	SystemService          *biz.SystemService
 	ChatCompletionHandlers *ChatCompletionHandlers
 }
 
@@ -33,14 +39,19 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 		ChatCompletionHandlers: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
+				params.ModelService,
 				params.RequestService,
 				params.HttpClient,
 				anthropic.NewInboundTransformer(),
 				params.SystemService,
 				params.UsageLogService,
+				params.PromptService,
+				params.QuotaService,
 			),
 		},
 		ChannelService: params.ChannelService,
+		ModelService:   params.ModelService,
+		SystemService:  params.SystemService,
 	}
 }
 
@@ -50,17 +61,37 @@ func (handlers *AnthropicHandlers) CreateMessage(c *gin.Context) {
 
 type AnthropicModel struct {
 	ID          string    `json:"id"`
+	Type        string    `json:"type"`
 	DisplayName string    `json:"display_name"`
 	CreatedAt   time.Time `json:"created"`
 }
 
+// ListModels returns all available models.
+// It uses QueryAllChannelModels setting from system config to determine model source.
 func (handlers *AnthropicHandlers) ListModels(c *gin.Context) {
-	models := handlers.ChannelService.ListEnabledModels(c.Request.Context())
+	ctx := c.Request.Context()
+
+	models, err := handlers.ModelService.ListEnabledModels(ctx)
+	if err != nil {
+		requestID, _ := contexts.GetRequestID(ctx)
+		c.JSON(http.StatusInternalServerError, anthropic.AnthropicError{
+			StatusCode: http.StatusInternalServerError,
+			Type:       "internal_server_error",
+			RequestID:  requestID,
+			Error: anthropic.ErrorDetail{
+				Type:    "internal_server_error",
+				Message: err.Error(),
+			},
+		})
+
+		return
+	}
 
 	anthropicModels := make([]AnthropicModel, 0, len(models))
 	for _, model := range models {
 		anthropicModels = append(anthropicModels, AnthropicModel{
 			ID:          model.ID,
+			Type:        "model",
 			DisplayName: model.DisplayName,
 			CreatedAt:   model.CreatedAt,
 		})

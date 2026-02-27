@@ -20,21 +20,21 @@ func TestAlwaysDeny(t *testing.T) {
 		{
 			name: "no user in context",
 			ctx:  context.Background(),
-			expectError: func(tt assert.TestingT, err error, i ...interface{}) bool {
+			expectError: func(tt assert.TestingT, err error, i ...any) bool {
 				return assert.ErrorIs(tt, err, privacy.Deny)
 			},
 		},
 		{
 			name: "nil user in context",
 			ctx:  contexts.WithUser(context.Background(), nil),
-			expectError: func(tt assert.TestingT, err error, i ...interface{}) bool {
+			expectError: func(tt assert.TestingT, err error, i ...any) bool {
 				return assert.ErrorIs(tt, err, privacy.Deny)
 			},
 		},
 		{
 			name: "valid user in context",
 			ctx:  contexts.WithUser(context.Background(), &ent.User{ID: 1}),
-			expectError: func(tt assert.TestingT, err error, i ...interface{}) bool {
+			expectError: func(tt assert.TestingT, err error, i ...any) bool {
 				return assert.ErrorIs(tt, err, privacy.Deny)
 			},
 		},
@@ -179,7 +179,7 @@ func TestHasRoleScope(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := hasRoleScope(tt.user, tt.requiredScope)
+			result := hasSystemRoleScope(tt.user, tt.requiredScope)
 			if result != tt.expected {
 				t.Errorf("hasRoleScope() = %v, expected %v", result, tt.expected)
 			}
@@ -253,7 +253,7 @@ func TestCheckUserPermission(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := userHasScope(tt.user, tt.requiredScope)
+			result := userHasSystemScope(tt.user, tt.requiredScope)
 			if result != tt.expected {
 				t.Errorf("checkUserPermission() = %v, expected %v", result, tt.expected)
 			}

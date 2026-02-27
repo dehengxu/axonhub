@@ -24,7 +24,7 @@ func (m *mockStrategy) ScoreWithDebug(ctx context.Context, channel *biz.Channel)
 	return m.score, StrategyScore{
 		StrategyName: m.name,
 		Score:        m.score,
-		Details:      map[string]interface{}{"fixed_score": m.score},
+		Details:      map[string]any{"fixed_score": m.score},
 	}
 }
 
@@ -50,6 +50,26 @@ func (m *mockMetricsProvider) GetChannelMetrics(ctx context.Context, channelID i
 	return &biz.AggregatedMetrics{}, nil
 }
 
+type mockRetryPolicyProvider struct {
+	policy *biz.RetryPolicy
+}
+
+func (m *mockRetryPolicyProvider) RetryPolicyOrDefault(ctx context.Context) *biz.RetryPolicy {
+	return m.policy
+}
+
+type mockSelectionTracker struct {
+	selections map[int]int
+}
+
+func (m *mockSelectionTracker) IncrementChannelSelection(channelID int) {
+	if m.selections == nil {
+		m.selections = make(map[int]int)
+	}
+
+	m.selections[channelID]++
+}
+
 // mockTraceProvider is a mock implementation of ChannelTraceProvider for testing.
 type mockTraceProvider struct {
 	lastSuccessChannel map[int]int // traceID -> channelID
@@ -71,9 +91,15 @@ func (m *mockTraceProvider) GetLastSuccessfulChannelID(ctx context.Context, trac
 // newTestChannelService creates a minimal channel service for testing.
 // It bypasses the normal initialization to avoid requiring a ScheduledExecutor.
 func newTestChannelService(client *ent.Client) *biz.ChannelService {
+	systemService := biz.NewSystemService(biz.SystemServiceParams{
+		CacheConfig: xcache.Config{Mode: xcache.ModeMemory},
+		Ent:         client,
+	})
+
 	return biz.NewChannelService(biz.ChannelServiceParams{
-		Executor: executors.NewPoolScheduleExecutor(),
-		Ent:      client,
+		Executor:      executors.NewPoolScheduleExecutor(),
+		Ent:           client,
+		SystemService: systemService,
 	})
 }
 
@@ -89,7 +115,8 @@ func newTestRequestService(client *ent.Client) *biz.RequestService {
 		CacheConfig:   xcache.Config{},
 		Executor:      executors.NewPoolScheduleExecutor(),
 	})
-	usageLogService := biz.NewUsageLogService(client, systemService)
+	channelService := biz.NewChannelServiceForTest(client)
+	usageLogService := biz.NewUsageLogService(client, systemService, channelService)
 
 	return biz.NewRequestService(client, systemService, usageLogService, dataStorageService)
 }

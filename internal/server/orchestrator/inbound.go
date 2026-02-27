@@ -2,17 +2,15 @@ package orchestrator
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/looplj/axonhub/internal/dumper"
 	"github.com/looplj/axonhub/internal/ent"
-	"github.com/looplj/axonhub/internal/llm"
-	"github.com/looplj/axonhub/internal/llm/pipeline"
-	"github.com/looplj/axonhub/internal/llm/transformer"
 	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/streams"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/streams"
+	"github.com/looplj/axonhub/llm/transformer"
 )
 
 // InboundPersistentStream wraps a stream and tracks all responses for final saving to database.
@@ -63,15 +61,6 @@ func (ts *InboundPersistentStream) Current() *httpclient.StreamEvent {
 	event := ts.stream.Current()
 	if event != nil {
 		ts.responseChunks = append(ts.responseChunks, event)
-
-		err := ts.requestService.AppendRequestChunk(
-			ts.ctx,
-			ts.request.ID,
-			event,
-		)
-		if err != nil {
-			log.Warn(ts.ctx, "Failed to append request chunk", log.Cause(err))
-		}
 	}
 
 	return event
@@ -152,6 +141,11 @@ func (ts *InboundPersistentStream) persistResponseChunks(ctx context.Context) {
 		if err != nil {
 			log.Warn(persistCtx, "Failed to update request status to completed", log.Cause(err))
 		}
+
+		// Save all response chunks at once
+		if err := ts.requestService.SaveRequestChunks(persistCtx, ts.request.ID, ts.responseChunks); err != nil {
+			log.Warn(persistCtx, "Failed to save request chunks", log.Cause(err))
+		}
 	}
 }
 
@@ -207,103 +201,4 @@ func (p *PersistentInboundTransformer) TransformStream(ctx context.Context, stre
 
 func (p *PersistentInboundTransformer) AggregateStreamChunks(ctx context.Context, chunks []*httpclient.StreamEvent) ([]byte, llm.ResponseMeta, error) {
 	return p.wrapped.AggregateStreamChunks(ctx, chunks)
-}
-
-// applyApiKeyModelMapping creates a middleware that applies model mapping from API key profiles.
-// This is the first step in the inbound pipeline.
-func applyApiKeyModelMapping(inbound *PersistentInboundTransformer) pipeline.Middleware {
-	return pipeline.OnLlmRequest("apply-model-mapping", func(ctx context.Context, llmRequest *llm.Request) (*llm.Request, error) {
-		if llmRequest.Model == "" {
-			return nil, fmt.Errorf("%w: request model is empty", biz.ErrInvalidModel)
-		}
-
-		// Apply model mapping from API key profiles if active profile exists
-		if inbound.state.APIKey == nil {
-			return llmRequest, nil
-		}
-
-		originalModel := llmRequest.Model
-		mappedModel := inbound.state.ModelMapper.MapModel(ctx, inbound.state.APIKey, originalModel)
-
-		if mappedModel != originalModel {
-			llmRequest.Model = mappedModel
-			log.Debug(ctx, "applied model mapping from API key profile",
-				log.String("api_key_name", inbound.state.APIKey.Name),
-				log.String("original_model", originalModel),
-				log.String("mapped_model", mappedModel))
-		}
-
-		// Save the model for later use, e.g. retry from next channels, should use the original model to choose channel model.
-		// This should be done after the api key level model mapping.
-		// This should be done before the request is created.
-		// The outbound transformer will restore the original model if it was mapped.
-		if inbound.state.OriginalModel == "" {
-			inbound.state.OriginalModel = llmRequest.Model
-		} else {
-			// Restore original model if it was mapped
-			// This should not happen, the inbound should not be called twice.
-			// Just in case, restore the original model.
-			llmRequest.Model = inbound.state.OriginalModel
-		}
-
-		return llmRequest, nil
-	})
-}
-
-// selectChannels creates a middleware that selects available channels for the model.
-// This is the second step in the inbound pipeline, moved from outbound transformer.
-// If no valid channels are found, it returns ErrInvalidModel to fail fast.
-func selectChannels(inbound *PersistentInboundTransformer) pipeline.Middleware {
-	return pipeline.OnLlmRequest("select-channels", func(ctx context.Context, llmRequest *llm.Request) (*llm.Request, error) {
-		// Only select channels once
-		if len(inbound.state.Channels) > 0 {
-			return llmRequest, nil
-		}
-
-		selector := inbound.state.ChannelSelector
-
-		if profile := GetActiveProfile(inbound.state.APIKey); profile != nil {
-			// 先应用 ChannelIDs 过滤
-			if len(profile.ChannelIDs) > 0 {
-				selector = NewSelectedChannelsSelector(selector, profile.ChannelIDs)
-			}
-
-			// 再应用 ChannelTags 过滤（链式装饰器，与 IDs 取交集）
-			if len(profile.ChannelTags) > 0 {
-				selector = NewTagsFilterSelector(selector, profile.ChannelTags)
-			}
-		}
-
-		// 应用 Google 原生工具过滤（仅对 Gemini 原生 API 格式生效）
-		if inbound.APIFormat() == llm.APIFormatGeminiContents {
-			selector = NewGoogleNativeToolsSelector(selector)
-		}
-
-		// 应用 Anthropic 原生工具过滤（对所有 API 格式生效）
-		// 无论通过 OpenAI 还是 Anthropic 格式入口，只要包含 web_search 工具，
-		// 都需要优先路由到支持 Anthropic 原生工具的渠道
-		selector = NewAnthropicNativeToolsSelector(selector)
-
-		if inbound.state.LoadBalancer != nil {
-			selector = NewLoadBalancedSelector(selector, inbound.state.LoadBalancer)
-		}
-
-		channels, err := selector.Select(ctx, llmRequest)
-		if err != nil {
-			return nil, err
-		}
-
-		log.Debug(ctx, "selected channels",
-			log.Any("channels", channels),
-			log.Any("model", llmRequest.Model),
-		)
-
-		if len(channels) == 0 {
-			return nil, fmt.Errorf("%w: no valid channels found for model %s", biz.ErrInvalidModel, llmRequest.Model)
-		}
-
-		inbound.state.Channels = channels
-
-		return llmRequest, nil
-	})
 }

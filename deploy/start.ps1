@@ -54,7 +54,7 @@ function Get-ConfiguredPort {
 
 function Check-Port([int]$port){
   try {
-    $lines = netstat -ano | Select-String -Pattern ":$port\s" -ErrorAction SilentlyContinue
+    $lines = netstat -ano | Select-String -Pattern "^\s*TCP\s+[^:]+:$port\s+" -ErrorAction SilentlyContinue
     if($lines){
       Write-Warn "Port $port is already in use"
       Write-Info "Processes using port ${port}:"
@@ -111,7 +111,11 @@ if(Test-Path $ConfigFile){
 
 Write-Info 'Starting AxonHub process...'
 try {
-  $p = Start-Process -FilePath $BinaryPath -ArgumentList $ConfigArgs -RedirectStandardOutput $stdoutTempFile -RedirectStandardError $stderrTempFile -PassThru -WindowStyle Hidden
+  if($ConfigArgs.Count -gt 0){
+    $p = Start-Process -FilePath $BinaryPath -ArgumentList $ConfigArgs -RedirectStandardOutput $stdoutTempFile -RedirectStandardError $stderrTempFile -PassThru -WindowStyle Hidden
+  } else {
+    $p = Start-Process -FilePath $BinaryPath -RedirectStandardOutput $stdoutTempFile -RedirectStandardError $stderrTempFile -PassThru -WindowStyle Hidden
+  }
   Start-Sleep -Seconds 2
   if($p -and (Get-Process -Id $p.Id -ErrorAction SilentlyContinue)){
     $p.Id | Out-File -FilePath $PidFile -Encoding ascii -Force

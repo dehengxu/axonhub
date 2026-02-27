@@ -8,7 +8,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/spf13/afero"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zhenzou/executors"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
+	"github.com/looplj/axonhub/internal/pkg/xredis"
 )
 
 func setupDataStorageTest(t *testing.T) (*ent.Client, *DataStorageService, context.Context) {
@@ -63,7 +63,7 @@ func setupDataStorageTestWithRedis(t *testing.T) (*ent.Client, *DataStorageServi
 
 	cacheConfig := xcache.Config{
 		Mode: xcache.ModeRedis,
-		Redis: xcache.RedisConfig{
+		Redis: xredis.Config{
 			Addr:       mr.Addr(),
 			Expiration: 5 * time.Minute,
 		},
@@ -249,20 +249,20 @@ func TestDataStorageService_UpdateDataStorage(t *testing.T) {
 		require.NotNil(t, updated.Settings)
 
 		require.NotNil(t, updated.Settings.Directory)
-		assert.Equal(t, existingDirectory, *updated.Settings.Directory)
+		require.Equal(t, existingDirectory, *updated.Settings.Directory)
 		require.NotNil(t, updated.Settings.DSN)
-		assert.Equal(t, existingDSN, *updated.Settings.DSN)
+		require.Equal(t, existingDSN, *updated.Settings.DSN)
 
 		require.NotNil(t, updated.Settings.S3)
-		assert.Equal(t, "updated-bucket", updated.Settings.S3.BucketName)
-		assert.Equal(t, "", updated.Settings.S3.Endpoint)
-		assert.Equal(t, "updated-region", updated.Settings.S3.Region)
-		assert.Equal(t, existingAccess, updated.Settings.S3.AccessKey)
-		assert.Equal(t, existingSecret, updated.Settings.S3.SecretKey)
+		require.Equal(t, "updated-bucket", updated.Settings.S3.BucketName)
+		require.Equal(t, "", updated.Settings.S3.Endpoint)
+		require.Equal(t, "updated-region", updated.Settings.S3.Region)
+		require.Equal(t, existingAccess, updated.Settings.S3.AccessKey)
+		require.Equal(t, existingSecret, updated.Settings.S3.SecretKey)
 
 		require.NotNil(t, updated.Settings.GCS)
-		assert.Equal(t, "updated-gcs-bucket", updated.Settings.GCS.BucketName)
-		assert.Equal(t, existingGCSCredential, updated.Settings.GCS.Credential)
+		require.Equal(t, "updated-gcs-bucket", updated.Settings.GCS.BucketName)
+		require.Equal(t, existingGCSCredential, updated.Settings.GCS.Credential)
 	})
 
 	t.Run("overrides credentials when provided", func(t *testing.T) {
@@ -322,20 +322,20 @@ func TestDataStorageService_UpdateDataStorage(t *testing.T) {
 		require.NotNil(t, updated.Settings)
 
 		require.NotNil(t, updated.Settings.Directory)
-		assert.Equal(t, "/new/path", *updated.Settings.Directory)
+		require.Equal(t, "/new/path", *updated.Settings.Directory)
 		require.NotNil(t, updated.Settings.DSN)
-		assert.Equal(t, "new-dsn", *updated.Settings.DSN)
+		require.Equal(t, "new-dsn", *updated.Settings.DSN)
 
 		require.NotNil(t, updated.Settings.S3)
-		assert.Equal(t, "new-bucket", updated.Settings.S3.BucketName)
-		assert.Equal(t, "new-endpoint", updated.Settings.S3.Endpoint)
-		assert.Equal(t, "new-region", updated.Settings.S3.Region)
-		assert.Equal(t, "new-access", updated.Settings.S3.AccessKey)
-		assert.Equal(t, "new-secret", updated.Settings.S3.SecretKey)
+		require.Equal(t, "new-bucket", updated.Settings.S3.BucketName)
+		require.Equal(t, "new-endpoint", updated.Settings.S3.Endpoint)
+		require.Equal(t, "new-region", updated.Settings.S3.Region)
+		require.Equal(t, "new-access", updated.Settings.S3.AccessKey)
+		require.Equal(t, "new-secret", updated.Settings.S3.SecretKey)
 
 		require.NotNil(t, updated.Settings.GCS)
-		assert.Equal(t, "new-gcs-bucket", updated.Settings.GCS.BucketName)
-		assert.Equal(t, "new-gcs-cred", updated.Settings.GCS.Credential)
+		require.Equal(t, "new-gcs-bucket", updated.Settings.GCS.BucketName)
+		require.Equal(t, "new-gcs-cred", updated.Settings.GCS.Credential)
 	})
 
 	t.Run("returns error when data storage is missing", func(t *testing.T) {
@@ -349,7 +349,7 @@ func TestDataStorageService_UpdateDataStorage(t *testing.T) {
 
 		_, err := service.UpdateDataStorage(ctx, 999, &ent.UpdateDataStorageInput{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get data storage")
+		require.Contains(t, err.Error(), "failed to get data storage")
 
 		_, err = service.Cache.Get(ctx, cacheKey)
 		require.NoError(t, err)
@@ -366,9 +366,9 @@ func TestDataStorageService_GetDataStorageByID(t *testing.T) {
 	t.Run("get existing data storage", func(t *testing.T) {
 		ds, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
-		assert.Equal(t, testDS.ID, ds.ID)
-		assert.Equal(t, testDS.Name, ds.Name)
-		assert.Equal(t, testDS.Type, ds.Type)
+		require.Equal(t, testDS.ID, ds.ID)
+		require.Equal(t, testDS.Name, ds.Name)
+		require.Equal(t, testDS.Type, ds.Type)
 	})
 
 	t.Run("get data storage from cache", func(t *testing.T) {
@@ -380,14 +380,14 @@ func TestDataStorageService_GetDataStorageByID(t *testing.T) {
 		ds2, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
 
-		assert.Equal(t, ds1.ID, ds2.ID)
-		assert.Equal(t, ds1.Name, ds2.Name)
+		require.Equal(t, ds1.ID, ds2.ID)
+		require.Equal(t, ds1.Name, ds2.Name)
 	})
 
 	t.Run("get non-existent data storage", func(t *testing.T) {
 		_, err := service.GetDataStorageByID(ctx, 99999)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get data storage by ID")
+		require.Contains(t, err.Error(), "failed to get data storage by ID")
 	})
 }
 
@@ -402,12 +402,12 @@ func TestDataStorageService_GetDataStorageByID_WithRedis(t *testing.T) {
 	t.Run("get data storage with redis cache", func(t *testing.T) {
 		ds, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
-		assert.Equal(t, testDS.ID, ds.ID)
+		require.Equal(t, testDS.ID, ds.ID)
 
 		// Verify cache key exists in redis
 		cacheKey := fmt.Sprintf("datastorage:%d", testDS.ID)
 		exists := mr.Exists(cacheKey)
-		assert.True(t, exists)
+		require.True(t, exists)
 	})
 }
 
@@ -421,8 +421,8 @@ func TestDataStorageService_GetPrimaryDataStorage(t *testing.T) {
 	t.Run("get primary data storage", func(t *testing.T) {
 		ds, err := service.GetPrimaryDataStorage(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, primaryDS.ID, ds.ID)
-		assert.True(t, ds.Primary)
+		require.Equal(t, primaryDS.ID, ds.ID)
+		require.True(t, ds.Primary)
 	})
 
 	t.Run("get primary data storage from cache", func(t *testing.T) {
@@ -434,8 +434,8 @@ func TestDataStorageService_GetPrimaryDataStorage(t *testing.T) {
 		ds2, err := service.GetPrimaryDataStorage(ctx)
 		require.NoError(t, err)
 
-		assert.Equal(t, ds1.ID, ds2.ID)
-		assert.Equal(t, ds1.Name, ds2.Name)
+		require.Equal(t, ds1.ID, ds2.ID)
+		require.Equal(t, ds1.Name, ds2.Name)
 	})
 
 	t.Run("no primary data storage", func(t *testing.T) {
@@ -450,7 +450,7 @@ func TestDataStorageService_GetPrimaryDataStorage(t *testing.T) {
 
 		_, err = service.GetPrimaryDataStorage(ctx)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get primary data storage")
+		require.Contains(t, err.Error(), "failed to get primary data storage")
 	})
 }
 
@@ -468,14 +468,14 @@ func TestDataStorageService_GetDefaultDataStorage(t *testing.T) {
 		// For now, test fallback to primary
 		ds, err := service.GetDefaultDataStorage(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, primaryDS.ID, ds.ID)
+		require.Equal(t, primaryDS.ID, ds.ID)
 	})
 
 	t.Run("fallback to primary when no default configured", func(t *testing.T) {
 		ds, err := service.GetDefaultDataStorage(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, primaryDS.ID, ds.ID)
-		assert.True(t, ds.Primary)
+		require.Equal(t, primaryDS.ID, ds.ID)
+		require.True(t, ds.Primary)
 	})
 
 	_ = defaultDS // Use the variable to avoid unused warning
@@ -501,7 +501,7 @@ func TestDataStorageService_CacheInvalidation(t *testing.T) {
 		ds2, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
 
-		assert.Equal(t, ds1.ID, ds2.ID)
+		require.Equal(t, ds1.ID, ds2.ID)
 	})
 
 	t.Run("invalidate primary data storage cache", func(t *testing.T) {
@@ -519,7 +519,7 @@ func TestDataStorageService_CacheInvalidation(t *testing.T) {
 		// Next call should work normally
 		ds, err := service.GetPrimaryDataStorage(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, primaryDS.ID, ds.ID)
+		require.Equal(t, primaryDS.ID, ds.ID)
 	})
 
 	t.Run("invalidate all cache", func(t *testing.T) {
@@ -534,7 +534,7 @@ func TestDataStorageService_CacheInvalidation(t *testing.T) {
 		// Next calls should work normally
 		ds, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
-		assert.Equal(t, testDS.ID, ds.ID)
+		require.Equal(t, testDS.ID, ds.ID)
 	})
 }
 
@@ -547,7 +547,7 @@ func TestDataStorageService_GetFileSystem(t *testing.T) {
 
 		_, err := service.GetFileSystem(ctx, dbDS)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "database storage does not support file system operations")
+		require.Contains(t, err.Error(), "database storage does not support file system operations")
 	})
 
 	t.Run("fs storage should return afero filesystem", func(t *testing.T) {
@@ -555,11 +555,11 @@ func TestDataStorageService_GetFileSystem(t *testing.T) {
 
 		fs, err := service.GetFileSystem(ctx, fsDS)
 		require.NoError(t, err)
-		assert.NotNil(t, fs)
+		require.NotNil(t, fs)
 
 		// Verify it's a BasePathFs
 		_, ok := fs.(*afero.BasePathFs)
-		assert.True(t, ok)
+		require.True(t, ok)
 	})
 
 	t.Run("fs storage without directory should fail", func(t *testing.T) {
@@ -576,20 +576,46 @@ func TestDataStorageService_GetFileSystem(t *testing.T) {
 
 		_, err = service.GetFileSystem(ctx, fsDS)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "directory not configured for fs storage")
+		require.Contains(t, err.Error(), "directory not configured for fs storage")
 	})
 
 	t.Run("storage types without settings", func(t *testing.T) {
 		s3DS := createTestDataStorage(t, client, ctx, "s3-storage", false, datastorage.TypeS3)
 		gcsDS := createTestDataStorage(t, client, ctx, "gcs-storage", false, datastorage.TypeGcs)
+		webdavDS := createTestDataStorage(t, client, ctx, "webdav-storage", false, datastorage.TypeWebdav)
 
 		_, err := service.GetFileSystem(ctx, s3DS)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "s3 settings not configured")
+		require.Contains(t, err.Error(), "s3 settings not configured")
 
 		_, err = service.GetFileSystem(ctx, gcsDS)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "gcs settings not configured")
+		require.Contains(t, err.Error(), "gcs settings not configured")
+
+		_, err = service.GetFileSystem(ctx, webdavDS)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "webdav settings not configured")
+	})
+
+	t.Run("webdav storage should return afero filesystem", func(t *testing.T) {
+		ctx := privacy.DecisionContext(ctx, privacy.Allow)
+		webdavDS, err := client.DataStorage.Create().
+			SetName("webdav-storage-with-settings").
+			SetDescription("WebDAV storage with settings").
+			SetPrimary(false).
+			SetType(datastorage.TypeWebdav).
+			SetSettings(&objects.DataStorageSettings{
+				WebDAV: &objects.WebDAV{
+					URL: "http://localhost:8080",
+				},
+			}).
+			SetStatus(datastorage.StatusActive).
+			Save(ctx)
+		require.NoError(t, err)
+
+		fs, err := service.GetFileSystem(ctx, webdavDS)
+		require.NoError(t, err)
+		require.NotNil(t, fs)
 	})
 }
 
@@ -605,7 +631,7 @@ func TestDataStorageService_SaveData(t *testing.T) {
 
 		result, err := service.SaveData(ctx, dbDS, testKey, testData)
 		require.NoError(t, err)
-		assert.Equal(t, string(testData), result)
+		require.Equal(t, string(testData), result)
 	})
 
 	t.Run("save data to fs storage", func(t *testing.T) {
@@ -613,7 +639,7 @@ func TestDataStorageService_SaveData(t *testing.T) {
 
 		result, err := service.SaveData(ctx, fsDS, testKey, testData)
 		require.NoError(t, err)
-		assert.Equal(t, testKey, result)
+		require.Equal(t, testKey, result)
 
 		// Verify file was created
 		fs, err := service.GetFileSystem(ctx, fsDS)
@@ -621,12 +647,12 @@ func TestDataStorageService_SaveData(t *testing.T) {
 
 		exists, err := afero.Exists(fs, testKey)
 		require.NoError(t, err)
-		assert.True(t, exists)
+		require.True(t, exists)
 
 		// Verify content
 		content, err := afero.ReadFile(fs, testKey)
 		require.NoError(t, err)
-		assert.Equal(t, testData, content)
+		require.Equal(t, testData, content)
 	})
 }
 
@@ -645,7 +671,7 @@ func TestDataStorageService_LoadData(t *testing.T) {
 
 		result, err := service.LoadData(ctx, dbDS, dataKey)
 		require.NoError(t, err)
-		assert.Equal(t, testData, result)
+		require.Equal(t, testData, result)
 	})
 
 	t.Run("load data from fs storage", func(t *testing.T) {
@@ -658,7 +684,7 @@ func TestDataStorageService_LoadData(t *testing.T) {
 		// Then load it
 		result, err := service.LoadData(ctx, fsDS, testKey)
 		require.NoError(t, err)
-		assert.Equal(t, testData, result)
+		require.Equal(t, testData, result)
 	})
 
 	t.Run("load non-existent file from fs storage", func(t *testing.T) {
@@ -666,7 +692,7 @@ func TestDataStorageService_LoadData(t *testing.T) {
 
 		_, err := service.LoadData(ctx, fsDS, "non-existent.txt")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read file")
+		require.Contains(t, err.Error(), "failed to read file")
 	})
 }
 
@@ -712,6 +738,6 @@ func TestDataStorageService_CacheExpiration(t *testing.T) {
 		ds2, err := service.GetDataStorageByID(ctx, testDS.ID)
 		require.NoError(t, err)
 
-		assert.Equal(t, ds1.ID, ds2.ID)
+		require.Equal(t, ds1.ID, ds2.ID)
 	})
 }

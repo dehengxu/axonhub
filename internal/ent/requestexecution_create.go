@@ -174,6 +174,20 @@ func (_c *RequestExecutionCreate) SetStatus(v requestexecution.Status) *RequestE
 	return _c
 }
 
+// SetStream sets the "stream" field.
+func (_c *RequestExecutionCreate) SetStream(v bool) *RequestExecutionCreate {
+	_c.mutation.SetStream(v)
+	return _c
+}
+
+// SetNillableStream sets the "stream" field if the given value is not nil.
+func (_c *RequestExecutionCreate) SetNillableStream(v *bool) *RequestExecutionCreate {
+	if v != nil {
+		_c.SetStream(*v)
+	}
+	return _c
+}
+
 // SetMetricsLatencyMs sets the "metrics_latency_ms" field.
 func (_c *RequestExecutionCreate) SetMetricsLatencyMs(v int64) *RequestExecutionCreate {
 	_c.mutation.SetMetricsLatencyMs(v)
@@ -199,6 +213,12 @@ func (_c *RequestExecutionCreate) SetNillableMetricsFirstTokenLatencyMs(v *int64
 	if v != nil {
 		_c.SetMetricsFirstTokenLatencyMs(*v)
 	}
+	return _c
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (_c *RequestExecutionCreate) SetRequestHeaders(v objects.JSONRawMessage) *RequestExecutionCreate {
+	_c.mutation.SetRequestHeaders(v)
 	return _c
 }
 
@@ -268,6 +288,10 @@ func (_c *RequestExecutionCreate) defaults() {
 		v := requestexecution.DefaultFormat
 		_c.mutation.SetFormat(v)
 	}
+	if _, ok := _c.mutation.Stream(); !ok {
+		v := requestexecution.DefaultStream
+		_c.mutation.SetStream(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -300,6 +324,9 @@ func (_c *RequestExecutionCreate) check() error {
 		if err := requestexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.Stream(); !ok {
+		return &ValidationError{Name: "stream", err: errors.New(`ent: missing required field "RequestExecution.stream"`)}
 	}
 	if len(_c.mutation.RequestIDs()) == 0 {
 		return &ValidationError{Name: "request", err: errors.New(`ent: missing required edge "RequestExecution.request"`)}
@@ -375,6 +402,10 @@ func (_c *RequestExecutionCreate) createSpec() (*RequestExecution, *sqlgraph.Cre
 		_spec.SetField(requestexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
 	}
+	if value, ok := _c.mutation.Stream(); ok {
+		_spec.SetField(requestexecution.FieldStream, field.TypeBool, value)
+		_node.Stream = value
+	}
 	if value, ok := _c.mutation.MetricsLatencyMs(); ok {
 		_spec.SetField(requestexecution.FieldMetricsLatencyMs, field.TypeInt64, value)
 		_node.MetricsLatencyMs = &value
@@ -382,6 +413,10 @@ func (_c *RequestExecutionCreate) createSpec() (*RequestExecution, *sqlgraph.Cre
 	if value, ok := _c.mutation.MetricsFirstTokenLatencyMs(); ok {
 		_spec.SetField(requestexecution.FieldMetricsFirstTokenLatencyMs, field.TypeInt64, value)
 		_node.MetricsFirstTokenLatencyMs = &value
+	}
+	if value, ok := _c.mutation.RequestHeaders(); ok {
+		_spec.SetField(requestexecution.FieldRequestHeaders, field.TypeJSON, value)
+		_node.RequestHeaders = value
 	}
 	if nodes := _c.mutation.RequestIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -630,6 +665,24 @@ func (u *RequestExecutionUpsert) ClearMetricsFirstTokenLatencyMs() *RequestExecu
 	return u
 }
 
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestExecutionUpsert) SetRequestHeaders(v objects.JSONRawMessage) *RequestExecutionUpsert {
+	u.Set(requestexecution.FieldRequestHeaders, v)
+	return u
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestExecutionUpsert) UpdateRequestHeaders() *RequestExecutionUpsert {
+	u.SetExcluded(requestexecution.FieldRequestHeaders)
+	return u
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestExecutionUpsert) ClearRequestHeaders() *RequestExecutionUpsert {
+	u.SetNull(requestexecution.FieldRequestHeaders)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -664,6 +717,9 @@ func (u *RequestExecutionUpsertOne) UpdateNewValues() *RequestExecutionUpsertOne
 		}
 		if _, exists := u.create.mutation.RequestBody(); exists {
 			s.SetIgnore(requestexecution.FieldRequestBody)
+		}
+		if _, exists := u.create.mutation.Stream(); exists {
+			s.SetIgnore(requestexecution.FieldStream)
 		}
 	}))
 	return u
@@ -861,6 +917,27 @@ func (u *RequestExecutionUpsertOne) UpdateMetricsFirstTokenLatencyMs() *RequestE
 func (u *RequestExecutionUpsertOne) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpsertOne {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearMetricsFirstTokenLatencyMs()
+	})
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestExecutionUpsertOne) SetRequestHeaders(v objects.JSONRawMessage) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetRequestHeaders(v)
+	})
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestExecutionUpsertOne) UpdateRequestHeaders() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateRequestHeaders()
+	})
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestExecutionUpsertOne) ClearRequestHeaders() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearRequestHeaders()
 	})
 }
 
@@ -1064,6 +1141,9 @@ func (u *RequestExecutionUpsertBulk) UpdateNewValues() *RequestExecutionUpsertBu
 			if _, exists := b.mutation.RequestBody(); exists {
 				s.SetIgnore(requestexecution.FieldRequestBody)
 			}
+			if _, exists := b.mutation.Stream(); exists {
+				s.SetIgnore(requestexecution.FieldStream)
+			}
 		}
 	}))
 	return u
@@ -1261,6 +1341,27 @@ func (u *RequestExecutionUpsertBulk) UpdateMetricsFirstTokenLatencyMs() *Request
 func (u *RequestExecutionUpsertBulk) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpsertBulk {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearMetricsFirstTokenLatencyMs()
+	})
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (u *RequestExecutionUpsertBulk) SetRequestHeaders(v objects.JSONRawMessage) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetRequestHeaders(v)
+	})
+}
+
+// UpdateRequestHeaders sets the "request_headers" field to the value that was provided on create.
+func (u *RequestExecutionUpsertBulk) UpdateRequestHeaders() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateRequestHeaders()
+	})
+}
+
+// ClearRequestHeaders clears the value of the "request_headers" field.
+func (u *RequestExecutionUpsertBulk) ClearRequestHeaders() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearRequestHeaders()
 	})
 }
 

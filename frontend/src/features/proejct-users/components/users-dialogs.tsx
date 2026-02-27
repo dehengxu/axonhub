@@ -1,24 +1,23 @@
-import { useUsers } from '../context/users-context'
-import { UsersActionDialog } from './users-action-dialog'
-import { UsersAddToProjectDialog } from './users-add-to-project-dialog'
-import { UsersDeleteDialog } from './users-delete-dialog'
+import { useUsers } from '../context/users-context';
+import { ProjectUserActionDialog } from './project-user-action-dialog';
+import { UsersDeleteDialog } from './users-delete-dialog';
 
 export function UsersDialogs() {
-  const { open, setOpen, currentRow, setCurrentRow } = useUsers()
+  const { open, setOpen, currentRow, setCurrentRow } = useUsers();
   return (
     <>
-      <UsersAddToProjectDialog key='user-add-to-project' open={open === 'add'} onOpenChange={() => setOpen('add')} />
+      <ProjectUserActionDialog key='user-add' open={open === 'add'} onOpenChange={() => setOpen('add')} />
 
       {currentRow && (
         <>
-          <UsersActionDialog
+          <ProjectUserActionDialog
             key={`user-edit-${currentRow.id}`}
             open={open === 'edit'}
             onOpenChange={() => {
-              setOpen('edit')
+              setOpen('edit');
               setTimeout(() => {
-                setCurrentRow(null)
-              }, 500)
+                setCurrentRow(null);
+              }, 500);
             }}
             currentRow={currentRow}
           />
@@ -27,15 +26,15 @@ export function UsersDialogs() {
             key={`user-remove-${currentRow.id}`}
             open={open === 'remove'}
             onOpenChange={() => {
-              setOpen('remove')
+              setOpen('remove');
               setTimeout(() => {
-                setCurrentRow(null)
-              }, 500)
+                setCurrentRow(null);
+              }, 500);
             }}
             currentRow={currentRow}
           />
         </>
       )}
     </>
-  )
+  );
 }

@@ -67,6 +67,7 @@ server:
     trace_header: "AH-Trace-Id" # Trace ID header name
     extra_trace_headers: []     # Extra trace headers
     claude_code_trace_enabled: false # Enable Claude Code trace extraction
+    codex_trace_enabled: false # Enable Codex trace extraction
   debug: false                  # Enable debug mode
 ```
 
@@ -80,13 +81,14 @@ server:
 - `AXONHUB_SERVER_TRACE_TRACE_HEADER`
 - `AXONHUB_SERVER_TRACE_EXTRA_TRACE_HEADERS`
 - `AXONHUB_SERVER_TRACE_CLAUDE_CODE_TRACE_ENABLED`
+- `AXONHUB_SERVER_TRACE_CODEX_TRACE_ENABLED`
 - `AXONHUB_SERVER_DEBUG`
 
 ### Database Configuration
 
 ```yaml
 db:
-  dialect: "sqlite3"            # sqlite3, postgres, mysql
+  dialect: "sqlite3"            # sqlite3, postgres, mysql, tidb
   dsn: "file:axonhub.db?cache=shared&_fk=1"  # Connection string
   debug: false                  # Enable database debug logging
 ```
@@ -95,6 +97,7 @@ db:
 - **SQLite**: `sqlite3` (development)
 - **PostgreSQL**: `postgres` (production)
 - **MySQL**: `mysql` (production)
+- **TiDB**: `tidb` (production/cloud)
 
 **Environment Variables:**
 - `AXONHUB_DB_DIALECT`
@@ -207,6 +210,40 @@ gc:
 **Environment Variables:**
 - `AXONHUB_GC_CRON`
 
+### Provider Quota Configuration
+
+```yaml
+provider_quota:
+  check_interval: "20m"          # Interval for checking provider quota status
+```
+
+**Description:**
+This setting controls how frequently AxonHub polls provider API endpoints to check quota status for supported providers (Claude Code, Codex). Quota data is stored in the database and displayed as battery icons in the UI.
+
+**Environment Variables:**
+- `AXONHUB_PROVIDER_QUOTA_CHECK_INTERVAL`
+
+**Supported Values:**
+- Minute intervals that divide evenly into 60: `1m`, `2m`, `3m`, `4m`, `5m`, `6m`, `10m`, `12m`, `15m`, `20m`, `30m`
+- Hourly intervals: `1h`, `2h`, `3h`, etc.
+
+**Default:** `20m`
+
+**Recommendations:**
+- **Development:** Use shorter intervals (e.g., `5m`) to see quota updates quickly
+- **Production:** Use `20m` or longer to reduce API calls while maintaining reasonable data freshness
+- Unsupported intervals will be rounded to the nearest supported value with a warning log message
+
+**Examples:**
+```yaml
+provider_quota:
+  check_interval: "10m"          # Check every 10 minutes
+```
+
+```bash
+export AXONHUB_PROVIDER_QUOTA_CHECK_INTERVAL="30m"
+```
+
 ## Configuration Examples
 
 ### Development Configuration
@@ -259,13 +296,6 @@ log:
     max_size: 200
     max_age: 14
     max_backups: 7
-
-metrics:
-  enabled: true
-  exporter:
-    type: "prometheus"
-    endpoint: "localhost:9090"
-    insecure: false
 ```
 
 ## Database Connection Strings
@@ -285,7 +315,13 @@ postgres://username:password@host:5432/database?sslmode=disable
 ### MySQL
 
 ```
-username:password@tcp(host:3306)/database?parseTime=true
+username:password@tcp(host:3306)/database?parseTime=True&multiStatements=true&charset=utf8mb4
+```
+
+### Tidb 
+
+```
+<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true&parseTime=true&multiStatements=true&charset=utf8mb4
 ```
 
 ## Best Practices
@@ -367,4 +403,6 @@ This command will validate your configuration file and report any errors.
 
 - [Docker Deployment](docker.md)
 - [Quick Start Guide](../getting-started/quick-start.md)
-- [API Reference](../api-reference/unified-api.md)
+- [OpenAI API](../api-reference/openai-api.md)
+- [Anthropic API](../api-reference/anthropic-api.md)
+- [Gemini API](../api-reference/gemini-api.md)

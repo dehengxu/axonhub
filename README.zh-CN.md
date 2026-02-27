@@ -1,15 +1,17 @@
 <div align="center">
 
 # AxonHub - All-in-one AI 开发平台
+### 任意 SDK、任意模型、零代码改动
+
+<a href="https://trendshift.io/repositories/16225" target="_blank"><img src="https://trendshift.io/api/badge/repositories/16225" alt="looplj%2Faxonhub | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 </div>
 
 <div align="center">
 
-[![Test Status](https://github.com/looplj/axonhub/actions/workflows/test.yml/badge.svg)](https://github.com/looplj/axonhub/actions/workflows/test.yml)
-[![Lint Status](https://github.com/looplj/axonhub/actions/workflows/lint.yml/badge.svg)](https://github.com/looplj/axonhub/actions/workflows/lint.yml)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/looplj/axonhub?logo=go&logoColor=white)](https://golang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![测试状态](https://github.com/looplj/axonhub/actions/workflows/test.yml/badge.svg)](https://github.com/looplj/axonhub/actions/workflows/test.yml)
+[![Lint 状态](https://github.com/looplj/axonhub/actions/workflows/lint.yml/badge.svg)](https://github.com/looplj/axonhub/actions/workflows/lint.yml)
+[![Go 版本](https://img.shields.io/github/go-mod/go-version/looplj/axonhub?logo=go&logoColor=white)](https://golang.org/)
 [![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
 
 [English](README.md) | [中文](README.zh-CN.md)
@@ -18,11 +20,28 @@
 
 ---
 
+## 💖 支持我
+
+| 服务商 | 计划 | 描述 | 链接 |
+|--------|------|------|------|
+| 智谱 AI | GLM CODING PLAN | 🚀 速来拼好模，智谱 GLM Coding 超值订阅，邀你一起薅羊毛！Claude Code、Cline 等 20+ 大编程工具无缝支持，"码力"全开，越拼越爽！立即开拼，享限时惊喜价！ | [English](https://z.ai/subscribe?ic=OKAF5UFZOM) / [中文](https://www.bigmodel.cn/glm-coding?ic=WIDLV0OOTJ) |
+| 火山引擎 | CODING PLAN | 方舟 Coding Plan 支持 Doubao、GLM、DeepSeek、Kimi 等模型，工具不限，现在订阅折上9折，低至8.9元，订阅越多越划算！立即订阅： | [链接](https://volcengine.com/L/1Q-HZr5Uvk8/) / 优惠码：LXKDZK3W |
+
+---
+
 ## 📖 项目介绍
 
 ### All-in-one AI 开发平台
 
-AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项目管理和全面的开发工具。平台提供 OpenAI、Anthropic 和 AI SDK 兼容的 API 层，通过转换器管道架构将请求转换到各种 AI 提供商。系统具备完整的追踪能力、基于项目的组织结构以及集成的 Playground 快速原型开发，帮助开发者和企业更好地管理 AI 开发工作流。
+**AxonHub 是 AI 网关，让你无需改动一行代码即可切换模型供应商。**
+
+无论你使用的是 OpenAI SDK、Anthropic SDK 还是任何 AI SDK，AxonHub 都会透明地将你的请求转换为与任何支持的模型供应商兼容的格式。无需重构，无需更换 SDK——只需更改配置即可。
+
+**它解决了什么问题：**
+- 🔒 **供应商锁定** - 从 GPT-4 瞬间切换到 Claude 或 Gemini
+- 🔧 **集成复杂性** - 一个 API 格式对接 10+ 供应商
+- 📊 **可观测性缺口** - 开箱即用的完整请求追踪
+- 💸 **成本控制** - 实时用量追踪和预算管理
 
 <div align="center">
   <img src="docs/axonhub-architecture-light.svg" alt="AxonHub Architecture" width="700"/>
@@ -30,10 +49,13 @@ AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项�
 
 ### 核心特性 Core Features
 
-1. [**统一 API** Unified API](docs/zh/api-reference/unified-api.md)：兼容 OpenAI 与 Anthropic 的接口，配合转换管线实现模型互换与映射，无需改动现有代码。
-2. [**追踪 / 线程** Tracing / Threads](docs/zh/guides/tracing.md)：线程级追踪实时记录完整调用链路，提升可观测性与问题定位效率。
-3. [**细粒度权限** Fine-grained Permission](docs/zh/guides/permissions.md)：基于 RBAC 的权限策略，帮助团队精细管理访问控制、配额与数据隔离。
-4. [**自适应负载均衡** Adaptive Load Balancing](docs/zh/guides/load-balance.md): 智能多策略负载均衡，自动选择最优 AI 通道，确保高可用性和最佳性能。
+| 特性 | 你能获得什么 |
+|------|-------------|
+| 🔄 [**任意 SDK → 任意模型**](docs/zh/api-reference/openai-api.md) | 用 OpenAI SDK 调用 Claude，或用 Anthropic SDK 调用 GPT。零代码改动。 |
+| 🔍 [**完整请求追踪**](docs/zh/guides/tracing.md) | 线程级可观测性的完整请求时间线。更快定位问题。 |
+| 🔐 [**企业级 RBAC**](docs/zh/guides/permissions.md) | 细粒度访问控制、用量配额和数据隔离。 |
+| ⚡ [**智能负载均衡**](docs/zh/guides/load-balance.md) | <100ms 自动故障转移。始终路由到最健康的渠道。 |
+| 💰 [**实时成本追踪**](docs/zh/guides/cost-tracking.md) | 每次请求的成本明细。输入、输出、缓存 Token——全部追踪。 |
 
 ---
 
@@ -41,8 +63,9 @@ AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项�
 
 ### DeepWiki
 详细的技术文档、API 参考、架构设计等内容，可以访问 
-- [DeepWiki](https://deepwiki.com/looplj/axonhub)
-- [Zread](https://zread.ai/looplj/axonhub)
+- [![DeepWiki](https://img.shields.io/badge/DeepWiki-looplj%2Faxonhub-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/looplj/axonhub)
+- [![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/looplj/axonhub)
+
 
 ---
 
@@ -81,14 +104,28 @@ AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项�
       渠道管理
     </td>
     <td align="center">
+      <a href="docs/screenshots/axonhub-model-price.png">
+        <img src="docs/screenshots/axonhub-model-price.png" alt="模型价格" width="250"/>
+      </a>
+      <br/>
+      模型价格
+    </td>
+  </tr>
+  <tr>
+   <td align="center">
+      <a href="docs/screenshots/axonhub-models.png">
+        <img src="docs/screenshots/axonhub-models.png" alt="模型" width="250"/>
+      </a>
+      <br/>
+      模型
+    </td>
+    <td align="center">
       <a href="docs/screenshots/axonhub-trace.png">
         <img src="docs/screenshots/axonhub-trace.png" alt="追踪查看" width="250"/>
       </a>
       <br/>
       追踪查看
     </td>
-  </tr>
-  <tr>
     <td align="center">
       <a href="docs/screenshots/axonhub-requests.png">
         <img src="docs/screenshots/axonhub-requests.png" alt="请求监控" width="250"/>
@@ -96,20 +133,7 @@ AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项�
       <br/>
       请求监控
     </td>
-    <td align="center">
-      <a href="docs/screenshots/axonhub-usage-logs.png">
-        <img src="docs/screenshots/axonhub-usage-logs.png" alt="用量日志" width="250"/>
-      </a>
-      <br/>
-      用量日志
-    </td>
-    <td align="center">
-      <a href="docs/screenshots/axonhub-system.png">
-        <img src="docs/screenshots/axonhub-system.png" alt="系统设置" width="250"/>
-      </a>
-      <br/>
-      系统设置
-    </td>
+    
   </tr>
 </table>
 
@@ -119,56 +143,74 @@ AxonHub 是一个 All-in-one AI 开发平台，提供统一的 API 网关、项�
 
 | API 类型 | 状态 | 描述 | 文档 |
 |---------|--------|-------------|--------|
-| **文本生成（Text Generation）** | ✅ Done | 对话交互接口 | [Unified API](docs/zh/api-reference/unified-api.md) |
-| **图片生成（Image Generation）** | ⚠️ Partial | 图片生成 | [Image Generation](docs/zh/api-reference/image-generation.md) |
-| **重排序（Rerank）** | 📝 Todo | 结果排序 | - |
+| **文本生成（Text Generation）** | ✅ Done | 对话交互接口 | [OpenAI API](docs/zh/api-reference/openai-api.md)、[Anthropic API](docs/zh/api-reference/anthropic-api.md)、[Gemini API](docs/zh/api-reference/gemini-api.md) |
+| **图片生成（Image Generation）** | ✅ Done | 图片生成 | [Image Generation](docs/zh/api-reference/image-generation.md) |
+| **重排序（Rerank）** | ✅ Done | 结果排序 | [Rerank API](docs/zh/api-reference/rerank-api.md) |
+| **嵌入（Embedding）** | ✅ Done | 向量嵌入生成 | [Embedding API](docs/zh/api-reference/embedding-api.md) |
 | **实时对话（Realtime）** | 📝 Todo | 实时对话功能 | - |
-| **嵌入（Embedding）** | 📝 Todo | 向量嵌入生成 | - |
 
 ---
 
-### 🌐 多提供商 AI 网关 | Multi-Provider AI Gateway
+### 🤖 支持的提供商 | Supported Providers
 
-| 特性 Feature | 技术实现 Implementation | 企业价值 Business Value |
-|-------------|----------------------|---------------------|
-| **统一 API 接口** | OpenAI 兼容标准，零学习成本 | 避免供应商锁定，降低迁移风险 |
-| **自动故障转移** | 多渠道级重试 + 负载均衡 | 服务中断时间 < 100ms |
-| **流式处理** | 原生 SSE 支持，实时响应 | 用户体验提升 60% |
-
----
-
-### 🧵 线程与追踪 | Threads & Tracing
-
-AxonHub 可以在不改动现有 OpenAI 兼容客户端的前提下，为每一次请求建立线程级追踪：
-
-- 需要显式传入 `AH-Trace-Id` 请求头才能将多次请求串联到同一追踪；若缺失该请求头，AxonHub 会记录单次调用但无法自动关联相关请求
-- 将追踪与线程关联，串联整段会话的上下文
-- 捕获模型元数据、请求/响应片段以及耗时信息，便于快速定位问题
-
-了解更多工作原理与使用方式，请参阅 [Tracing Guide](docs/zh/guides/tracing.md)。
-
-### 🔧 接口格式支持 | API Format Support
-
-| 格式 Format | 状态 Status | 兼容性 Compatibility | Modalities |
-|-------------|------------|---------------------|----------|
-| **OpenAI Chat Completions** | ✅ Done | 完全兼容 | Text, Image |
-| **OpenAI Responses** | ⚠️ Partial | 不支持 `previous_response_id` | Text |
-| **Anthropic API** | ✅ Done | 完全支持 | Text |
-| **Gemini** | ✅ Done | 完全支持 | Text, Image |
-| **AI SDK** | ⚠️ Partial | 部分支持 | Text |
+| 提供商 Provider        | 状态 Status | 支持模型 Models              | 兼容 API |
+| ---------------------- | ---------- | ---------------------------- | --------------- |
+| **OpenAI**             | ✅ 已完成   | GPT-4, GPT-4o, GPT-5 等      | OpenAI, Anthropic, Gemini, Embedding, Image Generation |
+| **Anthropic**          | ✅ 已完成   | Claude 3.5, Claude 3.0 等    | OpenAI, Anthropic, Gemini |
+| **智谱 AI (Zhipu)**    | ✅ 已完成   | GLM-4.5, GLM-4.5-air 等      | OpenAI, Anthropic, Gemini |
+| **月之暗面 (Moonshot)** | ✅ 已完成   | kimi-k2 等                   | OpenAI, Anthropic, Gemini |
+| **DeepSeek**           | ✅ 已完成   | DeepSeek-V3.1 等             | OpenAI, Anthropic, Gemini |
+| **字节跳动豆包**        | ✅ 已完成   | doubao-1.6 等                | OpenAI, Anthropic, Gemini, Image Generation |
+| **Gemini**             | ✅ 已完成   | Gemini 2.5 等                | OpenAI, Anthropic, Gemini, Image Generation |
+| **Jina AI**            | ✅ 已完成   | Embeddings, Reranker 等      | Jina Embedding, Jina Rerank |
+| **OpenRouter**         | ✅ 已完成   | 多种模型                     | OpenAI, Anthropic, Gemini, Image Generation |
+| **ZAI**                | ✅ 已完成   | -                            | Image Generation |
+| **AWS Bedrock**        | 🔄 测试中  | Claude on AWS                | OpenAI, Anthropic, Gemini |
+| **Google Cloud**       | 🔄 测试中  | Claude on GCP                | OpenAI, Anthropic, Gemini |
 
 ---
 
-### 🏢 权限控制 | Permission Control
 
-| 安全特性 Security | 实现方式 Implementation |
-|-----------------|----------------------|
-| **细粒度权限控制** | 基于角色的访问控制 (RBAC) |
-| **数据本地化** | 可配置数据存储策略 |
-| **API 密钥管理** | JWT + 作用域控制 |
+## 🚀 快速开始 | Quick Start
+
+### 30 秒本地启动 | 30-Second Local Start
+
+```bash
+# 下载并解压（以 macOS ARM64 为例）
+curl -sSL https://github.com/looplj/axonhub/releases/latest/download/axonhub_darwin_arm64.tar.gz | tar xz
+cd axonhub_*
+
+# 使用 SQLite 运行（默认）
+./axonhub
+
+# 打开 http://localhost:8090
+# 默认登录：admin@axonhub.com / admin
+```
+
+就这样！现在配置你的第一个 AI 渠道，开始通过 AxonHub 调用模型。
+
+### 零代码迁移示例 | Zero-Code Migration Example
+
+**你的现有代码无需任何改动。** 只需将 SDK 指向 AxonHub：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8090/v1",  # 指向 AxonHub
+    api_key="your-axonhub-api-key"        # 使用 AxonHub API 密钥
+)
+
+# 用 OpenAI SDK 调用 Claude！
+response = client.chat.completions.create(
+    model="claude-3-5-sonnet",  # 或 gpt-4、gemini-pro、deepseek-chat...
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+切换模型只需改一行：`model="gpt-4"` → `model="claude-3-5-sonnet"`。无需改动 SDK。
 
 ---
-
 
 ## 🚀 部署指南 | Deployment Guide
 
@@ -239,7 +281,7 @@ server:
 
 db:
   dialect: "tidb"
-  dsn: "<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true"
+  dsn: "<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true&parseTime=true&multiStatements=true&charset=utf8mb4"
 
 log:
   level: "info"
@@ -250,7 +292,7 @@ log:
 ```bash
 AXONHUB_SERVER_PORT=8090
 AXONHUB_DB_DIALECT="tidb"
-AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true"
+AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true&parseTime=true&multiStatements=true&charset=utf8mb4"
 AXONHUB_LOG_LEVEL=info
 ```
 
@@ -265,7 +307,7 @@ cd axonhub
 
 # 设置环境变量
 export AXONHUB_DB_DIALECT="tidb"
-export AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true"
+export AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true&parseTime=true&multiStatements=true&charset=utf8mb4"
 
 # 启动服务
 docker-compose up -d
@@ -273,6 +315,36 @@ docker-compose up -d
 # 查看状态
 docker-compose ps
 ```
+
+#### Helm Kubernetes 部署 | Helm Kubernetes Deployment
+
+使用官方 Helm Chart 在 Kubernetes 上部署 AxonHub：
+
+```bash
+# Quick installation
+git clone https://github.com/looplj/axonhub.git
+cd axonhub
+helm install axonhub ./deploy/helm
+
+# Production deployment
+helm install axonhub ./deploy/helm -f ./deploy/helm/values-production.yaml
+
+# Access AxonHub
+kubectl port-forward svc/axonhub 8090:8090
+# Visit http://localhost:8090
+```
+
+**关键配置选项：**
+
+| 参数 | 描述 | 默认 |
+|-----------|-------------|---------|
+| `axonhub.replicaCount` | 副本数 | `1` |
+| `axonhub.dbPassword` | 数据库密码 | `axonhub_password` |
+| `postgresql.enabled` | 是否启用内嵌 PostgreSQL | `true` |
+| `ingress.enabled` | 是否启用 Ingress | `false` |
+| `persistence.enabled` | 是否启用持久化存储 | `false` |
+
+有关详细配置和故障排查，请参阅 [Helm Chart 文档](deploy/helm/README.md)。
 
 #### 虚拟机部署 | Virtual Machine Deployment
 
@@ -285,7 +357,7 @@ cd axonhub
 
 # 设置环境变量
 export AXONHUB_DB_DIALECT="tidb"
-export AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true"
+export AXONHUB_DB_DSN="<USER>.root:<PASSWORD>@tcp(gateway01.us-west-2.prod.aws.tidbcloud.com:4000)/axonhub?tls=true&parseTime=true&multiStatements=true&charset=utf8mb4"
 
 # 安装
 sudo ./install.sh
@@ -323,111 +395,47 @@ axonhub config check
 
 ### 2. Channel 配置 | Channel Configuration
 
-在管理界面中配置 AI 提供商渠道：
+在管理界面中配置 AI 提供商渠道。关于渠道配置的详细信息，包括模型映射、参数覆盖和故障排除，请参阅 [渠道配置指南](docs/zh/guides/channel-management.md)。
 
-```yaml
-# OpenAI 渠道示例
-name: "openai"
-type: "openai"
-base_url: "https://api.openai.com/v1"
-credentials:
-  api_key: "your-openai-key"
-supported_models: ["gpt-5", "gpt-4o"]
-```
+### 3. 模型管理 | Model Management
 
-#### 2.1 测试连接
+AxonHub 提供灵活的模型管理系统，支持通过模型关联将抽象模型映射到特定渠道和模型实现。这使您能够：
 
-点击测试按钮，如果测试成功，说明配置正确。
+- **统一模型接口** - 使用抽象模型 ID（如 `gpt-4`、`claude-3-opus`）替代渠道特定的名称
+- **智能渠道选择** - 基于关联规则和负载均衡自动将请求路由到最优渠道
+- **灵活的映射策略** - 支持精确的渠道-模型匹配、正则表达式模式和基于标签的选择
+- **基于优先级的回退** - 配置多个具有优先级的关联以实现自动故障转移
 
-#### 2.2 启用渠道
+关于模型管理的全面信息，包括关联类型、配置示例和最佳实践，请参阅 [模型管理指南](docs/zh/guides/model-management.md)。
 
-测试成功后，点击启用按钮，启用该渠道。
+### 4. 创建 API Key | Create API Keys
 
-#### 2.3 模型映射 | Model Mappings
+创建 API 密钥以验证您的应用程序与 AxonHub 的连接。每个 API 密钥可以配置多个配置文件（Profile），用于定义：
 
-当请求中的模型名称与上游提供商支持的名称不一致时，可以通过模型映射在网关侧自动重写模型。
+- **模型映射** - 使用精确匹配或正则表达式模式将用户请求的模型转换为实际可用的模型
+- **渠道限制** - 通过渠道 ID 或标签限制 API 密钥可以使用的渠道
+- **模型访问控制** - 控制特定配置文件可以访问的模型
+- **配置文件切换** - 通过激活不同的配置文件即时更改行为
 
-- 将不支持或旧版本的模型 ID 映射到可用的替代模型
-- 为多渠道场景设置回退逻辑（不同渠道对应不同提供商）
+关于 API 密钥配置文件的详细信息，包括配置示例、验证规则和最佳实践，请参阅 [API 密钥配置文件指南](docs/zh/guides/api-key-profiles.md)。
 
-```yaml
-# 示例：将产品自定义别名映射到上游模型
-settings:
-  modelMappings:
-    - from: "gpt-4o-mini"
-      to: "gpt-4o"
-    - from: "claude-3-sonnet"
-      to: "claude-3.5-sonnet"
-```
+### 5. AI 编程工具集成 | AI Coding Tools Integration
 
-> 注意：AxonHub 仅接受映射到 `supported_models` 中已声明的模型。
+关于如何在 OpenCode、Claude Code 与 Claude Codex 中配置与 AxonHub 的集成、排查常见问题以及结合模型配置文件工作流的最佳实践，请参阅专门的集成指南：
+- [OpenCode 集成指南](docs/zh/guides/opencode-integration.md)
+- [Claude Code 集成指南](docs/zh/guides/claude-code-integration.md)
+- [Codex 集成指南](docs/zh/guides/codex-integration.md)
 
-#### 2.4 请求参数覆盖 | Override Parameters
-
-请求参数覆盖允许为渠道强制设置默认参数，无论上游请求携带了什么内容。配置时提供一个 JSON 对象，系统会在转发请求前自动合并。
-
-- 支持顶层字段（如 `temperature`、`max_tokens`、`top_p`）
-- 支持使用点分写法的嵌套字段（如 `response_format.type`）
-- 若 JSON 无法解析，系统会记录告警日志并保持原始请求不变
-
-```yaml
-# 示例：强制输出确定性的 JSON 结构
-settings:
-  overrideParameters: |
-    {
-      "temperature": 0.3,
-      "max_tokens": 1024,
-      "response_format.type": "json_object"
-    }
-```
-
-
-### 3. 添加用户 | Add Users
-
-1. 创建用户账户
-2. 分配角色和权限
-3. 生成 API 密钥
-
-### 4. Claude Code/Codex 使用 | Claude Code Integration
-
-关于如何在 Claude Code 与 Claude Codex 中配置与 AxonHub 的集成、排查常见问题以及结合模型配置文件工作流的最佳实践，请参阅专门的 [Claude Code & Codex 集成指南](docs/zh/guides/claude-code-integration.md)。
-
-该文档提供了环境变量示例、Codex 配置模板、模型配置文件说明以及工作流示例，帮助您快速完成接入。
+这些文档提供了环境变量示例、Codex 配置模板、模型配置文件说明以及工作流示例，帮助您快速完成接入。
 
 ---
 
-### 5. 使用 SDK | SDK Usage
+### 6. 使用 SDK | SDK Usage
 
-#### Python SDK
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="your-axonhub-api-key",
-    base_url="http://localhost:8090/v1"
-)
-
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-print(response.choices[0].message.content)
-```
-
-#### Node.js SDK
-```javascript
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: 'your-axonhub-api-key',
-  baseURL: 'http://localhost:8090/v1',
-});
-
-const completion = await openai.chat.completions.create({
-  messages: [{ role: 'user', content: 'Hello!' }],
-  model: 'gpt-4o',
-});
-```
+详细的 SDK 使用示例和代码示例，请参阅 API 文档：
+- [OpenAI API](docs/zh/api-reference/openai-api.md)
+- [Anthropic API](docs/zh/api-reference/anthropic-api.md)
+- [Gemini API](docs/zh/api-reference/gemini-api.md)
 
 
 ## 🛠️ 开发指南
@@ -451,8 +459,7 @@ const completion = await openai.chat.completions.create({
 
 ## 📄 许可证 | License
 
-本项目采用 MIT 许可证开源。详见 [LICENSE](LICENSE) 文件。
-
+本项目采用多种许可证授权（Apache-2.0 和 LGPL-3.0）。详见 [LICENSE](LICENSE) 文件了解详细的项目授权说明与条款。
 ---
 
 <div align="center">

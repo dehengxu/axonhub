@@ -1,37 +1,38 @@
-import { useMutation } from '@tanstack/react-query'
-import { graphqlRequest } from './graphql'
+import { useMutation } from '@tanstack/react-query';
+import { graphqlRequest } from './graphql';
 
 export interface Model {
-  id: string
-  status: 'enabled' | 'disabled' | 'archived'
+  id: string;
+  status: 'enabled' | 'disabled' | 'archived';
 }
 
 export interface ModelsResponse {
-  models: Model[]
+  queryModels: Model[];
 }
 
-export interface ModelsInput {
-  statusIn?: ('enabled' | 'disabled' | 'archived')[]
-  includeMapping?: boolean
-  includePrefix?: boolean
+export interface QueryModelsInput {
+  statusIn?: ('enabled' | 'disabled' | 'archived')[];
+  includeMapping?: boolean;
+  includePrefix?: boolean;
+  includeAllChannelModels?: boolean;
 }
 
 const MODELS_QUERY = `
-  query Models($input: ModelsInput!) {
-    models(input: $input) {
+  query Models($input: QueryModelsInput!) {
+    queryModels(input: $input) {
       id
       status
     }
   }
-`
+`;
 
 export function useQueryModels() {
   return useMutation({
-    mutationFn: async (input: ModelsInput = {}) => {
+    mutationFn: async (input: QueryModelsInput = {}) => {
       const data = await graphqlRequest<{
-        models: Model[]
-      }>(MODELS_QUERY, { input })
-      return data.models
+        queryModels: Model[];
+      }>(MODELS_QUERY, { input });
+      return data.queryModels;
     },
-  })
+  });
 }

@@ -33,6 +33,30 @@ func (f ChannelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelMutation", m)
 }
 
+// The ChannelModelPriceFunc type is an adapter to allow the use of ordinary
+// function as ChannelModelPrice mutator.
+type ChannelModelPriceFunc func(context.Context, *ent.ChannelModelPriceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ChannelModelPriceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ChannelModelPriceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelModelPriceMutation", m)
+}
+
+// The ChannelModelPriceVersionFunc type is an adapter to allow the use of ordinary
+// function as ChannelModelPriceVersion mutator.
+type ChannelModelPriceVersionFunc func(context.Context, *ent.ChannelModelPriceVersionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ChannelModelPriceVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ChannelModelPriceVersionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelModelPriceVersionMutation", m)
+}
+
 // The ChannelOverrideTemplateFunc type is an adapter to allow the use of ordinary
 // function as ChannelOverrideTemplate mutator.
 type ChannelOverrideTemplateFunc func(context.Context, *ent.ChannelOverrideTemplateMutation) (ent.Value, error)
@@ -45,16 +69,16 @@ func (f ChannelOverrideTemplateFunc) Mutate(ctx context.Context, m ent.Mutation)
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelOverrideTemplateMutation", m)
 }
 
-// The ChannelPerformanceFunc type is an adapter to allow the use of ordinary
-// function as ChannelPerformance mutator.
-type ChannelPerformanceFunc func(context.Context, *ent.ChannelPerformanceMutation) (ent.Value, error)
+// The ChannelProbeFunc type is an adapter to allow the use of ordinary
+// function as ChannelProbe mutator.
+type ChannelProbeFunc func(context.Context, *ent.ChannelProbeMutation) (ent.Value, error)
 
 // Mutate calls f(ctx, m).
-func (f ChannelPerformanceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.ChannelPerformanceMutation); ok {
+func (f ChannelProbeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ChannelProbeMutation); ok {
 		return f(ctx, mv)
 	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelPerformanceMutation", m)
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ChannelProbeMutation", m)
 }
 
 // The DataStorageFunc type is an adapter to allow the use of ordinary
@@ -69,6 +93,18 @@ func (f DataStorageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value,
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DataStorageMutation", m)
 }
 
+// The ModelFunc type is an adapter to allow the use of ordinary
+// function as Model mutator.
+type ModelFunc func(context.Context, *ent.ModelMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ModelFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ModelMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ModelMutation", m)
+}
+
 // The ProjectFunc type is an adapter to allow the use of ordinary
 // function as Project mutator.
 type ProjectFunc func(context.Context, *ent.ProjectMutation) (ent.Value, error)
@@ -79,6 +115,30 @@ func (f ProjectFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProjectMutation", m)
+}
+
+// The PromptFunc type is an adapter to allow the use of ordinary
+// function as Prompt mutator.
+type PromptFunc func(context.Context, *ent.PromptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PromptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PromptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PromptMutation", m)
+}
+
+// The ProviderQuotaStatusFunc type is an adapter to allow the use of ordinary
+// function as ProviderQuotaStatus mutator.
+type ProviderQuotaStatusFunc func(context.Context, *ent.ProviderQuotaStatusMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProviderQuotaStatusFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ProviderQuotaStatusMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProviderQuotaStatusMutation", m)
 }
 
 // The RequestFunc type is an adapter to allow the use of ordinary

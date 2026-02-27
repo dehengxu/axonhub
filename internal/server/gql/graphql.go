@@ -18,9 +18,11 @@ import (
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/channelprobe"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
+	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -31,6 +33,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/user"
 	"github.com/looplj/axonhub/internal/ent/userproject"
 	"github.com/looplj/axonhub/internal/ent/userrole"
+	"github.com/looplj/axonhub/internal/server/backup"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
 
@@ -51,6 +54,11 @@ type Dependencies struct {
 	ThreadService                  *biz.ThreadService
 	UsageLogService                *biz.UsageLogService
 	ChannelOverrideTemplateService *biz.ChannelOverrideTemplateService
+	ModelService                   *biz.ModelService
+	BackupService                  *backup.BackupService
+	ChannelProbeService            *biz.ChannelProbeService
+	PromptService                  *biz.PromptService
+	ProviderQuotaService           *biz.ProviderQuotaService
 }
 
 type GraphqlHandler struct {
@@ -75,6 +83,11 @@ func NewGraphqlHandlers(deps Dependencies) *GraphqlHandler {
 			deps.ThreadService,
 			deps.UsageLogService,
 			deps.ChannelOverrideTemplateService,
+			deps.ModelService,
+			deps.BackupService,
+			deps.ChannelProbeService,
+			deps.PromptService,
+			deps.ProviderQuotaService,
 		),
 	)
 
@@ -90,7 +103,14 @@ func NewGraphqlHandlers(deps Dependencies) *GraphqlHandler {
 		Cache: lru.New[string](1024),
 	})
 	gqlSrv.Use(&loggingTracer{})
-	gqlSrv.Use(entgql.Transactioner{TxOpener: deps.Ent})
+	gqlSrv.Use(entgql.Transactioner{
+		TxOpener: deps.Ent,
+		// Skip transaction for TestChannel mutation to avoid transaction conflicts
+		// when multiple test requests are sent in parallel from the frontend.
+		// TestChannel performs LLM API calls which can be long-running, and the
+		// database operations within don't require transactional consistency.
+		SkipTxFunc: entgql.SkipOperations("TestChannel"),
+	})
 
 	return &GraphqlHandler{
 		Graphql:    gqlSrv,
@@ -101,8 +121,9 @@ func NewGraphqlHandlers(deps Dependencies) *GraphqlHandler {
 var guidTypeToNodeType = map[string]string{
 	ent.TypeUser:                    user.Table,
 	ent.TypeAPIKey:                  apikey.Table,
+	ent.TypeModel:                   model.Table,
 	ent.TypeChannel:                 channel.Table,
-	ent.TypeChannelPerformance:      channelperformance.Table,
+	ent.TypeChannelProbe:            channelprobe.Table,
 	ent.TypeChannelOverrideTemplate: channeloverridetemplate.Table,
 	ent.TypeRequest:                 request.Table,
 	ent.TypeRequestExecution:        requestexecution.Table,
@@ -115,43 +136,7 @@ var guidTypeToNodeType = map[string]string{
 	ent.TypeThread:                  thread.Table,
 	ent.TypeTrace:                   trace.Table,
 	ent.TypeDataStorage:             datastorage.Table,
-}
-
-const maxPaginationLimit = 1000
-
-// validatePaginationArgs ensures GraphQL list queries receive a bounded window.
-func validatePaginationArgs(first, last *int) error {
-	provided := false
-
-	if first != nil {
-		provided = true
-
-		if *first <= 0 {
-			return fmt.Errorf("first must be greater than 0")
-		}
-
-		if *first > maxPaginationLimit {
-			return fmt.Errorf("first cannot exceed %d", maxPaginationLimit)
-		}
-	}
-
-	if last != nil {
-		provided = true
-
-		if *last <= 0 {
-			return fmt.Errorf("last must be greater than 0")
-		}
-
-		if *last > maxPaginationLimit {
-			return fmt.Errorf("last cannot exceed %d", maxPaginationLimit)
-		}
-	}
-
-	if !provided {
-		return fmt.Errorf("either first or last must be provided")
-	}
-
-	return nil
+	ent.TypePrompt:                  prompt.Table,
 }
 
 func getNilableChannel(ctx context.Context, client *ent.Client, channelID int) (*ent.Channel, error) {

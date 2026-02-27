@@ -199,13 +199,13 @@ func TestModelMapper_MatchesMapping(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "invalid regex fallback to exact match",
+			name:     "invalid regex returns false",
 			pattern:  "[invalid",
 			str:      "[invalid",
-			expected: true,
+			expected: false,
 		},
 		{
-			name:     "invalid regex no match",
+			name:     "invalid regex returns false for any string",
 			pattern:  "[invalid",
 			str:      "other",
 			expected: false,
@@ -215,157 +215,6 @@ func TestModelMapper_MatchesMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := mapper.matchesMapping(tt.pattern, tt.str)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestModelMapper_Cache(t *testing.T) {
-	mapper := NewModelMapper()
-
-	// Test cache functionality
-	assert.Equal(t, 0, mapper.CacheSize())
-
-	// Test pattern matching to populate cache
-	mapper.matchesMapping("gpt-*", "gpt-4")
-	assert.Equal(t, 1, mapper.CacheSize())
-
-	// Test same pattern uses cache
-	mapper.matchesMapping("gpt-*", "gpt-3.5")
-	assert.Equal(t, 1, mapper.CacheSize())
-
-	// Test different pattern adds to cache
-	mapper.matchesMapping("claude-*", "claude-3")
-	assert.Equal(t, 2, mapper.CacheSize())
-
-	// Test exact match pattern
-	mapper.matchesMapping("exact-model", "exact-model")
-	assert.Equal(t, 3, mapper.CacheSize())
-
-	// Test cache clear
-	mapper.ClearCache()
-	assert.Equal(t, 0, mapper.CacheSize())
-}
-
-func TestGetActiveProfile(t *testing.T) {
-	tests := []struct {
-		name     string
-		apiKey   *ent.APIKey
-		expected *objects.APIKeyProfile
-	}{
-		{
-			name:     "nil api key",
-			apiKey:   nil,
-			expected: nil,
-		},
-		{
-			name: "no profiles",
-			apiKey: &ent.APIKey{
-				Profiles: nil,
-			},
-			expected: nil,
-		},
-		{
-			name: "no active profile",
-			apiKey: &ent.APIKey{
-				Profiles: &objects.APIKeyProfiles{
-					ActiveProfile: "",
-					Profiles: []objects.APIKeyProfile{
-						{Name: "profile1"},
-					},
-				},
-			},
-			expected: nil,
-		},
-		{
-			name: "active profile found",
-			apiKey: &ent.APIKey{
-				Profiles: &objects.APIKeyProfiles{
-					ActiveProfile: "profile1",
-					Profiles: []objects.APIKeyProfile{
-						{
-							Name: "profile1",
-							ModelMappings: []objects.ModelMapping{
-								{From: "gpt-4", To: "claude-3"},
-							},
-						},
-					},
-				},
-			},
-			expected: &objects.APIKeyProfile{
-				Name: "profile1",
-				ModelMappings: []objects.ModelMapping{
-					{From: "gpt-4", To: "claude-3"},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetActiveProfile(tt.apiKey)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestHasActiveProfile(t *testing.T) {
-	tests := []struct {
-		name     string
-		apiKey   *ent.APIKey
-		expected bool
-	}{
-		{
-			name:     "nil api key",
-			apiKey:   nil,
-			expected: false,
-		},
-		{
-			name: "no active profile",
-			apiKey: &ent.APIKey{
-				Profiles: &objects.APIKeyProfiles{
-					ActiveProfile: "",
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "active profile with no mappings",
-			apiKey: &ent.APIKey{
-				Profiles: &objects.APIKeyProfiles{
-					ActiveProfile: "profile1",
-					Profiles: []objects.APIKeyProfile{
-						{
-							Name:          "profile1",
-							ModelMappings: []objects.ModelMapping{},
-						},
-					},
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "active profile with mappings",
-			apiKey: &ent.APIKey{
-				Profiles: &objects.APIKeyProfiles{
-					ActiveProfile: "profile1",
-					Profiles: []objects.APIKeyProfile{
-						{
-							Name: "profile1",
-							ModelMappings: []objects.ModelMapping{
-								{From: "gpt-4", To: "claude-3"},
-							},
-						},
-					},
-				},
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := HasActiveProfile(tt.apiKey)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

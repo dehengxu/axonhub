@@ -16,10 +16,15 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
+	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
+	"github.com/looplj/axonhub/internal/ent/channelmodelpriceversion"
 	"github.com/looplj/axonhub/internal/ent/channeloverridetemplate"
-	"github.com/looplj/axonhub/internal/ent/channelperformance"
+	"github.com/looplj/axonhub/internal/ent/channelprobe"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
+	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
+	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/role"
@@ -49,25 +54,50 @@ var channelImplementors = []string{"Channel", "Node"}
 // IsNode implements the Node interface check for GQLGen.
 func (*Channel) IsNode() {}
 
+var channelmodelpriceImplementors = []string{"ChannelModelPrice", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ChannelModelPrice) IsNode() {}
+
+var channelmodelpriceversionImplementors = []string{"ChannelModelPriceVersion", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ChannelModelPriceVersion) IsNode() {}
+
 var channeloverridetemplateImplementors = []string{"ChannelOverrideTemplate", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*ChannelOverrideTemplate) IsNode() {}
 
-var channelperformanceImplementors = []string{"ChannelPerformance", "Node"}
+var channelprobeImplementors = []string{"ChannelProbe", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
-func (*ChannelPerformance) IsNode() {}
+func (*ChannelProbe) IsNode() {}
 
 var datastorageImplementors = []string{"DataStorage", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*DataStorage) IsNode() {}
 
+var modelImplementors = []string{"Model", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*Model) IsNode() {}
+
 var projectImplementors = []string{"Project", "Node"}
 
 // IsNode implements the Node interface check for GQLGen.
 func (*Project) IsNode() {}
+
+var promptImplementors = []string{"Prompt", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*Prompt) IsNode() {}
+
+var providerquotastatusImplementors = []string{"ProviderQuotaStatus", "Node"}
+
+// IsNode implements the Node interface check for GQLGen.
+func (*ProviderQuotaStatus) IsNode() {}
 
 var requestImplementors = []string{"Request", "Node"}
 
@@ -195,6 +225,24 @@ func (c *Client) noder(ctx context.Context, table string, id int) (Noder, error)
 			}
 		}
 		return query.Only(ctx)
+	case channelmodelprice.Table:
+		query := c.ChannelModelPrice.Query().
+			Where(channelmodelprice.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelmodelpriceImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case channelmodelpriceversion.Table:
+		query := c.ChannelModelPriceVersion.Query().
+			Where(channelmodelpriceversion.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelmodelpriceversionImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
 	case channeloverridetemplate.Table:
 		query := c.ChannelOverrideTemplate.Query().
 			Where(channeloverridetemplate.ID(id))
@@ -204,11 +252,11 @@ func (c *Client) noder(ctx context.Context, table string, id int) (Noder, error)
 			}
 		}
 		return query.Only(ctx)
-	case channelperformance.Table:
-		query := c.ChannelPerformance.Query().
-			Where(channelperformance.ID(id))
+	case channelprobe.Table:
+		query := c.ChannelProbe.Query().
+			Where(channelprobe.ID(id))
 		if fc := graphql.GetFieldContext(ctx); fc != nil {
-			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelperformanceImplementors...); err != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, channelprobeImplementors...); err != nil {
 				return nil, err
 			}
 		}
@@ -222,11 +270,38 @@ func (c *Client) noder(ctx context.Context, table string, id int) (Noder, error)
 			}
 		}
 		return query.Only(ctx)
+	case model.Table:
+		query := c.Model.Query().
+			Where(model.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, modelImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
 	case project.Table:
 		query := c.Project.Query().
 			Where(project.ID(id))
 		if fc := graphql.GetFieldContext(ctx); fc != nil {
 			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, projectImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case prompt.Table:
+		query := c.Prompt.Query().
+			Where(prompt.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, promptImplementors...); err != nil {
+				return nil, err
+			}
+		}
+		return query.Only(ctx)
+	case providerquotastatus.Table:
+		query := c.ProviderQuotaStatus.Query().
+			Where(providerquotastatus.ID(id))
+		if fc := graphql.GetFieldContext(ctx); fc != nil {
+			if err := query.collectField(ctx, true, graphql.GetOperationContext(ctx), fc.Field, nil, providerquotastatusImplementors...); err != nil {
 				return nil, err
 			}
 		}
@@ -426,6 +501,38 @@ func (c *Client) noders(ctx context.Context, table string, ids []int) ([]Noder, 
 				*noder = node
 			}
 		}
+	case channelmodelprice.Table:
+		query := c.ChannelModelPrice.Query().
+			Where(channelmodelprice.IDIn(ids...))
+		query, err := query.CollectFields(ctx, channelmodelpriceImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case channelmodelpriceversion.Table:
+		query := c.ChannelModelPriceVersion.Query().
+			Where(channelmodelpriceversion.IDIn(ids...))
+		query, err := query.CollectFields(ctx, channelmodelpriceversionImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
 	case channeloverridetemplate.Table:
 		query := c.ChannelOverrideTemplate.Query().
 			Where(channeloverridetemplate.IDIn(ids...))
@@ -442,10 +549,10 @@ func (c *Client) noders(ctx context.Context, table string, ids []int) ([]Noder, 
 				*noder = node
 			}
 		}
-	case channelperformance.Table:
-		query := c.ChannelPerformance.Query().
-			Where(channelperformance.IDIn(ids...))
-		query, err := query.CollectFields(ctx, channelperformanceImplementors...)
+	case channelprobe.Table:
+		query := c.ChannelProbe.Query().
+			Where(channelprobe.IDIn(ids...))
+		query, err := query.CollectFields(ctx, channelprobeImplementors...)
 		if err != nil {
 			return nil, err
 		}
@@ -474,10 +581,58 @@ func (c *Client) noders(ctx context.Context, table string, ids []int) ([]Noder, 
 				*noder = node
 			}
 		}
+	case model.Table:
+		query := c.Model.Query().
+			Where(model.IDIn(ids...))
+		query, err := query.CollectFields(ctx, modelImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
 	case project.Table:
 		query := c.Project.Query().
 			Where(project.IDIn(ids...))
 		query, err := query.CollectFields(ctx, projectImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case prompt.Table:
+		query := c.Prompt.Query().
+			Where(prompt.IDIn(ids...))
+		query, err := query.CollectFields(ctx, promptImplementors...)
+		if err != nil {
+			return nil, err
+		}
+		nodes, err := query.All(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range nodes {
+			for _, noder := range idmap[node.ID] {
+				*noder = node
+			}
+		}
+	case providerquotastatus.Table:
+		query := c.ProviderQuotaStatus.Query().
+			Where(providerquotastatus.IDIn(ids...))
+		query, err := query.CollectFields(ctx, providerquotastatusImplementors...)
 		if err != nil {
 			return nil, err
 		}

@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/streams"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/streams"
 )
 
 // StreamWriter is a function type for writing stream events to the response.
@@ -129,6 +129,7 @@ func WriteSSEStream(c *gin.Context, stream streams.Stream[*httpclient.StreamEven
 				cur := stream.Current()
 				c.SSEvent(cur.Type, cur.Data)
 				log.Debug(ctx, "write stream event", log.Any("event", cur))
+				c.Writer.Flush()
 			} else {
 				if stream.Err() != nil {
 					log.Error(ctx, "Error in stream", log.Cause(stream.Err()))

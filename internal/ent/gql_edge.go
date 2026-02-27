@@ -108,12 +108,64 @@ func (_m *Channel) UsageLogs(
 	return _m.QueryUsageLogs().Paginate(ctx, after, first, before, last, opts...)
 }
 
-func (_m *Channel) ChannelPerformance(ctx context.Context) (*ChannelPerformance, error) {
-	result, err := _m.Edges.ChannelPerformanceOrErr()
+func (_m *Channel) ChannelProbes(ctx context.Context) (result []*ChannelProbe, err error) {
+	if fc := graphql.GetFieldContext(ctx); fc != nil && fc.Field.Alias != "" {
+		result, err = _m.NamedChannelProbes(graphql.GetFieldContext(ctx).Field.Alias)
+	} else {
+		result, err = _m.Edges.ChannelProbesOrErr()
+	}
 	if IsNotLoaded(err) {
-		result, err = _m.QueryChannelPerformance().Only(ctx)
+		result, err = _m.QueryChannelProbes().All(ctx)
+	}
+	return result, err
+}
+
+func (_m *Channel) ChannelModelPrices(ctx context.Context) (result []*ChannelModelPrice, err error) {
+	if fc := graphql.GetFieldContext(ctx); fc != nil && fc.Field.Alias != "" {
+		result, err = _m.NamedChannelModelPrices(graphql.GetFieldContext(ctx).Field.Alias)
+	} else {
+		result, err = _m.Edges.ChannelModelPricesOrErr()
+	}
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannelModelPrices().All(ctx)
+	}
+	return result, err
+}
+
+func (_m *Channel) ProviderQuotaStatus(ctx context.Context) (*ProviderQuotaStatus, error) {
+	result, err := _m.Edges.ProviderQuotaStatusOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryProviderQuotaStatus().Only(ctx)
 	}
 	return result, MaskNotFound(err)
+}
+
+func (_m *ChannelModelPrice) Channel(ctx context.Context) (*Channel, error) {
+	result, err := _m.Edges.ChannelOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannel().Only(ctx)
+	}
+	return result, err
+}
+
+func (_m *ChannelModelPrice) Versions(ctx context.Context) (result []*ChannelModelPriceVersion, err error) {
+	if fc := graphql.GetFieldContext(ctx); fc != nil && fc.Field.Alias != "" {
+		result, err = _m.NamedVersions(graphql.GetFieldContext(ctx).Field.Alias)
+	} else {
+		result, err = _m.Edges.VersionsOrErr()
+	}
+	if IsNotLoaded(err) {
+		result, err = _m.QueryVersions().All(ctx)
+	}
+	return result, err
+}
+
+func (_m *ChannelModelPriceVersion) ChannelModelPrice(ctx context.Context) (*ChannelModelPrice, error) {
+	result, err := _m.Edges.ChannelModelPriceOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannelModelPrice().Only(ctx)
+	}
+	return result, err
 }
 
 func (_m *ChannelOverrideTemplate) User(ctx context.Context) (*User, error) {
@@ -124,7 +176,7 @@ func (_m *ChannelOverrideTemplate) User(ctx context.Context) (*User, error) {
 	return result, err
 }
 
-func (_m *ChannelPerformance) Channel(ctx context.Context) (*Channel, error) {
+func (_m *ChannelProbe) Channel(ctx context.Context) (*Channel, error) {
 	result, err := _m.Edges.ChannelOrErr()
 	if IsNotLoaded(err) {
 		result, err = _m.QueryChannel().Only(ctx)
@@ -321,6 +373,27 @@ func (_m *Project) Traces(
 	return _m.QueryTraces().Paginate(ctx, after, first, before, last, opts...)
 }
 
+func (_m *Project) Prompts(
+	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *PromptOrder, where *PromptWhereInput,
+) (*PromptConnection, error) {
+	opts := []PromptPaginateOption{
+		WithPromptOrder(orderBy),
+		WithPromptFilter(where.Filter),
+	}
+	alias := graphql.GetFieldContext(ctx).Field.Alias
+	totalCount, hasTotalCount := _m.Edges.totalCount[7][alias]
+	if nodes, err := _m.NamedPrompts(alias); err == nil || hasTotalCount {
+		pager, err := newPromptPager(opts, last != nil)
+		if err != nil {
+			return nil, err
+		}
+		conn := &PromptConnection{Edges: []*PromptEdge{}, TotalCount: totalCount}
+		conn.build(nodes, pager, after, first, before, last)
+		return conn, nil
+	}
+	return _m.QueryPrompts().Paginate(ctx, after, first, before, last, opts...)
+}
+
 func (_m *Project) ProjectUsers(
 	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *UserProjectOrder, where *UserProjectWhereInput,
 ) (*UserProjectConnection, error) {
@@ -329,7 +402,7 @@ func (_m *Project) ProjectUsers(
 		WithUserProjectFilter(where.Filter),
 	}
 	alias := graphql.GetFieldContext(ctx).Field.Alias
-	totalCount, hasTotalCount := _m.Edges.totalCount[7][alias]
+	totalCount, hasTotalCount := _m.Edges.totalCount[8][alias]
 	if nodes, err := _m.NamedProjectUsers(alias); err == nil || hasTotalCount {
 		pager, err := newUserProjectPager(opts, last != nil)
 		if err != nil {
@@ -340,6 +413,35 @@ func (_m *Project) ProjectUsers(
 		return conn, nil
 	}
 	return _m.QueryProjectUsers().Paginate(ctx, after, first, before, last, opts...)
+}
+
+func (_m *Prompt) Projects(
+	ctx context.Context, after *Cursor, first *int, before *Cursor, last *int, orderBy *ProjectOrder, where *ProjectWhereInput,
+) (*ProjectConnection, error) {
+	opts := []ProjectPaginateOption{
+		WithProjectOrder(orderBy),
+		WithProjectFilter(where.Filter),
+	}
+	alias := graphql.GetFieldContext(ctx).Field.Alias
+	totalCount, hasTotalCount := _m.Edges.totalCount[0][alias]
+	if nodes, err := _m.NamedProjects(alias); err == nil || hasTotalCount {
+		pager, err := newProjectPager(opts, last != nil)
+		if err != nil {
+			return nil, err
+		}
+		conn := &ProjectConnection{Edges: []*ProjectEdge{}, TotalCount: totalCount}
+		conn.build(nodes, pager, after, first, before, last)
+		return conn, nil
+	}
+	return _m.QueryProjects().Paginate(ctx, after, first, before, last, opts...)
+}
+
+func (_m *ProviderQuotaStatus) Channel(ctx context.Context) (*Channel, error) {
+	result, err := _m.Edges.ChannelOrErr()
+	if IsNotLoaded(err) {
+		result, err = _m.QueryChannel().Only(ctx)
+	}
+	return result, err
 }
 
 func (_m *Request) APIKey(ctx context.Context) (*APIKey, error) {

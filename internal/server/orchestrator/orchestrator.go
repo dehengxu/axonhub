@@ -5,37 +5,44 @@ import (
 	"time"
 
 	"github.com/looplj/axonhub/internal/contexts"
-	"github.com/looplj/axonhub/internal/llm/pipeline"
-	"github.com/looplj/axonhub/internal/llm/pipeline/stream"
-	"github.com/looplj/axonhub/internal/llm/transformer"
 	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/objects"
-	"github.com/looplj/axonhub/internal/pkg/httpclient"
-	"github.com/looplj/axonhub/internal/pkg/streams"
 	"github.com/looplj/axonhub/internal/pkg/xcontext"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/pipeline"
+	"github.com/looplj/axonhub/llm/pipeline/stream"
+	"github.com/looplj/axonhub/llm/streams"
+	"github.com/looplj/axonhub/llm/transformer"
 )
 
 func NewChatCompletionOrchestrator(
 	channelService *biz.ChannelService,
+	modelService *biz.ModelService,
 	requestService *biz.RequestService,
 	httpClient *httpclient.HttpClient,
 	inbound transformer.Inbound,
 	systemService *biz.SystemService,
 	usageLogService *biz.UsageLogService,
+	promptService *biz.PromptService,
+	quotaService *biz.QuotaService,
 ) *ChatCompletionOrchestrator {
 	connectionTracker := NewDefaultConnectionTracker(256)
 
-	// Build strategies
-	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(requestService),                         // Priority 1: Last successful channel from trace
-		NewErrorAwareStrategy(channelService),                         // Priority 2: Health and error rate
-		NewWeightRoundRobinStrategy(channelService),                   // Priority 3: Weight round robin
-		NewConnectionAwareStrategy(channelService, connectionTracker), // Priority 4: Connection count
-	}
+	// Initialize model circuit breaker
+	modelCircuitBreaker := biz.NewModelCircuitBreaker()
 
-	adaptiveLoadBalancer := NewLoadBalancer(systemService, strategies...)
-	weightedLoadBalancer := NewLoadBalancer(systemService, NewWeightStrategy())
+	adaptiveLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewTraceAwareStrategy(requestService),
+		NewErrorAwareStrategy(channelService),
+		NewWeightRoundRobinStrategy(channelService),
+		NewConnectionAwareStrategy(channelService, connectionTracker),
+	)
+
+	failoverLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewWeightStrategy(), NewRandomStrategy())
+
+	circuitBreakerLoadBalancer := NewLoadBalancer(systemService, channelService,
+		NewWeightStrategy(), NewModelAwareCircuitBreakerStrategy(modelCircuitBreaker))
 
 	return &ChatCompletionOrchestrator{
 		Inbound:         inbound,
@@ -43,17 +50,21 @@ func NewChatCompletionOrchestrator(
 		ChannelService:  channelService,
 		SystemService:   systemService,
 		UsageLogService: usageLogService,
+		QuotaService:    quotaService,
+		PromptProvider:  promptService,
 		Middlewares: []pipeline.Middleware{
 			stream.EnsureUsage(),
 		},
-		PipelineFactory:      pipeline.NewFactory(httpClient),
-		ModelMapper:          NewModelMapper(),
-		channelSelector:      NewDefaultSelector(channelService),
-		selectedChannelIds:   []int{},
-		connectionTracker:    connectionTracker,
-		adaptiveLoadBalancer: adaptiveLoadBalancer,
-		weightedLoadBalancer: weightedLoadBalancer,
-		proxy:                nil,
+		PipelineFactory:            pipeline.NewFactory(httpClient),
+		ModelMapper:                NewModelMapper(),
+		channelSelector:            NewDefaultSelector(channelService, modelService, systemService),
+		selectedChannelIds:         []int{},
+		connectionTracker:          connectionTracker,
+		adaptiveLoadBalancer:       adaptiveLoadBalancer,
+		failoverLoadBalancer:       failoverLoadBalancer,
+		circuitBreakerLoadBalancer: circuitBreakerLoadBalancer,
+		modelCircuitBreaker:        modelCircuitBreaker,
+		proxy:                      nil,
 	}
 }
 
@@ -63,6 +74,8 @@ type ChatCompletionOrchestrator struct {
 	ChannelService  *biz.ChannelService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
+	QuotaService    *biz.QuotaService
+	PromptProvider  PromptProvider
 	Middlewares     []pipeline.Middleware
 	PipelineFactory *pipeline.Factory
 	ModelMapper     *ModelMapper
@@ -70,21 +83,24 @@ type ChatCompletionOrchestrator struct {
 	// The runtime fields.
 
 	// The default channel selector.
-	channelSelector ChannelSelector
+	channelSelector CandidateSelector
 	// The runtime selected channel ids.
 	selectedChannelIds []int
 	// The load balancer for channel load balancing.
-	adaptiveLoadBalancer *LoadBalancer
-	weightedLoadBalancer *LoadBalancer
+	adaptiveLoadBalancer       *LoadBalancer
+	failoverLoadBalancer       *LoadBalancer
+	circuitBreakerLoadBalancer *LoadBalancer
 	// The connection tracker for connection aware load balancing.
 	connectionTracker ConnectionTracker
+	// The model circuit breaker for circuit-breaker load balancing.
+	modelCircuitBreaker *biz.ModelCircuitBreaker
 
 	// proxy is the proxy configuration for testing
 	// If set, it will override the channel's default proxy configuration
-	proxy *objects.ProxyConfig
+	proxy *httpclient.ProxyConfig
 }
 
-func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector ChannelSelector) *ChatCompletionOrchestrator {
+func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector CandidateSelector) *ChatCompletionOrchestrator {
 	c := *processor
 	c.channelSelector = selector
 
@@ -93,12 +109,12 @@ func (processor *ChatCompletionOrchestrator) WithChannelSelector(selector Channe
 
 func (processor *ChatCompletionOrchestrator) WithAllowedChannels(allowedChannelIDs []int) *ChatCompletionOrchestrator {
 	c := *processor
-	c.channelSelector = NewSelectedChannelsSelector(processor.channelSelector, allowedChannelIDs)
+	c.channelSelector = WithSelectedChannelsSelector(processor.channelSelector, allowedChannelIDs)
 
 	return &c
 }
 
-func (processor *ChatCompletionOrchestrator) WithProxy(proxy *objects.ProxyConfig) *ChatCompletionOrchestrator {
+func (processor *ChatCompletionOrchestrator) WithProxy(proxy *httpclient.ProxyConfig) *ChatCompletionOrchestrator {
 	c := *processor
 	c.proxy = proxy
 
@@ -112,41 +128,46 @@ type ChatCompletionResult struct {
 
 func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, request *httpclient.Request) (ChatCompletionResult, error) {
 	apiKey, _ := contexts.GetAPIKey(ctx)
-	user, _ := contexts.GetUser(ctx)
 
 	// Get retry policy from system settings
 	retryPolicy := processor.SystemService.RetryPolicyOrDefault(ctx)
 
+	strategy := deriveLoadBalancerStrategy(retryPolicy, apiKey)
 	if log.DebugEnabled(ctx) {
 		log.Debug(ctx, "chat request received",
 			log.String("request_body", string(request.Body)),
 			log.Any("request_headers", request.Headers),
 			log.Any("retry_policy", retryPolicy),
+			log.String("system_load_balance_strategy", retryPolicy.LoadBalancerStrategy),
+			log.String("load_balance_strategy", strategy),
 		)
 	}
 
 	loadBalancer := processor.adaptiveLoadBalancer
 
-	switch retryPolicy.LoadBalancerStrategy {
-	case "adaptive":
+	switch strategy {
+	case biz.LoadBalancerStrategyAdaptive:
 		loadBalancer = processor.adaptiveLoadBalancer
-	case "weighted":
-		loadBalancer = processor.weightedLoadBalancer
+	case biz.LoadBalancerStrategyFailover:
+		loadBalancer = processor.failoverLoadBalancer
+	case biz.LoadBalancerStrategyCircuitBreaker:
+		loadBalancer = processor.circuitBreakerLoadBalancer
 	default:
 		// Default to adaptive load balancer
 	}
 
 	state := &PersistenceState{
-		APIKey:          apiKey,
-		User:            user,
-		RequestService:  processor.RequestService,
-		UsageLogService: processor.UsageLogService,
-		ChannelService:  processor.ChannelService,
-		ChannelSelector: processor.channelSelector,
-		LoadBalancer:    loadBalancer,
-		ModelMapper:     processor.ModelMapper,
-		Proxy:           processor.proxy,
-		ChannelIndex:    0,
+		APIKey:                apiKey,
+		RequestService:        processor.RequestService,
+		UsageLogService:       processor.UsageLogService,
+		ChannelService:        processor.ChannelService,
+		PromptProvider:        processor.PromptProvider,
+		RetryPolicyProvider:   processor.SystemService,
+		CandidateSelector:     processor.channelSelector,
+		LoadBalancer:          loadBalancer,
+		ModelMapper:           processor.ModelMapper,
+		Proxy:                 processor.proxy,
+		CurrentCandidateIndex: 0,
 	}
 
 	var pipelineOpts []pipeline.Option
@@ -169,8 +190,11 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 
 	// Add inbound middlewares (executed after inbound.TransformRequest)
 	middlewares = append(middlewares,
-		applyApiKeyModelMapping(inbound),
-		selectChannels(inbound),
+		enforceQuota(inbound, processor.QuotaService),
+		checkApiKeyModelAccess(inbound),
+		applyModelMapping(inbound),
+		selectCandidates(inbound),
+		injectPrompts(inbound),
 		persistRequest(inbound),
 	)
 
@@ -181,6 +205,8 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 
 		// Unified performance tracking middleware.
 		withPerformanceRecording(outbound),
+
+		withModelCircuitBreaker(outbound, processor.modelCircuitBreaker, strategy),
 
 		// The request execution middleware must be the final middleware
 		// to ensure that the request execution is created with the correct request bodys.
@@ -224,8 +250,6 @@ func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, reques
 			); updateErr != nil {
 				log.Warn(persistCtx, "Failed to update request status from error", log.Cause(updateErr))
 			}
-		} else {
-			log.Warn(persistCtx, "Request is nil, cannot update request status from error")
 		}
 
 		return ChatCompletionResult{}, err

@@ -80,6 +80,11 @@ func Name(v string) predicate.Channel {
 	return predicate.Channel(sql.FieldEQ(FieldName, v))
 }
 
+// AutoSyncSupportedModels applies equality check predicate on the "auto_sync_supported_models" field. It's identical to AutoSyncSupportedModelsEQ.
+func AutoSyncSupportedModels(v bool) predicate.Channel {
+	return predicate.Channel(sql.FieldEQ(FieldAutoSyncSupportedModels, v))
+}
+
 // DefaultTestModel applies equality check predicate on the "default_test_model" field. It's identical to DefaultTestModelEQ.
 func DefaultTestModel(v string) predicate.Channel {
 	return predicate.Channel(sql.FieldEQ(FieldDefaultTestModel, v))
@@ -400,6 +405,26 @@ func StatusNotIn(vs ...Status) predicate.Channel {
 	return predicate.Channel(sql.FieldNotIn(FieldStatus, vs...))
 }
 
+// DisabledAPIKeysIsNil applies the IsNil predicate on the "disabled_api_keys" field.
+func DisabledAPIKeysIsNil() predicate.Channel {
+	return predicate.Channel(sql.FieldIsNull(FieldDisabledAPIKeys))
+}
+
+// DisabledAPIKeysNotNil applies the NotNil predicate on the "disabled_api_keys" field.
+func DisabledAPIKeysNotNil() predicate.Channel {
+	return predicate.Channel(sql.FieldNotNull(FieldDisabledAPIKeys))
+}
+
+// AutoSyncSupportedModelsEQ applies the EQ predicate on the "auto_sync_supported_models" field.
+func AutoSyncSupportedModelsEQ(v bool) predicate.Channel {
+	return predicate.Channel(sql.FieldEQ(FieldAutoSyncSupportedModels, v))
+}
+
+// AutoSyncSupportedModelsNEQ applies the NEQ predicate on the "auto_sync_supported_models" field.
+func AutoSyncSupportedModelsNEQ(v bool) predicate.Channel {
+	return predicate.Channel(sql.FieldNEQ(FieldAutoSyncSupportedModels, v))
+}
+
 // TagsIsNil applies the IsNil predicate on the "tags" field.
 func TagsIsNil() predicate.Channel {
 	return predicate.Channel(sql.FieldIsNull(FieldTags))
@@ -473,6 +498,16 @@ func DefaultTestModelEqualFold(v string) predicate.Channel {
 // DefaultTestModelContainsFold applies the ContainsFold predicate on the "default_test_model" field.
 func DefaultTestModelContainsFold(v string) predicate.Channel {
 	return predicate.Channel(sql.FieldContainsFold(FieldDefaultTestModel, v))
+}
+
+// PoliciesIsNil applies the IsNil predicate on the "policies" field.
+func PoliciesIsNil() predicate.Channel {
+	return predicate.Channel(sql.FieldIsNull(FieldPolicies))
+}
+
+// PoliciesNotNil applies the NotNil predicate on the "policies" field.
+func PoliciesNotNil() predicate.Channel {
+	return predicate.Channel(sql.FieldNotNull(FieldPolicies))
 }
 
 // SettingsIsNil applies the IsNil predicate on the "settings" field.
@@ -744,21 +779,67 @@ func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.Channel {
 	})
 }
 
-// HasChannelPerformance applies the HasEdge predicate on the "channel_performance" edge.
-func HasChannelPerformance() predicate.Channel {
+// HasChannelProbes applies the HasEdge predicate on the "channel_probes" edge.
+func HasChannelProbes() predicate.Channel {
 	return predicate.Channel(func(s *sql.Selector) {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, ChannelPerformanceTable, ChannelPerformanceColumn),
+			sqlgraph.Edge(sqlgraph.O2M, false, ChannelProbesTable, ChannelProbesColumn),
 		)
 		sqlgraph.HasNeighbors(s, step)
 	})
 }
 
-// HasChannelPerformanceWith applies the HasEdge predicate on the "channel_performance" edge with a given conditions (other predicates).
-func HasChannelPerformanceWith(preds ...predicate.ChannelPerformance) predicate.Channel {
+// HasChannelProbesWith applies the HasEdge predicate on the "channel_probes" edge with a given conditions (other predicates).
+func HasChannelProbesWith(preds ...predicate.ChannelProbe) predicate.Channel {
 	return predicate.Channel(func(s *sql.Selector) {
-		step := newChannelPerformanceStep()
+		step := newChannelProbesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasChannelModelPrices applies the HasEdge predicate on the "channel_model_prices" edge.
+func HasChannelModelPrices() predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ChannelModelPricesTable, ChannelModelPricesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasChannelModelPricesWith applies the HasEdge predicate on the "channel_model_prices" edge with a given conditions (other predicates).
+func HasChannelModelPricesWith(preds ...predicate.ChannelModelPrice) predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := newChannelModelPricesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasProviderQuotaStatus applies the HasEdge predicate on the "provider_quota_status" edge.
+func HasProviderQuotaStatus() predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, ProviderQuotaStatusTable, ProviderQuotaStatusColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasProviderQuotaStatusWith applies the HasEdge predicate on the "provider_quota_status" edge with a given conditions (other predicates).
+func HasProviderQuotaStatusWith(preds ...predicate.ProviderQuotaStatus) predicate.Channel {
+	return predicate.Channel(func(s *sql.Selector) {
+		step := newProviderQuotaStatusStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/looplj/axonhub/internal/objects"
 )
 
 const (
@@ -24,6 +25,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldRequestID holds the string denoting the request_id field in the database.
 	FieldRequestID = "request_id"
+	// FieldAPIKeyID holds the string denoting the api_key_id field in the database.
+	FieldAPIKeyID = "api_key_id"
 	// FieldProjectID holds the string denoting the project_id field in the database.
 	FieldProjectID = "project_id"
 	// FieldChannelID holds the string denoting the channel_id field in the database.
@@ -42,6 +45,10 @@ const (
 	FieldPromptCachedTokens = "prompt_cached_tokens"
 	// FieldPromptWriteCachedTokens holds the string denoting the prompt_write_cached_tokens field in the database.
 	FieldPromptWriteCachedTokens = "prompt_write_cached_tokens"
+	// FieldPromptWriteCachedTokens5m holds the string denoting the prompt_write_cached_tokens_5m field in the database.
+	FieldPromptWriteCachedTokens5m = "prompt_write_cached_tokens_5m"
+	// FieldPromptWriteCachedTokens1h holds the string denoting the prompt_write_cached_tokens_1h field in the database.
+	FieldPromptWriteCachedTokens1h = "prompt_write_cached_tokens_1h"
 	// FieldCompletionAudioTokens holds the string denoting the completion_audio_tokens field in the database.
 	FieldCompletionAudioTokens = "completion_audio_tokens"
 	// FieldCompletionReasoningTokens holds the string denoting the completion_reasoning_tokens field in the database.
@@ -54,6 +61,12 @@ const (
 	FieldSource = "source"
 	// FieldFormat holds the string denoting the format field in the database.
 	FieldFormat = "format"
+	// FieldTotalCost holds the string denoting the total_cost field in the database.
+	FieldTotalCost = "total_cost"
+	// FieldCostItems holds the string denoting the cost_items field in the database.
+	FieldCostItems = "cost_items"
+	// FieldCostPriceReferenceID holds the string denoting the cost_price_reference_id field in the database.
+	FieldCostPriceReferenceID = "cost_price_reference_id"
 	// EdgeRequest holds the string denoting the request edge name in mutations.
 	EdgeRequest = "request"
 	// EdgeProject holds the string denoting the project edge name in mutations.
@@ -91,6 +104,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldRequestID,
+	FieldAPIKeyID,
 	FieldProjectID,
 	FieldChannelID,
 	FieldModelID,
@@ -100,12 +114,17 @@ var Columns = []string{
 	FieldPromptAudioTokens,
 	FieldPromptCachedTokens,
 	FieldPromptWriteCachedTokens,
+	FieldPromptWriteCachedTokens5m,
+	FieldPromptWriteCachedTokens1h,
 	FieldCompletionAudioTokens,
 	FieldCompletionReasoningTokens,
 	FieldCompletionAcceptedPredictionTokens,
 	FieldCompletionRejectedPredictionTokens,
 	FieldSource,
 	FieldFormat,
+	FieldTotalCost,
+	FieldCostItems,
+	FieldCostPriceReferenceID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -146,6 +165,10 @@ var (
 	DefaultPromptCachedTokens int64
 	// DefaultPromptWriteCachedTokens holds the default value on creation for the "prompt_write_cached_tokens" field.
 	DefaultPromptWriteCachedTokens int64
+	// DefaultPromptWriteCachedTokens5m holds the default value on creation for the "prompt_write_cached_tokens_5m" field.
+	DefaultPromptWriteCachedTokens5m int64
+	// DefaultPromptWriteCachedTokens1h holds the default value on creation for the "prompt_write_cached_tokens_1h" field.
+	DefaultPromptWriteCachedTokens1h int64
 	// DefaultCompletionAudioTokens holds the default value on creation for the "completion_audio_tokens" field.
 	DefaultCompletionAudioTokens int64
 	// DefaultCompletionReasoningTokens holds the default value on creation for the "completion_reasoning_tokens" field.
@@ -156,6 +179,8 @@ var (
 	DefaultCompletionRejectedPredictionTokens int64
 	// DefaultFormat holds the default value on creation for the "format" field.
 	DefaultFormat string
+	// DefaultCostItems holds the default value on creation for the "cost_items" field.
+	DefaultCostItems []objects.CostItem
 )
 
 // Source defines the type for the "source" enum field.
@@ -208,6 +233,11 @@ func ByRequestID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequestID, opts...).ToFunc()
 }
 
+// ByAPIKeyID orders the results by the api_key_id field.
+func ByAPIKeyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAPIKeyID, opts...).ToFunc()
+}
+
 // ByProjectID orders the results by the project_id field.
 func ByProjectID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProjectID, opts...).ToFunc()
@@ -253,6 +283,16 @@ func ByPromptWriteCachedTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPromptWriteCachedTokens, opts...).ToFunc()
 }
 
+// ByPromptWriteCachedTokens5m orders the results by the prompt_write_cached_tokens_5m field.
+func ByPromptWriteCachedTokens5m(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromptWriteCachedTokens5m, opts...).ToFunc()
+}
+
+// ByPromptWriteCachedTokens1h orders the results by the prompt_write_cached_tokens_1h field.
+func ByPromptWriteCachedTokens1h(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPromptWriteCachedTokens1h, opts...).ToFunc()
+}
+
 // ByCompletionAudioTokens orders the results by the completion_audio_tokens field.
 func ByCompletionAudioTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompletionAudioTokens, opts...).ToFunc()
@@ -281,6 +321,16 @@ func BySource(opts ...sql.OrderTermOption) OrderOption {
 // ByFormat orders the results by the format field.
 func ByFormat(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFormat, opts...).ToFunc()
+}
+
+// ByTotalCost orders the results by the total_cost field.
+func ByTotalCost(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalCost, opts...).ToFunc()
+}
+
+// ByCostPriceReferenceID orders the results by the cost_price_reference_id field.
+func ByCostPriceReferenceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCostPriceReferenceID, opts...).ToFunc()
 }
 
 // ByRequestField orders the results by request field.

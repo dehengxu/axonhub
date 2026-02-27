@@ -6,15 +6,15 @@
 
 ### E2E 测试脚本
 
-#### `e2e-test.sh`
+#### `e2e/e2e-test.sh`
 一键运行完整的 E2E 测试套件。
 
 ```bash
 # 运行所有 E2E 测试
-./scripts/e2e-test.sh
+./scripts/e2e/e2e-test.sh
 
 # 运行特定测试
-./scripts/e2e-test.sh tests/auth.spec.ts
+./scripts/e2e/e2e-test.sh tests/auth.spec.ts
 ```
 
 **功能：**
@@ -22,48 +22,48 @@
 - 运行 Playwright E2E 测试
 - 测试完成后自动清理
 
-#### `e2e-backend.sh`
+#### `e2e/e2e-backend.sh`
 管理 E2E 测试后端服务。
 
 ```bash
 # 启动后端
-./scripts/e2e-backend.sh start
+./scripts/e2e/e2e-backend.sh start
 
 # 停止后端
-./scripts/e2e-backend.sh stop
+./scripts/e2e/e2e-backend.sh stop
 
 # 查看状态
-./scripts/e2e-backend.sh status
+./scripts/e2e/e2e-backend.sh status
 
 # 重启后端
-./scripts/e2e-backend.sh restart
+./scripts/e2e/e2e-backend.sh restart
 
 # 清理所有 E2E 文件
-./scripts/e2e-backend.sh clean
+./scripts/e2e/e2e-backend.sh clean
 ```
 
 **配置：**
 - 端口: 8099
-- 数据库: `scripts/axonhub-e2e.db`
-- 日志: `scripts/e2e-backend.log`
+- 数据库: `scripts/e2e/axonhub-e2e.db`
+- 日志: `scripts/e2e/e2e-backend.log`
 
 ### 数据库迁移测试脚本
 
-#### `migration-test.sh`
+#### `migration/migration-test.sh`
 测试从指定 tag 到当前分支的数据库迁移。
 
 ```bash
 # 测试从 v0.1.0 迁移
-./scripts/migration-test.sh v0.1.0
+./scripts/migration/migration-test.sh v0.1.0
 
 # 跳过 E2E 测试
-./scripts/migration-test.sh v0.1.0 --skip-e2e
+./scripts/migration/migration-test.sh v0.1.0 --skip-e2e
 
 # 保留测试产物
-./scripts/migration-test.sh v0.1.0 --keep-artifacts
+./scripts/migration/migration-test.sh v0.1.0 --keep-artifacts
 
 # 使用缓存的二进制文件
-./scripts/migration-test.sh v0.1.0 --skip-download
+./scripts/migration/migration-test.sh v0.1.0 --skip-download
 ```
 
 **功能：**
@@ -73,26 +73,74 @@
 4. 使用当前版本运行迁移
 5. 运行 E2E 测试验证迁移结果
 
-**详细文档：** [MIGRATION_TEST.md](./MIGRATION_TEST.md)
+**详细文档：** [MIGRATION_TEST.md](./migration/MIGRATION_TEST.md)
 
-#### `migration-test-all.sh`
+#### `migration/migration-test-all.sh`
 批量测试多个版本的数据库迁移。
 
 ```bash
 # 自动测试最近 3 个稳定版本
-./scripts/migration-test-all.sh
+./scripts/migration/migration-test-all.sh
 
 # 测试指定版本
-./scripts/migration-test-all.sh --tags v0.1.0,v0.2.0,v0.2.1
+./scripts/migration/migration-test-all.sh --tags v0.1.0,v0.2.0,v0.2.1
 
 # 批量测试但跳过 E2E
-./scripts/migration-test-all.sh --skip-e2e
+./scripts/migration/migration-test-all.sh --skip-e2e
 ```
 
 **功能：**
 - 自动检测最近的稳定版本
 - 批量运行迁移测试
 - 生成测试摘要报告
+
+### Load Balance 日志分析脚本
+
+#### `utils/filter-load-balance-logs.sh`
+过滤和分析负载均衡日志，便于分析 load balance 是否如预期工作。
+
+```bash
+# 显示最近 10 分钟的负载均衡日志
+./scripts/filter-load-balance-logs.sh --since 10m server.log
+
+# 按渠道 ID 过滤
+./scripts/filter-load-balance-logs.sh --channel-id 1 server.log
+
+# 显示特定模型的统计信息
+./scripts/filter-load-balance-logs.sh --model gpt-4 --stats server.log
+
+# 显示详细的策略分解
+./scripts/filter-load-balance-logs.sh --details --limit 5 server.log
+
+# 显示最近 1 小时的决策摘要
+./scripts/filter-load-balance-logs.sh --since 1h --summary server.log
+
+# 导出为 CSV
+./scripts/filter-load-balance-logs.sh --format csv --limit 1000 server.log > output.csv
+
+# 按分数范围过滤
+./scripts/filter-load-balance-logs.sh --min-score 1000 --max-score 2000 server.log
+
+# 仅显示排名第一的渠道
+./scripts/filter-load-balance-logs.sh --max-rank 1 server.log
+```
+
+**功能：**
+- 按时间范围过滤日志（--since, --until）
+- 按渠道 ID 过滤（--channel-id）
+- 按模型名称过滤（--model）
+- 按分数范围过滤（--min-score, --max-score）
+- 按排名过滤（--min-rank, --max-rank）
+- 显示决策摘要（--summary）
+- 显示统计信息（--stats）
+- 显示详细的策略分解（--details）
+- 仅显示决策日志或渠道详情（--decision-only, --channel-only）
+- 限制输出条数（--limit）
+- 多种输出格式：table, json, csv（--format）
+
+**日志类型：**
+- `Load balancing decision completed` - 总体决策信息
+- `Channel load balancing details` - 每个渠道的详细信息
 
 ## 📚 文档
 
