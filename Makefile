@@ -16,7 +16,7 @@ build-backend:
 # Build the frontend application
 build-frontend:
 	@echo "Building axonhub frontend..."
-	cd frontend && pnpm vite build
+	cd frontend && pnpm install && pnpm vite build
 	@echo "Copying frontend dist to server static directory..."
 	mkdir -p internal/server/static/dist
 	cp -r frontend/dist/* internal/server/static/dist/
