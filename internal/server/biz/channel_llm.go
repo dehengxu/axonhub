@@ -9,8 +9,6 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/llm/auth"
@@ -305,12 +303,13 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 			tokens := claudecode.NewTokenProvider(oauth.TokenProviderParams{
 				Credentials: creds,
 				HTTPClient:  httpClient,
-				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+				OnRefreshed: svc.onTokenRefreshed(c),
 			})
 
 			transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
 				TokenProvider: tokens,
 				BaseURL:       c.BaseURL,
+				IsOfficial:    true,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
@@ -332,6 +331,7 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
 			TokenProvider: tokens,
 			BaseURL:       c.BaseURL,
+			IsOfficial:    false,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
@@ -524,7 +524,7 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 			p := codex.NewTokenProvider(codex.TokenProviderParams{
 				Credentials: creds,
 				HTTPClient:  httpClient,
-				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+				OnRefreshed: svc.onTokenRefreshed(c),
 			})
 
 			transformer, err := codex.NewOutboundTransformer(codex.Params{
@@ -627,7 +627,7 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		transformer, err := antigravity.NewTransformer(
 			antigravity.Config{BaseURL: c.BaseURL, APIKey: c.Credentials.APIKey},
 			antigravity.WithHTTPClient(httpClient),
-			antigravity.WithOnTokenRefreshed(svc.refreshOAuthTokenFunc(c)),
+			antigravity.WithOnTokenRefreshed(svc.onTokenRefreshed(c)),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create antigravity outbound transformer: %w", err)
@@ -653,54 +653,44 @@ func isOAuthJSON(s string) bool {
 	return strings.HasPrefix(trimmed, "{") && strings.Contains(s, "access_token")
 }
 
-func (svc *ChannelService) refreshOAuthTokenFunc(ch *ent.Channel) func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
-	return func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
-		if refreshed == nil {
-			return nil
-		}
-
-		credJSON, err := refreshed.ToJSON()
-		if err != nil {
-			return err
-		}
-
-		updated := ch.Credentials
-
-		// NOTE：必须是使用 APIKey 字段，不能使用 API Keys 字段
-		updated.APIKey = credJSON
-		updated.OAuth = refreshed
-
-		dbCtx := privacy.DecisionContext(ctx, privacy.Allow)
-		_, err = svc.entFromContext(dbCtx).Channel.UpdateOneID(ch.ID).SetCredentials(updated).Save(dbCtx)
-
-		return err
+func extractProjectIDFromAntigravityCreds(apiKey string) (string, error) {
+	parts := strings.Split(apiKey, "|")
+	if len(parts) >= 2 {
+		return parts[1], nil
 	}
+	return "", errors.New("api key does not contain project ID (expected format: \"<refreshToken>|<projectID>\")")
 }
 
-// preloadModelPrices loads active model prices for a channel and caches them.
-func (svc *ChannelService) preloadModelPrices(ctx context.Context, ch *Channel) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
-	prices, err := svc.entFromContext(ctx).ChannelModelPrice.Query().
-		Where(
-			channelmodelprice.ChannelID(ch.ID),
-			channelmodelprice.DeletedAtEQ(0),
-		).
-		All(ctx)
-	if err != nil {
-		log.Warn(ctx, "failed to preload model prices", log.Int("channel_id", ch.ID), log.Cause(err))
-		return
+func (svc *ChannelService) refreshOAuthToken(ctx context.Context, ch *ent.Channel, refreshed *oauth.OAuthCredentials) error {
+	if refreshed == nil {
+		return nil
 	}
 
-	cache := make(map[string]*ent.ChannelModelPrice, len(prices))
-	for _, p := range prices {
-		cache[p.ModelID] = p
+	updated := ch.Credentials
+
+	if ch.Type == channel.TypeAntigravity {
+		projectID, err := extractProjectIDFromAntigravityCreds(ch.Credentials.APIKey)
+		if err != nil {
+			log.Warn(ctx, "failed to extract project ID from antigravity credentials",
+				log.Cause(err),
+				log.String("channel", ch.Name))
+			return fmt.Errorf("failed to extract project ID from antigravity credentials: %w", err)
+		}
+		updated.APIKey = fmt.Sprintf("%s|%s", refreshed.RefreshToken, projectID)
+	} else {
+		credJSON, err := refreshed.ToJSON()
+		if err != nil {
+			return fmt.Errorf("failed to serialize refreshed credentials: %w", err)
+		}
+		// NOTE：必须是使用 APIKey 字段，不能使用 API Keys 字段
+		updated.APIKey = credJSON
 	}
 
-	ch.cachedModelPrices = cache
-	if log.DebugEnabled(ctx) {
-		log.Debug(ctx, "preloaded model prices", log.Int("channel_id", ch.ID), log.Int("count", len(cache)))
-	}
+	updated.OAuth = refreshed
+
+	_, err := svc.entFromContext(ctx).Channel.UpdateOneID(ch.ID).SetCredentials(updated).Save(ctx)
+
+	return err
 }
 
 // GetModelEntries returns all models this channel can handle, RequestModel -> Entry

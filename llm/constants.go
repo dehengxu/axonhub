@@ -7,6 +7,7 @@ const (
 	RequestTypeEmbedding RequestType = "embedding"
 	RequestTypeRerank    RequestType = "rerank"
 	RequestTypeImage     RequestType = "image"
+	RequestTypeVideo     RequestType = "video"
 )
 
 func (r RequestType) String() string {
@@ -22,6 +23,7 @@ const (
 	APIFormatOpenAIImageEdit       APIFormat = "openai/image_edit"
 	APIFormatOpenAIImageVariation  APIFormat = "openai/image_variation"
 	APIFormatOpenAIEmbedding       APIFormat = "openai/embeddings"
+	APIFormatOpenAIVideo           APIFormat = "openai/video"
 	APIFormatGeminiContents        APIFormat = "gemini/contents"
 	APIFormatAnthropicMessage      APIFormat = "anthropic/messages"
 	APIFormatAiSDKText             APIFormat = "aisdk/text"
@@ -29,6 +31,8 @@ const (
 
 	APIFormatJinaRerank    APIFormat = "jina/rerank"
 	APIFormatJinaEmbedding APIFormat = "jina/embeddings"
+
+	APIFormatSeedanceVideo APIFormat = "seedance/video"
 )
 
 func (f APIFormat) String() string {
@@ -42,6 +46,9 @@ const (
 	// ToolTypeImageGeneration is the image generation grounding tool type for OpenAI.
 	ToolTypeImageGeneration = "image_generation"
 
+	// ToolTypeWebSearch is the web search grounding tool type.
+	ToolTypeWebSearch = "web_search"
+
 	// ToolTypeGoogleSearch is the Google Search grounding tool type for Gemini.
 	ToolTypeGoogleSearch = "google_search"
 
@@ -51,11 +58,7 @@ const (
 	// ToolTypeGoogleUrlContext is the URL context grounding tool type for Gemini 2.0+.
 	ToolTypeGoogleUrlContext = "google_url_context"
 
-	// ToolTypeAnthropicWebSearch is the native web search tool type for Anthropic (Beta).
-	// This tool is only supported by native Anthropic API format channels.
-	ToolTypeAnthropicWebSearch = "web_search_20250305"
-
-	// AnthropicWebSearchFunctionName is the standard function name that triggers
-	// native Anthropic web search tool transformation.
-	AnthropicWebSearchFunctionName = "web_search"
+	// ToolTypeResponsesCustomTool is the custom tool type for OpenAI Responses API.
+	// Custom tools use freeform input (not JSON) and a grammar-based format definition.
+	ToolTypeResponsesCustomTool = "responses_custom_tool"
 )

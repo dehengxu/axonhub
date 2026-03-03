@@ -1,22 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, RefreshCw, Search, ChevronLeft, ChevronRight, PanelLeft, Plus, Trash2, Eye, EyeOff, Copy } from 'lucide-react';
+import { X, RefreshCw, Search, ChevronLeft, ChevronRight, PanelLeft, Plus, Trash2, Eye, EyeOff, Copy, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSelectedProjectId } from '@/stores/projectStore';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TagsAutocompleteInput } from '@/components/ui/tags-autocomplete-input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,10 +30,10 @@ import {
   useCreateChannel,
   useUpdateChannel,
   useFetchModels,
-  useBulkCreateChannels,
   useAllChannelNames,
   useAllChannelTags,
   useChannelDisabledAPIKeys,
+  useSyncChannelModels,
 } from '../data/channels';
 import { claudecodeOAuthExchange, claudecodeOAuthStart } from '../data/claudecode';
 import { codexOAuthExchange, codexOAuthStart } from '../data/codex';
@@ -51,7 +53,11 @@ import {
   getChannelTypeForApiFormat,
 } from '../data/config_providers';
 import { Channel, ChannelType, ApiFormat, createChannelInputSchema, updateChannelInputSchema } from '../data/schema';
-import { useOAuthFlow } from '../hooks/use-oauth-flow';
+import { ProxyConfig, useOAuthFlow } from '../hooks/use-oauth-flow';
+import { ManualModelBadge } from './manual-model-badge';
+import { ProxyType } from './channels-proxy-dialog';
+import { mergeChannelSettingsForUpdate } from '../utils/merge';
+import { matchesModelPattern } from '../utils/pattern';
 
 interface Props {
   currentRow?: Channel;
@@ -64,6 +70,109 @@ interface Props {
 const MAX_MODELS_DISPLAY = 2;
 
 const duplicateNameRegex = /^(.*) \((\d+)\)$/;
+
+// Custom hook for debounced value
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+// Memoized FetchedModelItem component
+const FetchedModelItem = memo(({
+  model,
+  isAdded,
+  isSelected,
+  onToggle,
+  addedLabel,
+  willRemoveLabel
+}: {
+  model: string;
+  isAdded: boolean;
+  isSelected: boolean;
+  onToggle: () => void;
+  addedLabel: string;
+  willRemoveLabel: string;
+}) => (
+  <div
+    className={`flex items-center gap-2 rounded-md p-2 text-sm transition-colors ${
+      isAdded && !isSelected
+        ? 'bg-muted/50 text-muted-foreground'
+        : isSelected
+          ? 'bg-primary/10 border-primary/30 border'
+          : 'hover:bg-accent cursor-pointer'
+    }`}
+  >
+    <Checkbox checked={isSelected} onCheckedChange={onToggle} />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className='max-w-[200px] flex-1 cursor-pointer truncate'
+          onClick={onToggle}
+        >
+          {model}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className='max-w-xs break-all'>{model}</p>
+      </TooltipContent>
+    </Tooltip>
+    {isAdded && !isSelected && (
+      <Badge variant='secondary' className='shrink-0 text-xs'>
+        {addedLabel}
+      </Badge>
+    )}
+    {isAdded && isSelected && (
+      <Badge variant='destructive' className='shrink-0 text-xs'>
+        {willRemoveLabel}
+      </Badge>
+    )}
+  </div>
+));
+FetchedModelItem.displayName = 'FetchedModelItem';
+
+// Memoized SupportedModelItem component
+const SupportedModelItem = memo(({
+  model,
+  isManual,
+  onRemove
+}: {
+  model: string;
+  isManual: boolean;
+  onRemove: () => void;
+}) => (
+  <div className='hover:bg-accent flex items-center gap-2 rounded-md p-2 text-sm'>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className='w-0 flex-1 cursor-help truncate'>{model}</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className='max-w-xs break-all'>{model}</p>
+      </TooltipContent>
+    </Tooltip>
+    <ManualModelBadge isManual={isManual} />
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='hover:text-destructive h-6 w-6 shrink-0 p-0'
+      onClick={onRemove}
+    >
+      <X className='h-3 w-3' />
+    </Button>
+  </div>
+));
+SupportedModelItem.displayName = 'SupportedModelItem';
 
 function getDuplicateBaseName(name: string) {
   const match = name.match(duplicateNameRegex);
@@ -91,13 +200,14 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const isDuplicate = !!duplicateFromRow && !isEdit;
   const initialRow: Channel | undefined = currentRow || duplicateFromRow;
   const createChannel = useCreateChannel();
-  const bulkCreateChannels = useBulkCreateChannels();
   const updateChannel = useUpdateChannel();
   const fetchModels = useFetchModels();
+  const syncChannelModels = useSyncChannelModels();
   const { data: allChannelNames = [], isSuccess: allChannelNamesLoaded } = useAllChannelNames({ enabled: open && isDuplicate });
   const { data: allTags = [], isLoading: isLoadingTags } = useAllChannelTags();
   const selectedProjectId = useSelectedProjectId();
   const [supportedModels, setSupportedModels] = useState<string[]>(() => initialRow?.supportedModels || []);
+  const [manualModels, setManualModels] = useState<string[]>(() => initialRow?.manualModels || []);
   const [newModel, setNewModel] = useState('');
   const [selectedDefaultModels, setSelectedDefaultModels] = useState<string[]>([]);
   const [fetchedModels, setFetchedModels] = useState<string[]>([]);
@@ -114,6 +224,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const [showNotAddedModelsOnly, setShowNotAddedModelsOnly] = useState(false);
   const [supportedModelsExpanded, setSupportedModelsExpanded] = useState(false);
   const [showClearAllPopover, setShowClearAllPopover] = useState(false);
+  const [applyPatternFilter, setApplyPatternFilter] = useState(false);
   const hasAutoSetDuplicateNameRef = useRef(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showApiKeysPanel, setShowApiKeysPanel] = useState(false);
@@ -123,7 +234,40 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | null>(null);
   const [showGcpJsonData, setShowGcpJsonData] = useState(false);
   const [authMode, setAuthMode] = useState<'official' | 'third-party'>('official');
+  const [patternError, setPatternError] = useState<string | null>(null);
   const dialogContentRef = useRef<HTMLDivElement>(null);
+
+  // Debounced search values for better performance
+  const debouncedFetchedModelsSearch = useDebounce(fetchedModelsSearch, 300);
+  const debouncedSupportedModelsSearch = useDebounce(supportedModelsSearch, 300);
+  const debouncedApiKeysSearch = useDebounce(apiKeysSearch, 300);
+
+  // Refs for virtual scrolling
+  const fetchedModelsParentRef = useRef<HTMLDivElement>(null);
+  const supportedModelsParentRef = useRef<HTMLDivElement>(null);
+
+  const [proxyType, setProxyType] = useState<ProxyType>(() => {
+    if (initialRow?.settings?.proxy?.type) {
+      return initialRow.settings.proxy.type as ProxyType;
+    }
+    return ProxyType.ENVIRONMENT;
+  });
+  const [proxyUrl, setProxyUrl] = useState(() => initialRow?.settings?.proxy?.url || '');
+  const [proxyUsername, setProxyUsername] = useState(() => initialRow?.settings?.proxy?.username || '');
+  const [proxyPassword, setProxyPassword] = useState(() => initialRow?.settings?.proxy?.password || '');
+
+  // Memoized proxy config for OAuth exchange
+  const proxyConfig: ProxyConfig | undefined = useMemo(() => {
+    if (proxyType === ProxyType.URL && proxyUrl) {
+      return {
+        type: proxyType,
+        url: proxyUrl,
+        ...(proxyUsername && { username: proxyUsername }),
+        ...(proxyPassword && { password: proxyPassword }),
+      };
+    }
+    return undefined;
+  }, [proxyType, proxyUrl, proxyUsername, proxyPassword]);
 
   // OAuth flows using the reusable hook
   // OAuth credentials are stored in apiKey field as JSON string, not in apiKeys array
@@ -131,6 +275,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     startFn: codexOAuthStart,
     exchangeFn: codexOAuthExchange,
     projectId: selectedProjectId,
+    proxyConfig,
     onSuccess: (credentials) => {
       form.setValue('credentials.apiKey', credentials);
     },
@@ -140,6 +285,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     startFn: claudecodeOAuthStart,
     exchangeFn: claudecodeOAuthExchange,
     projectId: selectedProjectId,
+    proxyConfig,
     onSuccess: (credentials) => {
       form.setValue('credentials.apiKey', credentials);
     },
@@ -149,6 +295,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     startFn: antigravityOAuthStart,
     exchangeFn: antigravityOAuthExchange,
     projectId: selectedProjectId,
+    proxyConfig,
     onSuccess: (credentials) => {
       form.setValue('credentials.apiKey', credentials);
     },
@@ -232,6 +379,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       setSelectedKeysToRemove(new Set());
       setConfirmRemoveSelectedOpen(false);
       setConfirmRemoveKey(null);
+      setPatternError(null);
     }
   }, [open]);
 
@@ -264,6 +412,13 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       setShowApiKeysPanel(false);
     }
   }, [open, showModelsPanel, initialRow]);
+
+  // Sync manualModels when dialog opens with new initialRow
+  useEffect(() => {
+    if (open && initialRow) {
+      setManualModels(initialRow.manualModels || []);
+    }
+  }, [open, initialRow]);
 
   // Get available providers (excluding fake types)
   const availableProviders = useMemo(
@@ -327,6 +482,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             policies: currentRow.policies ?? { stream: 'unlimited' },
             supportedModels: currentRow.supportedModels,
             autoSyncSupportedModels: currentRow.autoSyncSupportedModels,
+            autoSyncModelPattern: currentRow.autoSyncModelPattern || '',
             defaultTestModel: currentRow.defaultTestModel,
             tags: currentRow.tags || [],
             remark: currentRow.remark || '',
@@ -349,6 +505,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
               policies: duplicateFromRow.policies ?? { stream: 'unlimited' },
               supportedModels: duplicateFromRow.supportedModels,
               autoSyncSupportedModels: duplicateFromRow.autoSyncSupportedModels,
+              autoSyncModelPattern: duplicateFromRow.autoSyncModelPattern || '',
               defaultTestModel: duplicateFromRow.defaultTestModel,
               tags: duplicateFromRow.tags || [],
               remark: duplicateFromRow.remark || '',
@@ -408,8 +565,9 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     form.setValue('name', nextName);
     hasAutoSetDuplicateNameRef.current = true;
   }, [open, isDuplicate, duplicateFromRow, allChannelNamesLoaded, allChannelNames, form]);
-
   const selectedType = form.watch('type') as ChannelType | undefined;
+  const watchedAutoSync = form.watch('autoSyncSupportedModels');
+  const watchedAutoSyncPattern = form.watch('autoSyncModelPattern');
 
   const isCodexType = (selectedType || derivedChannelType) === 'codex';
   const isAntigravityType = (selectedType || derivedChannelType) === 'antigravity';
@@ -699,6 +857,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       const dataWithModels = {
         ...valuesForSubmit,
         supportedModels,
+        manualModels,
       };
 
       if ((isCodexType || isClaudeCodeType) && authMode === 'official' && !isDuplicate) {
@@ -710,15 +869,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       }
 
       if (isEdit && currentRow) {
-        // For edit mode, only include credentials if user actually entered new values
         const updateInput = {
           ...dataWithModels,
-          // type 不能更新
+          settings: undefined,
           type: undefined,
-        };
+        } as z.infer<typeof updateChannelInputSchema>;
 
-        // Check if any credential fields have actual values
-        // apiKey: OAuth 凭据 (codex/claudecode/antigravity)，不会出现在 apiKeys 中
         const apiKey = values.credentials?.apiKey || '';
         const hasApiKey = apiKey.trim().length > 0;
         const apiKeys = values.credentials?.apiKeys || [];
@@ -731,7 +887,6 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
           values.credentials?.gcp?.jsonData &&
           values.credentials.gcp.jsonData.trim() !== '';
 
-        // Only include credentials if user provided new values
         if (!hasApiKey && !hasApiKeys && !hasGcpCredentials) {
           delete updateInput.credentials;
         }
@@ -741,16 +896,28 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
           input: updateInput,
         });
       } else {
-        // For create mode, always use createChannel mutation with apiKeys
-        // The backend will handle multiple API keys in a single channel
+        const proxyConfig = {
+          type: proxyType as 'disabled' | 'environment' | 'url',
+          ...(proxyType === ProxyType.URL && {
+            url: proxyUrl,
+            username: proxyUsername || undefined,
+            password: proxyPassword || undefined,
+          }),
+        };
+
+        const nextSettings = mergeChannelSettingsForUpdate(values.settings, {
+          proxy: proxyConfig,
+        });
+
         await createChannel.mutateAsync({
           ...(dataWithModels as z.infer<typeof createChannelInputSchema>),
-          settings: values.settings ?? duplicateFromRow?.settings ?? undefined,
-        });
+          settings: nextSettings,
+        } as z.infer<typeof createChannelInputSchema>);
       }
 
       form.reset();
       setSupportedModels([]);
+      setManualModels([]);
       onOpenChange(false);
     } catch (_error) {
       void _error;
@@ -760,6 +927,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
   const addModel = () => {
     if (newModel.trim() && !supportedModels.includes(newModel.trim())) {
       setSupportedModels([...supportedModels, newModel.trim()]);
+      setManualModels([...manualModels, newModel.trim()]);
       setNewModel('');
     }
   };
@@ -783,11 +951,23 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       if (combinedModels.size === prev.length) return prev;
       return [...combinedModels];
     });
+    setManualModels((prev) => {
+      // Only add models that are NOT already in supportedModels
+      const newModels = models.filter((m) => !supportedModels.includes(m));
+      const combinedModels = new Set([...prev, ...newModels]);
+      if (combinedModels.size === prev.length) return prev;
+      return [...combinedModels];
+    });
     setNewModel('');
-  }, [newModel]);
+  }, [newModel, supportedModels]);
 
   const removeModel = (model: string) => {
     setSupportedModels(supportedModels.filter((m) => m !== model));
+    setManualModels(manualModels.filter((m) => m !== model));
+  };
+
+  const isModelManual = (model: string): boolean => {
+    return manualModels.includes(model);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -811,6 +991,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
   const handleClearAllSupportedModels = () => {
     setSupportedModels([]);
+    setManualModels([]);
   };
 
   const handleFetchModels = useCallback(async () => {
@@ -848,6 +1029,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
         setSelectedFetchedModels([]);
         setFetchedModelsSearch('');
         setShowNotAddedModelsOnly(false);
+        setApplyPatternFilter(false);
       }
     } catch (_error) {
       // Error is already handled by the mutation
@@ -883,12 +1065,15 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     if (showNotAddedModelsOnly) {
       models = models.filter((model) => !supportedModels.includes(model));
     }
-    if (fetchedModelsSearch.trim()) {
-      const search = fetchedModelsSearch.toLowerCase();
+    if (applyPatternFilter && watchedAutoSyncPattern && !patternError) {
+      models = models.filter((model) => matchesModelPattern(model, watchedAutoSyncPattern));
+    }
+    if (debouncedFetchedModelsSearch.trim()) {
+      const search = debouncedFetchedModelsSearch.toLowerCase();
       models = models.filter((model) => model.toLowerCase().includes(search));
     }
     return models;
-  }, [fetchedModels, fetchedModelsSearch, showNotAddedModelsOnly, supportedModels]);
+  }, [fetchedModels, debouncedFetchedModelsSearch, showNotAddedModelsOnly, supportedModels, applyPatternFilter, watchedAutoSyncPattern, patternError]);
 
   // Toggle selection for fetched model
   const toggleFetchedModelSelection = useCallback((model: string) => {
@@ -907,9 +1092,10 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
   // Add or remove selected fetched models to supported models
   const addSelectedFetchedModels = useCallback(() => {
+    const modelsToRemove: string[] = [];
+
     setSupportedModels((prev) => {
       const modelsToAdd: string[] = [];
-      const modelsToRemove: string[] = [];
 
       selectedFetchedModels.forEach((model) => {
         if (prev.includes(model)) {
@@ -923,6 +1109,11 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
       return [...afterRemoval, ...modelsToAdd];
     });
 
+    // Remove toggled-off models from manualModels
+    if (modelsToRemove.length > 0) {
+      setManualModels((prev) => prev.filter((m) => !modelsToRemove.includes(m)));
+    }
+
     setSelectedFetchedModels([]);
   }, [selectedFetchedModels]);
 
@@ -932,6 +1123,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     setSelectedFetchedModels([]);
     setFetchedModelsSearch('');
     setShowNotAddedModelsOnly(false);
+    setApplyPatternFilter(false);
   }, []);
 
   // Close supported models panel handler
@@ -966,17 +1158,31 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
     [form, t]
   );
 
-  // Remove deprecated models (models in supportedModels but not in fetchedModels)
+  // Remove deprecated models (models in supportedModels but not in fetchedModels and not manual)
   const removeDeprecatedModels = useCallback(() => {
     const fetchedModelsSet = new Set(fetchedModels);
-    setSupportedModels((prev) => prev.filter((model) => fetchedModelsSet.has(model)));
-  }, [fetchedModels]);
+    const manualModelsSet = new Set(manualModels);
+    // Deprecated = not fetched AND not manual
+    const deprecatedModels = supportedModels.filter(
+      (model) => !fetchedModelsSet.has(model) && !manualModelsSet.has(model)
+    );
+    // Keep fetched models and manual models in supportedModels
+    setSupportedModels((prev) =>
+      prev.filter((model) => fetchedModelsSet.has(model) || manualModelsSet.has(model))
+    );
+    // Remove deprecated models from manualModels (should be none, but for consistency)
+    setManualModels((prev) => prev.filter((model) => !deprecatedModels.includes(model)));
+  }, [fetchedModels, supportedModels, manualModels]);
 
   // Count of deprecated models
   const deprecatedModelsCount = useMemo(() => {
     const fetchedModelsSet = new Set(fetchedModels);
-    return supportedModels.filter((model) => !fetchedModelsSet.has(model)).length;
-  }, [supportedModels, fetchedModels]);
+    const manualModelsSet = new Set(manualModels);
+    // Count only models that are neither fetched nor manual
+    return supportedModels.filter(
+      (model) => !fetchedModelsSet.has(model) && !manualModelsSet.has(model)
+    ).length;
+  }, [supportedModels, fetchedModels, manualModels]);
 
   // Models to display (limited to MAX_MODELS_DISPLAY unless expanded)
   const displayedSupportedModels = useMemo(() => {
@@ -988,12 +1194,28 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
   // Filtered supported models based on search
   const filteredSupportedModels = useMemo(() => {
-    if (!supportedModelsSearch.trim()) {
+    if (!debouncedSupportedModelsSearch.trim()) {
       return supportedModels;
     }
-    const search = supportedModelsSearch.toLowerCase();
+    const search = debouncedSupportedModelsSearch.toLowerCase();
     return supportedModels.filter((model) => model.toLowerCase().includes(search));
-  }, [supportedModels, supportedModelsSearch]);
+  }, [supportedModels, debouncedSupportedModelsSearch]);
+
+  // Virtual scrolling for fetched models
+  const fetchedModelsVirtualizer = useVirtualizer({
+    count: filteredFetchedModels.length,
+    getScrollElement: () => fetchedModelsParentRef.current,
+    estimateSize: () => 40,
+    overscan: 5,
+  });
+
+  // Virtual scrolling for supported models
+  const supportedModelsVirtualizer = useVirtualizer({
+    count: filteredSupportedModels.length,
+    getScrollElement: () => supportedModelsParentRef.current,
+    estimateSize: () => 40,
+    overscan: 5,
+  });
 
   return (
     <>
@@ -1003,6 +1225,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
           if (!state) {
             form.reset();
             setSupportedModels(initialRow?.supportedModels || []);
+            setManualModels(initialRow?.manualModels || []);
             setSelectedDefaultModels([]);
             setFetchedModels([]);
             setUseFetchedModels(false);
@@ -1014,12 +1237,22 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
             setSupportedModelsSearch('');
             setSelectedFetchedModels([]);
             setShowNotAddedModelsOnly(false);
+            setApplyPatternFilter(false);
             setSupportedModelsExpanded(false);
             setApiKeysSearch('');
             setSelectedKeysToRemove(new Set());
             setConfirmRemoveSelectedOpen(false);
             setConfirmRemoveKey(null);
             setShowApiKey(false);
+            // Reset proxy state
+            if (initialRow?.settings?.proxy?.type) {
+              setProxyType(initialRow.settings.proxy.type as ProxyType);
+            } else {
+              setProxyType(ProxyType.ENVIRONMENT);
+            }
+            setProxyUrl(initialRow?.settings?.proxy?.url || '');
+            setProxyUsername(initialRow?.settings?.proxy?.username || '');
+            setProxyPassword(initialRow?.settings?.proxy?.password || '');
             // Reset provider and API format state
             if (initialRow) {
               setSelectedProvider(getProviderFromChannelType(initialRow.type) || 'openai');
@@ -1479,6 +1712,60 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                           />
                         )}
 
+                      {!isEdit && (
+                        <FormItem className='grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-8'>
+                          <FormLabel className='pt-2 font-medium md:col-span-2 md:text-right'>
+                            {t('channels.dialogs.proxy.fields.type.label')}
+                          </FormLabel>
+                          <div className='space-y-3 md:col-span-6'>
+                            <Select value={proxyType} onValueChange={(value) => setProxyType(value as ProxyType)}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t('channels.dialogs.proxy.fields.type.placeholder')} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value={ProxyType.DISABLED}>{t('channels.dialogs.proxy.types.disabled')}</SelectItem>
+                                <SelectItem value={ProxyType.ENVIRONMENT}>{t('channels.dialogs.proxy.types.environment')}</SelectItem>
+                                <SelectItem value={ProxyType.URL}>{t('channels.dialogs.proxy.types.url')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            {proxyType === ProxyType.URL && (
+                              <>
+                                <div className='space-y-1'>
+                                  <FormLabel className='text-sm'>{t('channels.dialogs.proxy.fields.url.label')}</FormLabel>
+                                  <Input
+                                    placeholder={t('channels.dialogs.proxy.fields.url.placeholder')}
+                                    value={proxyUrl}
+                                    onChange={(e) => setProxyUrl(e.target.value)}
+                                  />
+                                </div>
+
+                                <div className='space-y-1'>
+                                  <FormLabel className='text-sm'>{t('channels.dialogs.proxy.fields.username.label')}</FormLabel>
+                                  <Input
+                                    placeholder={t('channels.dialogs.proxy.fields.username.placeholder')}
+                                    value={proxyUsername}
+                                    onChange={(e) => setProxyUsername(e.target.value)}
+                                  />
+                                </div>
+
+                                <div className='space-y-1'>
+                                  <FormLabel className='text-sm'>{t('channels.dialogs.proxy.fields.password.label')}</FormLabel>
+                                  <Input
+                                    type='password'
+                                    placeholder={t('channels.dialogs.proxy.fields.password.placeholder')}
+                                    value={proxyPassword}
+                                    onChange={(e) => setProxyPassword(e.target.value)}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </FormItem>
+                      )}
+
                       <FormField
                         control={form.control}
                         name='policies.stream'
@@ -1557,6 +1844,7 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                             {displayedSupportedModels.map((model) => (
                               <Badge key={model} variant='secondary' className='text-xs'>
                                 {model}
+                                <ManualModelBadge isManual={isModelManual(model)} className='ml-1' />
                                 <button type='button' onClick={() => removeModel(model)} className='hover:text-destructive ml-1'>
                                   <X size={12} />
                                 </button>
@@ -1600,17 +1888,81 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                                     />,
                                     'inline-flex items-center'
                                   )}
-                                  <div className='space-y-0.5'>
-                                    <FormLabel className='cursor-pointer text-sm font-normal'>
-                                      {t('channels.dialogs.fields.autoSyncSupportedModels.label')}
-                                    </FormLabel>
-                                    <p className='text-muted-foreground text-xs'>
-                                      {t('channels.dialogs.fields.autoSyncSupportedModels.description')}
-                                    </p>
+                                  <div className='flex flex-1 items-center justify-between'>
+                                    <div className='space-y-0.5'>
+                                      <FormLabel className='cursor-pointer text-sm font-normal'>
+                                        {t('channels.dialogs.fields.autoSyncSupportedModels.label')}
+                                      </FormLabel>
+                                      <p className='text-muted-foreground text-xs'>
+                                        {t('channels.dialogs.fields.autoSyncSupportedModels.description')}
+                                      </p>
+                                    </div>
+                                    {isEdit && field.value && (
+                                      <Button
+                                        type='button'
+                                        size='sm'
+                                        variant='outline'
+                                        onClick={() => {
+                                          if (currentRow?.id) {
+                                            syncChannelModels.mutate(currentRow.id);
+                                          }
+                                        }}
+                                        disabled={syncChannelModels.isPending}
+                                      >
+                                        <Play className={`mr-1 h-3 w-3 ${syncChannelModels.isPending ? 'animate-spin' : ''}`} />
+                                        {syncChannelModels.isPending
+                                          ? t('channels.dialogs.buttons.syncingNow')
+                                          : t('channels.dialogs.buttons.syncNow')}
+                                      </Button>
+                                    )}
                                   </div>
                                 </FormItem>
                               )}
                             />
+
+                            {/* Auto sync model pattern */}
+                            {form.watch('autoSyncSupportedModels') && (
+                              <FormField
+                                control={form.control}
+                                name='autoSyncModelPattern'
+                                render={({ field }) => (
+                                  <FormItem className='mt-2 pl-6'>
+                                    <FormLabel className='text-sm font-normal'>
+                                      {t('channels.dialogs.fields.autoSyncModelPattern.label')}
+                                    </FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder={t('channels.dialogs.fields.autoSyncModelPattern.placeholder')}
+                                        {...field}
+                                        value={field.value || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          field.onChange(val);
+                                          // Validate regex pattern
+                                          if (val === '') {
+                                            setPatternError(null);
+                                          } else {
+                                            try {
+                                              new RegExp(val);
+                                              setPatternError(null);
+                                            } catch {
+                                              setPatternError(t('channels.dialogs.fields.autoSyncModelPattern.invalid'));
+                                            }
+                                          }
+                                        }}
+                                        className='font-mono text-sm'
+                                      />
+                                    </FormControl>
+                                    <p className='text-muted-foreground text-xs'>
+                                      {t('channels.dialogs.fields.autoSyncModelPattern.description')}
+                                    </p>
+                                    {patternError && (
+                                      <p className='text-destructive text-xs'>{patternError}</p>
+                                    )}
+                                  </FormItem>
+                                )}
+                              />
+                            )}
                           </div>
 
                           {/* Quick add models section */}
@@ -1767,10 +2119,18 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
 
                 {/* Filter and Actions */}
                 <div className='mb-3 flex items-center justify-between gap-2'>
-                  <label className='flex cursor-pointer items-center gap-2 text-xs'>
-                    <Checkbox checked={showNotAddedModelsOnly} onCheckedChange={(checked) => setShowNotAddedModelsOnly(checked === true)} />
-                    {t('channels.dialogs.fields.supportedModels.showNotAddedOnly')}
-                  </label>
+                  <div className='flex flex-col gap-1.5'>
+                    <label className='flex cursor-pointer items-center gap-2 text-xs'>
+                      <Checkbox checked={showNotAddedModelsOnly} onCheckedChange={(checked) => setShowNotAddedModelsOnly(checked === true)} />
+                      {t('channels.dialogs.fields.supportedModels.showNotAddedOnly')}
+                    </label>
+                    {watchedAutoSync && watchedAutoSyncPattern && !patternError && (
+                      <label className='flex cursor-pointer items-center gap-2 text-xs'>
+                        <Checkbox checked={applyPatternFilter} onCheckedChange={(checked) => setApplyPatternFilter(checked === true)} />
+                        {t('channels.dialogs.fields.supportedModels.filterByPattern')}
+                      </label>
+                    )}
+                  </div>
                   <div className='flex gap-1'>
                     <Button type='button' variant='outline' size='sm' className='h-6 px-2 text-xs' onClick={selectAllFilteredModels}>
                       {t('channels.dialogs.buttons.selectAll')}
@@ -1782,51 +2142,43 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                 </div>
 
                 {/* Model List */}
-                <ScrollArea className='min-h-0 flex-1' type='always'>
-                  <div className='space-y-1 pr-3'>
-                    {filteredFetchedModels.map((model) => {
+                <div ref={fetchedModelsParentRef} className='min-h-0 flex-1 overflow-auto pr-3'>
+                  <div
+                    style={{
+                      height: `${fetchedModelsVirtualizer.getTotalSize()}px`,
+                      width: '100%',
+                      position: 'relative',
+                    }}
+                  >
+                    {fetchedModelsVirtualizer.getVirtualItems().map((virtualItem) => {
+                      const model = filteredFetchedModels[virtualItem.index];
                       const isAdded = supportedModels.includes(model);
                       const isSelected = selectedFetchedModels.includes(model);
                       return (
                         <div
-                          key={model}
-                          className={`flex items-center gap-2 rounded-md p-2 text-sm transition-colors ${
-                            isAdded && !isSelected
-                              ? 'bg-muted/50 text-muted-foreground'
-                              : isSelected
-                                ? 'bg-primary/10 border-primary/30 border'
-                                : 'hover:bg-accent cursor-pointer'
-                          }`}
+                          key={virtualItem.key}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${virtualItem.size}px`,
+                            transform: `translateY(${virtualItem.start}px)`,
+                          }}
                         >
-                          <Checkbox checked={isSelected} onCheckedChange={() => toggleFetchedModelSelection(model)} />
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className='max-w-[200px] flex-1 cursor-pointer truncate'
-                                onClick={() => toggleFetchedModelSelection(model)}
-                              >
-                                {model}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className='max-w-xs break-all'>{model}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          {isAdded && !isSelected && (
-                            <Badge variant='secondary' className='shrink-0 text-xs'>
-                              {t('channels.dialogs.fields.supportedModels.added')}
-                            </Badge>
-                          )}
-                          {isAdded && isSelected && (
-                            <Badge variant='destructive' className='shrink-0 text-xs'>
-                              {t('channels.dialogs.fields.supportedModels.willRemove')}
-                            </Badge>
-                          )}
+                          <FetchedModelItem
+                            model={model}
+                            isAdded={isAdded}
+                            isSelected={isSelected}
+                            onToggle={() => toggleFetchedModelSelection(model)}
+                            addedLabel={t('channels.dialogs.fields.supportedModels.added')}
+                            willRemoveLabel={t('channels.dialogs.fields.supportedModels.willRemove')}
+                          />
                         </div>
                       );
                     })}
                   </div>
-                </ScrollArea>
+                </div>
 
                 {/* Action Buttons */}
                 <div className='mt-2 flex gap-2 border-t pt-2'>
@@ -2028,7 +2380,12 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                       <PanelLeft className='h-4 w-4' />
                     </Button>
                     <h3 className='text-sm font-semibold'>
-                      {t('channels.dialogs.fields.supportedModels.allModels', { count: supportedModels.length })}
+                      {manualModels.length > 0
+                        ? t('channels.dialogs.fields.supportedModels.allModelsWithManual', {
+                            autoCount: Math.max(0, supportedModels.length - manualModels.length),
+                            manualCount: manualModels.length,
+                          })
+                        : t('channels.dialogs.fields.supportedModels.allModels', { count: supportedModels.length })}
                     </h3>
                   </div>
                   <Popover open={showClearAllPopover} onOpenChange={setShowClearAllPopover}>
@@ -2078,31 +2435,38 @@ export function ChannelsActionDialog({ currentRow, duplicateFromRow, open, onOpe
                 </div>
 
                 {/* Model List */}
-                <ScrollArea className='min-h-0 flex-1' type='always'>
-                  <div className='space-y-1 pr-3'>
-                    {filteredSupportedModels.map((model) => (
-                      <div key={model} className='hover:bg-accent flex items-center gap-2 rounded-md p-2 text-sm'>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className='w-0 flex-1 cursor-help truncate'>{model}</span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className='max-w-xs break-all'>{model}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Button
-                          type='button'
-                          variant='ghost'
-                          size='sm'
-                          className='hover:text-destructive h-6 w-6 shrink-0 p-0'
-                          onClick={() => removeModel(model)}
+                <div ref={supportedModelsParentRef} className='min-h-0 flex-1 overflow-auto pr-3'>
+                  <div
+                    style={{
+                      height: `${supportedModelsVirtualizer.getTotalSize()}px`,
+                      width: '100%',
+                      position: 'relative',
+                    }}
+                  >
+                    {supportedModelsVirtualizer.getVirtualItems().map((virtualItem) => {
+                      const model = filteredSupportedModels[virtualItem.index];
+                      return (
+                        <div
+                          key={virtualItem.key}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: `${virtualItem.size}px`,
+                            transform: `translateY(${virtualItem.start}px)`,
+                          }}
                         >
-                          <X className='h-3 w-3' />
-                        </Button>
-                      </div>
-                    ))}
+                          <SupportedModelItem
+                            model={model}
+                            isManual={isModelManual(model)}
+                            onRemove={() => removeModel(model)}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
             </div>
           </div>

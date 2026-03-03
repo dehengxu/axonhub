@@ -6,8 +6,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/looplj/axonhub/internal/pkg/xtest"
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/internal/pkg/xtest"
 	"github.com/looplj/axonhub/llm/streams"
 )
 
@@ -32,6 +32,12 @@ func TestOutboundTransformer_StreamTransformation_WithTestData(t *testing.T) {
 			inputStreamFile:      "encrypted_content.stream.jsonl",
 			expectedStreamFile:   "llm-encrypted_content.stream.jsonl",
 			expectedResponseFile: "llm-encrypted_content.response.json",
+		},
+		{
+			name:                 "stream transformation with custom tool call",
+			inputStreamFile:      "custom_tool.stream.jsonl",
+			expectedStreamFile:   "llm-custom_tool.stream.jsonl",
+			expectedResponseFile: "llm-custom_tool.stream.response.json",
 		},
 	}
 

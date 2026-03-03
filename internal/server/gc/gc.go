@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
 	"github.com/zhenzou/executors"
 	"go.uber.org/fx"
 
+	entsql "entgo.io/ent/dialect/sql"
+
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channelprobe"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/ent/schema/schematype"
@@ -26,7 +28,9 @@ import (
 var defaultBatchSize = 500
 
 type Config struct {
-	CRON string `json:"cron" yaml:"cron" conf:"cron" validate:"required"`
+	CRON          string `json:"cron" yaml:"cron" conf:"cron" validate:"required"`
+	VacuumEnabled bool   `json:"vacuum_enabled" yaml:"vacuum_enabled" conf:"vacuum_enabled"`
+	VacuumFull    bool   `json:"vacuum_full" yaml:"vacuum_full" conf:"vacuum_full"`
 }
 
 // Worker handles garbage collection and cleanup operations.
@@ -62,7 +66,6 @@ func NewWorker(params Params) *Worker {
 // deleteInBatches deletes records in batches to avoid memory issues
 // This function repeatedly executes the delete query until no more records are deleted.
 func (w *Worker) deleteInBatches(ctx context.Context, deleteFunc func() (int, error)) (int, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	totalDeleted := 0
 
 	for {
@@ -96,7 +99,7 @@ func (w *Worker) getBatchSize() int {
 
 func (w *Worker) Start(ctx context.Context) error {
 	cancelFunc, err := w.Executor.ScheduleFuncAtCronRate(
-		w.runCleanup,
+		w.runCleanupWithSystemContext,
 		executors.CRONRule{Expr: w.Config.CRON},
 	)
 	if err != nil {
@@ -129,7 +132,6 @@ func (w *Worker) runCleanup(ctx context.Context) {
 
 	ctx = ent.NewContext(ctx, w.Ent)
 	ctx = schematype.SkipSoftDelete(ctx)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 
 	// Get storage policy
 	policy, err := w.SystemService.StoragePolicy(ctx)
@@ -205,6 +207,14 @@ func (w *Worker) runCleanup(ctx context.Context) {
 			log.Int("cleanup_days", 3))
 	}
 
+// Run VACUUM after cleanup to reclaim storage space (SQLite and PostgreSQL)
+	if w.Config.VacuumEnabled {
+		if err := w.runVacuum(ctx); err != nil {
+			log.Error(ctx, "Failed to run VACUUM after cleanup",
+				log.Cause(err))
+		}
+	}
+
 	log.Info(ctx, "Automatic cleanup process completed")
 }
 
@@ -215,7 +225,6 @@ func (w *Worker) cleanupRequests(ctx context.Context, cleanupDays int) error {
 		return nil // No cleanup needed
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	cutoffTime := time.Now().AddDate(0, 0, -cleanupDays)
 
 	execResult, err := w.cleanupOldRequestExecutions(ctx, cutoffTime)
@@ -416,7 +425,6 @@ func (w *Worker) cleanupUsageLogs(ctx context.Context, cleanupDays int) error {
 		return nil // No cleanup needed
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	cutoffTime := time.Now().AddDate(0, 0, -cleanupDays)
 
 	// Delete usage logs in batches
@@ -441,7 +449,6 @@ func (w *Worker) cleanupThreads(ctx context.Context, cleanupDays int) error {
 		return nil // No cleanup needed
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	cutoffTime := time.Now().AddDate(0, 0, -cleanupDays)
 
 	// Delete threads in batches
@@ -466,7 +473,6 @@ func (w *Worker) cleanupTraces(ctx context.Context, cleanupDays int) error {
 		return nil // No cleanup needed
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	cutoffTime := time.Now().AddDate(0, 0, -cleanupDays)
 
 	// Delete traces in batches
@@ -491,7 +497,6 @@ func (w *Worker) cleanupChannelProbes(ctx context.Context, cleanupDays int) erro
 		return nil
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	cutoffTime := time.Now().AddDate(0, 0, -cleanupDays)
 
 	result, err := w.deleteInBatches(ctx, func() (int, error) {
@@ -506,6 +511,68 @@ func (w *Worker) cleanupChannelProbes(ctx context.Context, cleanupDays int) erro
 		log.Time("cutoff_time", cutoffTime))
 
 	return nil
+}
+
+// runVacuum executes VACUUM command on SQLite/PostgreSQL database to reclaim storage space.
+// This should be called after cleanup operations to defragment the database file.
+func (w *Worker) runVacuum(ctx context.Context) error {
+	if !w.Config.VacuumEnabled {
+		log.Debug(ctx, "VACUUM is disabled, skipping")
+		return nil
+	}
+
+	// Get the underlying SQL driver to check if it's SQLite
+	dbDriver := w.Ent.Driver()
+	if dbDriver == nil {
+		return fmt.Errorf("failed to get database driver")
+	}
+
+	// Try to cast to *entsql.Driver to access underlying *sql.DB
+	sqlDriver, ok := dbDriver.(*entsql.Driver)
+	if !ok {
+		log.Debug(ctx, "Database driver is not *entsql.Driver, skipping VACUUM")
+		return nil
+	}
+
+	// Check if this is SQLite or PostgreSQL
+	if sqlDriver.Dialect() != dialect.SQLite && sqlDriver.Dialect() != dialect.Postgres {
+		log.Debug(ctx, "Database does not support VACUUM, skipping",
+			log.String("dialect", sqlDriver.Dialect()))
+
+		return nil
+	}
+
+	log.Info(ctx, "Starting database VACUUM operation",
+		log.String("dialect", sqlDriver.Dialect()),
+		log.Bool("vacuum_full", w.Config.VacuumFull))
+
+	startTime := time.Now()
+
+	// Execute VACUUM using raw SQL
+	var vacuumSQL string
+	if sqlDriver.Dialect() == dialect.Postgres && w.Config.VacuumFull {
+		vacuumSQL = "VACUUM FULL"
+	} else {
+		vacuumSQL = "VACUUM"
+	}
+
+	_, err := sqlDriver.ExecContext(ctx, vacuumSQL, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to execute %s: %w", vacuumSQL, err)
+	}
+
+	duration := time.Since(startTime)
+	log.Info(ctx, "Database VACUUM completed successfully",
+		log.Duration("duration", duration),
+		log.String("command", vacuumSQL))
+
+	return nil
+}
+
+// RunVacuumNow manually triggers the VACUUM operation.
+// This can be useful for testing or manual execution.
+func (w *Worker) RunVacuumNow(ctx context.Context) error {
+	return w.runVacuum(ctx)
 }
 
 // RunCleanupNow manually triggers the cleanup process.

@@ -13,7 +13,6 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/transformer/anthropic/claudecode"
 	"github.com/looplj/axonhub/llm/transformer/antigravity"
@@ -49,23 +48,36 @@ type FetchModelsResult struct {
 }
 
 // FetchModels fetches available models from the provider API.
-func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) (*FetchModelsResult, error) {
-	// do not support volcengine for now.
-	if input.ChannelType == channel.TypeVolcengine.String() {
-		return &FetchModelsResult{
-			Models: []ModelIdentify{},
-		}, nil
+func (f *ModelFetcher) getDefaultModels(channelType string) []ModelIdentify {
+	return f.getDefaultModelsByType(channel.Type(channelType))
+}
+
+func (f *ModelFetcher) getDefaultModelsByType(typ channel.Type) []ModelIdentify {
+	//nolint:exhaustive // only support codex and claudecode for now.
+	switch typ {
+	case channel.TypeAntigravity:
+		return lo.Map(antigravity.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
+	case channel.TypeCodex:
+		return lo.Map(codex.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
+	case channel.TypeClaudecode:
+		return lo.Map(claudecode.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
+	default:
+		return nil
+	}
+}
+
+func (f *ModelFetcher) tryReturnDefaultModels(channelType string) (*FetchModelsResult, bool) {
+	models := f.getDefaultModels(channelType)
+	if models != nil {
+		return &FetchModelsResult{Models: models}, true
 	}
 
-	if input.ChannelType == channel.TypeAntigravity.String() {
-		models := lo.Map(antigravity.DefaultModels(), func(id string, _ int) ModelIdentify {
-			return ModelIdentify{ID: id}
-		})
+	return nil, false
+}
 
-		return &FetchModelsResult{
-			Models: models,
-			Error:  nil,
-		}, nil
+func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) (*FetchModelsResult, error) {
+	if result, ok := f.tryReturnDefaultModels(input.ChannelType); ok {
+		return result, nil
 	}
 
 	var (
@@ -78,8 +90,6 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 	}
 
 	if input.ChannelID != nil {
-		ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
 		ch, err := f.channelService.entFromContext(ctx).Channel.Get(ctx, *input.ChannelID)
 		if err != nil {
 			return &FetchModelsResult{
@@ -89,22 +99,8 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 		}
 
 		if ch.Credentials.IsOAuth() {
-			//nolint:exhaustive // only support codex and claudecode for now.
-			switch ch.Type {
-			case channel.TypeCodex:
-				models := lo.Map(codex.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
-
-				return &FetchModelsResult{
-					Models: models,
-					Error:  nil,
-				}, nil
-			case channel.TypeClaudecode:
-				models := lo.Map(claudecode.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
-
-				return &FetchModelsResult{
-					Models: models,
-					Error:  nil,
-				}, nil
+			if models := f.getDefaultModelsByType(ch.Type); models != nil {
+				return &FetchModelsResult{Models: models}, nil
 			}
 		}
 
@@ -128,20 +124,8 @@ func (f *ModelFetcher) FetchModels(ctx context.Context, input FetchModelsInput) 
 	}
 
 	if isOAuthJSON(apiKey) {
-		//nolint:exhaustive // only support codex and claudecode for now.
-		switch input.ChannelType {
-		case channel.TypeCodex.String():
-			models := lo.Map(codex.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
-			return &FetchModelsResult{
-				Models: models,
-				Error:  nil,
-			}, nil
-		case channel.TypeClaudecode.String():
-			models := lo.Map(claudecode.DefaultModels(), func(id string, _ int) ModelIdentify { return ModelIdentify{ID: id} })
-			return &FetchModelsResult{
-				Models: models,
-				Error:  nil,
-			}, nil
+		if result, ok := f.tryReturnDefaultModels(input.ChannelType); ok {
+			return result, nil
 		}
 	}
 
@@ -352,6 +336,9 @@ func (f *ModelFetcher) prepareModelsEndpoint(channelType channel.Type, baseURL s
 	case channelType == channel.TypeZai || channelType == channel.TypeZhipu:
 		baseURL = strings.TrimSuffix(baseURL, "/v4")
 		return baseURL + "/v4/models", headers
+	case channelType == channel.TypeDoubao || channelType == channel.TypeVolcengine:
+		baseURL = strings.TrimSuffix(baseURL, "/v3")
+		return baseURL + "/v3/models", headers
 	case channelType.IsAnthropicLike():
 		baseURL = strings.TrimSuffix(baseURL, "/anthropic")
 		baseURL = strings.TrimSuffix(baseURL, "/claude")

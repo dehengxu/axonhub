@@ -13,6 +13,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"github.com/looplj/axonhub/internal/authz"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
@@ -25,6 +26,7 @@ import (
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/xtime"
 	"github.com/looplj/axonhub/internal/scopes"
+	"github.com/looplj/axonhub/internal/server/gql/qb"
 	"github.com/samber/lo"
 )
 
@@ -32,7 +34,7 @@ import (
 // Note: This resolver provides high-level dashboard metrics.
 // For detailed request statistics, see RequestStats resolver documentation.
 func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOverview, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	// Initialize response with defaults to handle partial failures gracefully
 	stats := &DashboardOverview{
@@ -85,7 +87,7 @@ func (r *queryResolver) DashboardOverview(ctx context.Context) (*DashboardOvervi
 // For process tracking (e.g., failed requests), use request/request_execution tables.
 // For channel-level statistics, use request_execution table.
 func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	// Initialize response with defaults to handle partial failures gracefully
 	stats := &RequestStats{
@@ -137,7 +139,7 @@ func (r *queryResolver) RequestStats(ctx context.Context) (*RequestStats, error)
 // Note: Uses usage_logs table for result-only statistics aggregated by channel.
 // For channel-level process tracking (e.g., success/failure rates), use request_execution table.
 func (r *queryResolver) RequestStatsByChannel(ctx context.Context) ([]*RequestStatsByChannel, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	// Use efficient aggregation query with JOIN to get channel details and filter out deleted channels
 	type channelStats struct {
@@ -172,7 +174,6 @@ func (r *queryResolver) RequestStatsByChannel(ctx context.Context) ([]*RequestSt
 			s.OrderBy(sql.Desc("count")).Limit(10)
 		}).
 		Scan(ctx, &results)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get requests by channel: %w", err)
 	}
@@ -190,7 +191,7 @@ func (r *queryResolver) RequestStatsByChannel(ctx context.Context) ([]*RequestSt
 // Note: Uses usage_logs table for result-only statistics aggregated by model.
 // This provides successful request counts per model.
 func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStatsByModel, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	type modelStats struct {
 		ModelID string `json:"model_id"`
@@ -230,7 +231,7 @@ func (r *queryResolver) RequestStatsByModel(ctx context.Context) ([]*RequestStat
 // Note: Uses usage_logs table for result-only statistics aggregated by API key.
 // This provides successful request counts per API key.
 func (r *queryResolver) RequestStatsByAPIKey(ctx context.Context) ([]*RequestStatsByAPIKey, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	type apiKeyStats struct {
 		APIKeyID int `json:"api_key_id"`
@@ -300,7 +301,7 @@ func (r *queryResolver) RequestStatsByAPIKey(ctx context.Context) ([]*RequestSta
 // Note: Uses usage_logs table for token consumption statistics aggregated by API key.
 // This provides actual token usage (input, output, cached, reasoning) per API key.
 func (r *queryResolver) TokenStatsByAPIKey(ctx context.Context) ([]*TokenStatsByAPIKey, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	type tokenStats struct {
 		APIKeyID        int   `json:"api_key_id"`
@@ -405,7 +406,7 @@ func (r *queryResolver) TokenStatsByAPIKey(ctx context.Context) ([]*TokenStatsBy
 // Note: Uses usage_logs table for daily aggregated statistics (count, tokens, cost).
 // Provides result-only daily metrics for the last 30 days.
 func (r *queryResolver) DailyRequestStats(ctx context.Context) ([]*DailyRequestStats, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	daysCount := 30
 
@@ -502,7 +503,7 @@ func (r *queryResolver) DailyRequestStats(ctx context.Context) ([]*DailyRequestS
 // Note: Uses usage_logs table for project-level request statistics.
 // Provides result-only request counts per project.
 func (r *queryResolver) TopRequestsProjects(ctx context.Context) ([]*TopRequestsProjects, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	limitCount := 10
 
@@ -570,7 +571,7 @@ func (r *queryResolver) TopRequestsProjects(ctx context.Context) ([]*TopRequests
 // Note: Uses usage_logs table for token consumption statistics (today, this week, this month).
 // Provides result-only token metrics aggregated by calendar periods.
 func (r *queryResolver) TokenStats(ctx context.Context) (*TokenStats, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	// Initialize response with defaults to handle partial failures gracefully
 	stats := &TokenStats{
@@ -843,7 +844,7 @@ func (r *queryResolver) ModelTokenStats(ctx context.Context, models []string, pe
 // This provides success/failure rates per channel, suitable for monitoring channel health.
 // For result-only channel statistics, use RequestStatsByChannel instead.
 func (r *queryResolver) ChannelSuccessRates(ctx context.Context) ([]*ChannelSuccessRate, error) {
-	ctx = scopes.WithUserScopeDecision(ctx, scopes.ScopeReadDashboard)
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
 
 	limitCount := 5
 
@@ -934,4 +935,470 @@ func (r *queryResolver) ChannelSuccessRates(ctx context.Context) ([]*ChannelSucc
 	}
 
 	return response, nil
+}
+
+// FastestChannels is the resolver for the fastestChannels field.
+// Returns the fastest channels by throughput (tokens per second) based on completed request executions.
+// Groups by channel_id and calculates throughput from usage_log.completion_tokens and request_execution.metrics_latency_ms.
+func (r *queryResolver) FastestChannels(ctx context.Context, input FastestChannelsInput) ([]*FastestChannel, error) {
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	// Validate and set default limit
+	if input.Limit == nil || *input.Limit <= 0 {
+		input.Limit = new(int)
+		*input.Limit = 5
+	}
+	if *input.Limit > 100 {
+		*input.Limit = 100
+	}
+
+	// Parse time window using calendar periods (like Token Statistics)
+	loc := r.systemService.TimeLocation(ctx)
+	period := xtime.GetCalendarPeriods(loc)
+
+	var since time.Time
+	switch input.TimeWindow {
+	case "day":
+		since = period.Today.Start
+	case "week":
+		since = period.ThisWeek.Start
+	case "month":
+		since = period.ThisMonth.Start
+	default:
+		since = period.Today.Start // Default to day
+	}
+
+	// Query structure for aggregation
+
+	type channelStats struct {
+		ChannelID    int     `json:"channel_id"`
+		ChannelName  string  `json:"channel_name"`
+		ChannelType  string  `json:"channel_type"`
+		TokensCount  int64   `json:"tokens_count"`
+		LatencyMs    int64   `json:"latency_ms"`
+		RequestCount int64   `json:"request_count"`
+		Throughput   float64 `json:"throughput"`
+	}
+	var results []channelStats
+	dbDriver := r.client.Driver()
+	sqlDB, ok := dbDriver.(*sql.Driver)
+	if !ok {
+		return nil, fmt.Errorf("failed to get underlying SQL driver")
+	}
+
+	// Detect dialect to use appropriate placeholder syntax
+	// PostgreSQL uses $1, $2, etc. while SQLite uses ? placeholders
+	dialectName := sqlDB.Dialect()
+	useDollarPlaceholders := dialectName == dialect.Postgres
+
+	// Select throughput mode based on dialect: ROW_NUMBER for PostgreSQL, MaxID for older SQLite
+	queryMode := qb.ThroughputModeRowNumber
+	if !useDollarPlaceholders {
+		queryMode = qb.ThroughputModeMaxID
+	}
+
+	// Build query using shared helper function
+	// Fetch more items than needed to allow confidence-based filtering
+	sqlLimit := max(*input.Limit*4, 20)
+	query := qb.BuildThroughputQuery(
+		useDollarPlaceholders,
+		qb.ThroughputQueryByChannel,
+		sqlLimit,
+		queryMode,
+	)
+
+	// Use UTC for the time parameter to match the timezone of the created_at column.
+	// This assumes created_at is stored in UTC, which is consistent with the application's timezone handling.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context canceled: %w", err)
+	}
+	// MaxID mode requires the timestamp twice (outer WHERE and subquery WHERE)
+	// ROW_NUMBER mode only needs it once (in the CTE)
+	var queryArgs []any
+	if queryMode == qb.ThroughputModeMaxID {
+		queryArgs = []any{since.UTC(), since.UTC()}
+	} else {
+		queryArgs = []any{since.UTC()}
+	}
+
+	rows, err := sqlDB.DB().QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query fastest channels: %w", err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context canceled: %w", err)
+		}
+
+		var stat channelStats
+		if err := rows.Scan(
+			&stat.ChannelID,
+			&stat.ChannelName,
+			&stat.ChannelType,
+			&stat.TokensCount,
+			&stat.LatencyMs,
+			&stat.RequestCount,
+			&stat.Throughput,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan channel stats: %w", err)
+		}
+		results = append(results, stat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*FastestChannel{}, nil
+	}
+
+	resultsToShow := calculateConfidenceAndSort(results,
+		func(item channelStats) int64 { return item.RequestCount },
+		func(item channelStats) float64 { return item.Throughput },
+		*input.Limit,
+	)
+
+	// Build response with confidence levels
+	return lo.Map(resultsToShow, func(item scoredItem[channelStats], _ int) *FastestChannel {
+		return &FastestChannel{
+			ChannelID:       objects.GUID{Type: "Channel", ID: item.stats.ChannelID},
+			ChannelName:     item.stats.ChannelName,
+			ChannelType:     item.stats.ChannelType,
+			Throughput:      item.stats.Throughput,
+			TokensCount:     safeIntFromInt64(item.stats.TokensCount),
+			LatencyMs:       safeIntFromInt64(item.stats.LatencyMs),
+			RequestCount:    safeIntFromInt64(item.stats.RequestCount),
+			ConfidenceLevel: item.confidence,
+		}
+	}), nil
+}
+
+// FastestModels is the resolver for the fastestModels field.
+// Returns the fastest models by throughput (tokens per second) based on completed request executions.
+// Groups by request.model_id (AxonHub model) and calculates throughput from usage_log.completion_tokens and request_execution.metrics_latency_ms.
+func (r *queryResolver) FastestModels(ctx context.Context, input FastestChannelsInput) ([]*FastestModel, error) {
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	// Validate and set default limit
+	if input.Limit == nil || *input.Limit <= 0 {
+		input.Limit = new(int)
+		*input.Limit = 5
+	}
+	if *input.Limit > 100 {
+		*input.Limit = 100
+	}
+
+	// Parse time window using calendar periods (like Token Statistics)
+	loc := r.systemService.TimeLocation(ctx)
+	period := xtime.GetCalendarPeriods(loc)
+
+	var since time.Time
+	switch input.TimeWindow {
+	case "day":
+		since = period.Today.Start
+	case "week":
+		since = period.ThisWeek.Start
+	case "month":
+		since = period.ThisMonth.Start
+	default:
+		since = period.Today.Start // Default to day
+	}
+
+	// Query structure for aggregation
+
+	type modelStats struct {
+		ModelID      string  `json:"model_id"`
+		ModelName    string  `json:"model_name"`
+		TokensCount  int64   `json:"tokens_count"`
+		LatencyMs    int64   `json:"latency_ms"`
+		RequestCount int64   `json:"request_count"`
+		Throughput   float64 `json:"throughput"`
+	}
+	var results []modelStats
+	dbDriver := r.client.Driver()
+	sqlDB, ok := dbDriver.(*sql.Driver)
+	if !ok {
+		return nil, fmt.Errorf("failed to get underlying SQL driver")
+	}
+
+	// Detect dialect to use appropriate placeholder syntax
+	// PostgreSQL uses $1, $2, etc. while SQLite uses ? placeholders
+	dialectName := sqlDB.Dialect()
+	useDollarPlaceholders := dialectName == dialect.Postgres
+
+	// Select throughput mode based on dialect: ROW_NUMBER for PostgreSQL, MaxID for older SQLite
+	queryMode := qb.ThroughputModeRowNumber
+	if !useDollarPlaceholders {
+		queryMode = qb.ThroughputModeMaxID
+	}
+
+	// Build query with dialect-aware timestamp placeholder
+	// Fetch more items than needed to allow confidence-based filtering
+	sqlLimit := *input.Limit * 4
+	if sqlLimit < 20 {
+		sqlLimit = 20
+	}
+
+	query := qb.BuildThroughputQuery(
+		useDollarPlaceholders,
+		qb.ThroughputQueryByModel,
+		sqlLimit,
+		queryMode,
+	)
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context canceled: %w", err)
+	}
+	// MaxID mode requires the timestamp twice (outer WHERE and subquery WHERE)
+	// ROW_NUMBER mode only needs it once (in the CTE)
+	var queryArgs []any
+	if queryMode == qb.ThroughputModeMaxID {
+		queryArgs = []any{since.UTC(), since.UTC()}
+	} else {
+		queryArgs = []any{since.UTC()}
+	}
+
+	rows, err := sqlDB.DB().QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query fastest models: %w", err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context canceled: %w", err)
+		}
+
+		var stat modelStats
+		if err := rows.Scan(
+			&stat.ModelID,
+			&stat.ModelName,
+			&stat.TokensCount,
+			&stat.LatencyMs,
+			&stat.RequestCount,
+			&stat.Throughput,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan model stats: %w", err)
+		}
+		results = append(results, stat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	if len(results) == 0 {
+		return []*FastestModel{}, nil
+	}
+
+	resultsToShow := calculateConfidenceAndSort(results,
+		func(item modelStats) int64 { return item.RequestCount },
+		func(item modelStats) float64 { return item.Throughput },
+		*input.Limit,
+	)
+
+	// Build response with confidence levels
+	return lo.Map(resultsToShow, func(item scoredItem[modelStats], _ int) *FastestModel {
+		return &FastestModel{
+			ModelID:         item.stats.ModelID,
+			ModelName:       item.stats.ModelName,
+			Throughput:      item.stats.Throughput,
+			TokensCount:     safeIntFromInt64(item.stats.TokensCount),
+			LatencyMs:       safeIntFromInt64(item.stats.LatencyMs),
+			RequestCount:    safeIntFromInt64(item.stats.RequestCount),
+			ConfidenceLevel: item.confidence,
+		}
+	}), nil
+}
+
+// ModelPerformanceStats is the resolver for the modelPerformanceStats field.
+// Returns daily performance statistics for the top models over the last 30 days.
+// Aggregates by date and model_id, calculating throughput (tokens per second).
+// Only includes successful (completed) requests with valid latency metrics.
+func (r *queryResolver) ModelPerformanceStats(ctx context.Context) ([]*ModelPerformanceStat, error) {
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	// Add 30-second timeout to prevent long-running queries
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	daysCount := 30
+
+	loc := r.systemService.TimeLocation(ctx)
+	nowUTC := xtime.UTCNow()
+	nowLocal := nowUTC.In(loc)
+	startDateLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -daysCount+1)
+	startDateUTC := startDateLocal.UTC()
+	_, offsetSeconds := nowLocal.Zone()
+
+	dbDriver := r.client.Driver()
+	sqlDB, ok := dbDriver.(*sql.Driver)
+	if !ok {
+		return nil, fmt.Errorf("failed to get underlying SQL driver")
+	}
+
+	dialectName := sqlDB.Dialect()
+	useDollarPlaceholders := dialectName == dialect.Postgres
+
+	placeholder := "?"
+	if useDollarPlaceholders {
+		placeholder = "$1"
+	}
+
+	// Select throughput mode based on dialect: ROW_NUMBER for PostgreSQL, MaxID for older SQLite
+	queryMode := qb.ThroughputModeRowNumber
+	if !useDollarPlaceholders {
+		queryMode = qb.ThroughputModeMaxID
+	}
+
+	// Use shared query builder for daily performance stats
+	query := qb.BuildDailyPerformanceStatsQuery(
+		dialectName,
+		loc.String(),
+		offsetSeconds,
+		qb.DailyThroughputByModel,
+		placeholder,
+		queryMode,
+	)
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context canceled: %w", err)
+	}
+
+	rows, err := sqlDB.DB().QueryContext(ctx, query, startDateUTC)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query model performance stats: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type rawStat struct {
+		Date         string
+		ModelID      string
+		TokensCount  int64
+		LatencyMs    int64
+		FirstTokenMs *float64
+		RequestCount int64
+		Throughput   *float64
+	}
+
+	// ModelStatsBucket holds aggregated statistics for a single model.
+	// This is used internally to group performance stats before ranking.
+	type ModelStatsBucket struct {
+		totalRequests int64
+		results       []*ModelPerformanceStat
+	}
+
+	var rawResults []rawStat
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context canceled: %w", err)
+		}
+
+		var stat rawStat
+		if err := rows.Scan(
+			&stat.Date,
+			&stat.ModelID,
+			&stat.TokensCount,
+			&stat.LatencyMs,
+			&stat.FirstTokenMs,
+			&stat.RequestCount,
+			&stat.Throughput,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan model performance stats: %w", err)
+		}
+		rawResults = append(rawResults, stat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	modelStats := make(map[string]*ModelStatsBucket)
+
+	for _, raw := range rawResults {
+		var ttftMs *float64
+		if raw.FirstTokenMs != nil && *raw.FirstTokenMs > 0 {
+			ttftMs = raw.FirstTokenMs
+		}
+
+		stat := &ModelPerformanceStat{
+			Date:         raw.Date,
+			ModelID:      raw.ModelID,
+			Throughput:   raw.Throughput,
+			TtftMs:       ttftMs,
+			RequestCount: safeIntFromInt64(raw.RequestCount),
+		}
+
+		if modelStats[raw.ModelID] == nil {
+			modelStats[raw.ModelID] = &ModelStatsBucket{}
+		}
+		modelStats[raw.ModelID].totalRequests += raw.RequestCount
+		modelStats[raw.ModelID].results = append(modelStats[raw.ModelID].results, stat)
+	}
+
+	type modelInfo struct {
+		modelID      string
+		requestCount int64
+	}
+
+	modelInfos := lo.MapToSlice(modelStats, func(modelID string, stats *ModelStatsBucket) modelInfo {
+		return modelInfo{
+			modelID:      modelID,
+			requestCount: stats.totalRequests,
+		}
+	})
+
+	// Use requestCount for both count and value since modelInfo doesn't include throughput.
+	// This ranks models by request volume rather than performance metrics.
+	topModels := calculateConfidenceAndSort(modelInfos, func(m modelInfo) int64 { return m.requestCount }, func(m modelInfo) float64 { return float64(m.requestCount) }, topPerformersLimit)
+
+	statsResults := make([]*ModelPerformanceStat, 0)
+	for _, item := range topModels {
+		statsResults = append(statsResults, modelStats[item.stats.modelID].results...)
+	}
+
+	return statsResults, nil
+}
+
+// ChannelPerformanceStats is the resolver for the channelPerformanceStats field.
+func (r *queryResolver) ChannelPerformanceStats(ctx context.Context) ([]*ChannelPerformanceStat, error) {
+	ctx = authz.WithScopeDecision(ctx, scopes.ScopeReadDashboard)
+
+	var cancel context.CancelFunc
+
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	daysCount := 30
+
+	loc := r.systemService.TimeLocation(ctx)
+	nowUTC := xtime.UTCNow()
+	nowLocal := nowUTC.In(loc)
+	startDateLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -daysCount+1)
+	startTimestamp := startDateLocal.UTC().Unix()
+	_, offsetSeconds := nowLocal.Zone()
+
+	probeResults, err := r.queryChannelProbeStats(ctx, startTimestamp, loc.String(), offsetSeconds)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(probeResults) == 0 {
+		return r.buildChannelPerformanceStatsFromExecutions(ctx, startDateLocal, offsetSeconds, daysCount)
+	}
+
+	statsMap := aggregateProbeStats(probeResults)
+	topChannelIDs := getTopChannelIDs(statsMap, topPerformersLimit)
+	filterStatsByTopChannels(statsMap, topChannelIDs)
+
+	channelIDs := extractChannelIDsFromStats(statsMap)
+	channelNames := r.fetchChannelNames(ctx, channelIDs)
+
+	return buildChannelPerformanceResponse(statsMap, channelNames, startDateLocal, daysCount), nil
 }

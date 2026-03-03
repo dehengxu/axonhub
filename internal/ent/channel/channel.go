@@ -39,8 +39,12 @@ const (
 	FieldDisabledAPIKeys = "disabled_api_keys"
 	// FieldSupportedModels holds the string denoting the supported_models field in the database.
 	FieldSupportedModels = "supported_models"
+	// FieldManualModels holds the string denoting the manual_models field in the database.
+	FieldManualModels = "manual_models"
 	// FieldAutoSyncSupportedModels holds the string denoting the auto_sync_supported_models field in the database.
 	FieldAutoSyncSupportedModels = "auto_sync_supported_models"
+	// FieldAutoSyncModelPattern holds the string denoting the auto_sync_model_pattern field in the database.
+	FieldAutoSyncModelPattern = "auto_sync_model_pattern"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
 	// FieldDefaultTestModel holds the string denoting the default_test_model field in the database.
@@ -126,7 +130,9 @@ var Columns = []string{
 	FieldCredentials,
 	FieldDisabledAPIKeys,
 	FieldSupportedModels,
+	FieldManualModels,
 	FieldAutoSyncSupportedModels,
+	FieldAutoSyncModelPattern,
 	FieldTags,
 	FieldDefaultTestModel,
 	FieldPolicies,
@@ -165,8 +171,12 @@ var (
 	DefaultDeletedAt int
 	// DefaultDisabledAPIKeys holds the default value on creation for the "disabled_api_keys" field.
 	DefaultDisabledAPIKeys []objects.DisabledAPIKey
+	// DefaultManualModels holds the default value on creation for the "manual_models" field.
+	DefaultManualModels []string
 	// DefaultAutoSyncSupportedModels holds the default value on creation for the "auto_sync_supported_models" field.
 	DefaultAutoSyncSupportedModels bool
+	// DefaultAutoSyncModelPattern holds the default value on creation for the "auto_sync_model_pattern" field.
+	DefaultAutoSyncModelPattern string
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags []string
 	// DefaultPolicies holds the default value on creation for the "policies" field.
@@ -314,6 +324,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByAutoSyncSupportedModels orders the results by the auto_sync_supported_models field.
 func ByAutoSyncSupportedModels(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAutoSyncSupportedModels, opts...).ToFunc()
+}
+
+// ByAutoSyncModelPattern orders the results by the auto_sync_model_pattern field.
+func ByAutoSyncModelPattern(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoSyncModelPattern, opts...).ToFunc()
 }
 
 // ByDefaultTestModel orders the results by the default_test_model field.

@@ -4,12 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/looplj/axonhub/internal/authz"
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/pkg/xcontext"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/pipeline"
+	"github.com/looplj/axonhub/llm/pipeline/cc"
 	"github.com/looplj/axonhub/llm/pipeline/stream"
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
@@ -53,6 +55,7 @@ func NewChatCompletionOrchestrator(
 		QuotaService:    quotaService,
 		PromptProvider:  promptService,
 		Middlewares: []pipeline.Middleware{
+			cc.StripBillingHeaderCCH(),
 			stream.EnsureUsage(),
 		},
 		PipelineFactory:            pipeline.NewFactory(httpClient),
@@ -127,6 +130,9 @@ type ChatCompletionResult struct {
 }
 
 func (processor *ChatCompletionOrchestrator) Process(ctx context.Context, request *httpclient.Request) (ChatCompletionResult, error) {
+	// The context is system bypassed to allow the orchestrator to access the system settings.
+	ctx = authz.WithSystemBypass(ctx, "process-chat-completion")
+
 	apiKey, _ := contexts.GetAPIKey(ctx)
 
 	// Get retry policy from system settings

@@ -76,7 +76,6 @@ models:
   Node:
     model:
       - github.com/looplj/axonhub/internal/ent.Noder
-
   Cursor:
     model:
       - github.com/looplj/axonhub/internal/server/gql.Cursor
@@ -509,6 +508,12 @@ models:
   UpdateSystemGeneralSettingsInput:
     model:
       - github.com/looplj/axonhub/internal/server/biz.SystemGeneralSettings
+  VideoStorageSettings:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.VideoStorageSettings
+  UpdateVideoStorageSettingsInput:
+    model:
+      - github.com/looplj/axonhub/internal/server/biz.VideoStorageSettings
   ChannelProbeSetting:
     model:
       - github.com/looplj/axonhub/internal/server/biz.ChannelProbeSetting

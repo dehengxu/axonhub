@@ -249,7 +249,12 @@ type Channel implements Node {
   name: String!
   status: ChannelStatus!
   supportedModels: [String!]!
+  manualModels: [String!]
   autoSyncSupportedModels: Boolean!
+  """
+  Regex pattern to filter models during auto-sync. Empty string means no filtering.
+  """
+  autoSyncModelPattern: String
   tags: [String!]
   defaultTestModel: String!
   policies: ChannelPolicies @goField(forceResolver: true)
@@ -1223,6 +1228,24 @@ input ChannelWhereInput {
   autoSyncSupportedModels: Boolean
   autoSyncSupportedModelsNEQ: Boolean
   """
+  auto_sync_model_pattern field predicates
+  """
+  autoSyncModelPattern: String
+  autoSyncModelPatternNEQ: String
+  autoSyncModelPatternIn: [String!]
+  autoSyncModelPatternNotIn: [String!]
+  autoSyncModelPatternGT: String
+  autoSyncModelPatternGTE: String
+  autoSyncModelPatternLT: String
+  autoSyncModelPatternLTE: String
+  autoSyncModelPatternContains: String
+  autoSyncModelPatternHasPrefix: String
+  autoSyncModelPatternHasSuffix: String
+  autoSyncModelPatternIsNil: Boolean
+  autoSyncModelPatternNotNil: Boolean
+  autoSyncModelPatternEqualFold: String
+  autoSyncModelPatternContainsFold: String
+  """
   default_test_model field predicates
   """
   defaultTestModel: String
@@ -1342,7 +1365,12 @@ input CreateChannelInput {
   name: String!
   credentials: ChannelCredentialsInput!
   supportedModels: [String!]!
+  manualModels: [String!]
   autoSyncSupportedModels: Boolean
+  """
+  Regex pattern to filter models during auto-sync. Empty string means no filtering.
+  """
+  autoSyncModelPattern: String
   tags: [String!]
   defaultTestModel: String!
   policies: ChannelPoliciesInput
@@ -1482,6 +1510,10 @@ input CreatePromptInput {
   content: String!
   status: PromptStatus
   """
+  prompt insertion order, smaller values are inserted first
+  """
+  order: Int
+  """
   prompt settings in JSON format
   """
   settings: PromptSettingsInput!
@@ -1508,6 +1540,22 @@ input CreateRequestInput {
   clientIP: String
   metricsLatencyMs: Int
   metricsFirstTokenLatencyMs: Int
+  """
+  whether the generated content has been saved to external storage
+  """
+  contentSaved: Boolean
+  """
+  data storage id used to save the content file
+  """
+  contentStorageID: Int
+  """
+  storage key/path of the saved content file
+  """
+  contentStorageKey: String
+  """
+  when the content file was saved
+  """
+  contentSavedAt: Time
   apiKeyID: ID
   projectID: ID!
   traceID: ID
@@ -2042,6 +2090,8 @@ enum ModelType @goModel(model: "github.com/looplj/axonhub/internal/ent/model.Typ
   chat
   embedding
   rerank
+  image_generation
+  video_generation
 }
 """
 ModelWhereInput is used for filtering Model objects.
@@ -2717,6 +2767,10 @@ type Prompt implements Node {
   content: String!
   status: PromptStatus!
   """
+  prompt insertion order, smaller values are inserted first
+  """
+  order: Int!
+  """
   prompt settings in JSON format
   """
   settings: PromptSettings!
@@ -2801,6 +2855,7 @@ Properties by which Prompt connections can be ordered.
 enum PromptOrderField {
   CREATED_AT
   UPDATED_AT
+  ORDER
 }
 """
 PromptStatus is enum for the field status
@@ -2932,6 +2987,17 @@ input PromptWhereInput {
   statusNEQ: PromptStatus
   statusIn: [PromptStatus!]
   statusNotIn: [PromptStatus!]
+  """
+  order field predicates
+  """
+  order: Int
+  orderNEQ: Int
+  orderIn: [Int!]
+  orderNotIn: [Int!]
+  orderGT: Int
+  orderGTE: Int
+  orderLT: Int
+  orderLTE: Int
   """
   projects edge predicates
   """
@@ -3590,6 +3656,22 @@ type Request implements Node {
   clientIP: String!
   metricsLatencyMs: Int
   metricsFirstTokenLatencyMs: Int
+  """
+  whether the generated content has been saved to external storage
+  """
+  contentSaved: Boolean!
+  """
+  data storage id used to save the content file
+  """
+  contentStorageID: Int
+  """
+  storage key/path of the saved content file
+  """
+  contentStorageKey: String
+  """
+  when the content file was saved
+  """
+  contentSavedAt: Time
   apiKey: APIKey
   project: Project!
   trace: Trace
@@ -4210,6 +4292,55 @@ input RequestWhereInput {
   metricsFirstTokenLatencyMsLTE: Int
   metricsFirstTokenLatencyMsIsNil: Boolean
   metricsFirstTokenLatencyMsNotNil: Boolean
+  """
+  content_saved field predicates
+  """
+  contentSaved: Boolean
+  contentSavedNEQ: Boolean
+  """
+  content_storage_id field predicates
+  """
+  contentStorageID: Int
+  contentStorageIDNEQ: Int
+  contentStorageIDIn: [Int!]
+  contentStorageIDNotIn: [Int!]
+  contentStorageIDGT: Int
+  contentStorageIDGTE: Int
+  contentStorageIDLT: Int
+  contentStorageIDLTE: Int
+  contentStorageIDIsNil: Boolean
+  contentStorageIDNotNil: Boolean
+  """
+  content_storage_key field predicates
+  """
+  contentStorageKey: String
+  contentStorageKeyNEQ: String
+  contentStorageKeyIn: [String!]
+  contentStorageKeyNotIn: [String!]
+  contentStorageKeyGT: String
+  contentStorageKeyGTE: String
+  contentStorageKeyLT: String
+  contentStorageKeyLTE: String
+  contentStorageKeyContains: String
+  contentStorageKeyHasPrefix: String
+  contentStorageKeyHasSuffix: String
+  contentStorageKeyIsNil: Boolean
+  contentStorageKeyNotNil: Boolean
+  contentStorageKeyEqualFold: String
+  contentStorageKeyContainsFold: String
+  """
+  content_saved_at field predicates
+  """
+  contentSavedAt: Time
+  contentSavedAtNEQ: Time
+  contentSavedAtIn: [Time!]
+  contentSavedAtNotIn: [Time!]
+  contentSavedAtGT: Time
+  contentSavedAtGTE: Time
+  contentSavedAtLT: Time
+  contentSavedAtLTE: Time
+  contentSavedAtIsNil: Boolean
+  contentSavedAtNotNil: Boolean
   """
   api_key edge predicates
   """
@@ -4962,7 +5093,15 @@ input UpdateChannelInput {
   credentials: ChannelCredentialsInput
   supportedModels: [String!]
   appendSupportedModels: [String!]
+  manualModels: [String!]
+  appendManualModels: [String!]
+  clearManualModels: Boolean
   autoSyncSupportedModels: Boolean
+  """
+  Regex pattern to filter models during auto-sync. Empty string means no filtering.
+  """
+  autoSyncModelPattern: String
+  clearAutoSyncModelPattern: Boolean
   tags: [String!]
   appendTags: [String!]
   clearTags: Boolean
@@ -5102,6 +5241,10 @@ input UpdatePromptInput {
   content: String
   status: PromptStatus
   """
+  prompt insertion order, smaller values are inserted first
+  """
+  order: Int
+  """
   prompt settings in JSON format
   """
   settings: PromptSettingsInput
@@ -5133,6 +5276,25 @@ input UpdateRequestInput {
   clearMetricsLatencyMs: Boolean
   metricsFirstTokenLatencyMs: Int
   clearMetricsFirstTokenLatencyMs: Boolean
+  """
+  whether the generated content has been saved to external storage
+  """
+  contentSaved: Boolean
+  """
+  data storage id used to save the content file
+  """
+  contentStorageID: Int
+  clearContentStorageID: Boolean
+  """
+  storage key/path of the saved content file
+  """
+  contentStorageKey: String
+  clearContentStorageKey: Boolean
+  """
+  when the content file was saved
+  """
+  contentSavedAt: Time
+  clearContentSavedAt: Boolean
   channelID: ID
   clearChannel: Boolean
 }

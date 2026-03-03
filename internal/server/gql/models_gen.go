@@ -95,6 +95,16 @@ type BulkUpdateChannelOrderingResult struct {
 	Channels []*ent.Channel `json:"channels"`
 }
 
+// Performance statistics for a specific channel on a given date
+type ChannelPerformanceStat struct {
+	Date         string   `json:"date"`
+	ChannelID    string   `json:"channelId"`
+	ChannelName  string   `json:"channelName"`
+	Throughput   *float64 `json:"throughput,omitempty"`
+	TtftMs       *float64 `json:"ttftMs,omitempty"`
+	RequestCount int      `json:"requestCount"`
+}
+
 type ChannelSuccessRate struct {
 	ChannelID    objects.GUID `json:"channelId"`
 	ChannelName  string       `json:"channelName"`
@@ -141,6 +151,32 @@ type DashboardOverview struct {
 	AverageResponseTime *float64      `json:"averageResponseTime,omitempty"`
 }
 
+type FastestChannel struct {
+	ChannelID       objects.GUID `json:"channelId"`
+	ChannelName     string       `json:"channelName"`
+	ChannelType     string       `json:"channelType"`
+	Throughput      float64      `json:"throughput"`
+	TokensCount     int          `json:"tokensCount"`
+	LatencyMs       int          `json:"latencyMs"`
+	RequestCount    int          `json:"requestCount"`
+	ConfidenceLevel string       `json:"confidenceLevel"`
+}
+
+type FastestChannelsInput struct {
+	TimeWindow string `json:"timeWindow"`
+	Limit      *int   `json:"limit,omitempty"`
+}
+
+type FastestModel struct {
+	ModelID         string  `json:"modelId"`
+	ModelName       string  `json:"modelName"`
+	Throughput      float64 `json:"throughput"`
+	TokensCount     int     `json:"tokensCount"`
+	LatencyMs       int     `json:"latencyMs"`
+	RequestCount    int     `json:"requestCount"`
+	ConfidenceLevel string  `json:"confidenceLevel"`
+}
+
 type FetchModelsPayload struct {
 	Models []*biz.ModelIdentify `json:"models"`
 	Error  *string              `json:"error,omitempty"`
@@ -166,36 +202,13 @@ type InitializeSystemPayload struct {
 	Token   *string   `json:"token,omitempty"`
 }
 
-type ModelTokenStats struct {
-	ModelID           string `json:"modelId"`
-	ModelName         string `json:"modelName"`
-	TotalInputTokens  int    `json:"totalInputTokens"`
-	TotalOutputTokens int    `json:"totalOutputTokens"`
-	TotalCachedTokens int    `json:"totalCachedTokens"`
-	TotalTokens       int    `json:"totalTokens"`
-	Period            string `json:"period"`
-	Date              string `json:"date"`
-}
-
-type ModelTokenStatsSummary struct {
-	CurrentPeriod []*ModelTokenStats   `json:"currentPeriod"`
-	Trends        *ModelTokenTrendData `json:"trends"`
-}
-
-type ModelTokenTrend struct {
-	ModelID      string `json:"modelId"`
-	ModelName    string `json:"modelName"`
-	Date         string `json:"date"`
-	InputTokens  int    `json:"inputTokens"`
-	OutputTokens int    `json:"outputTokens"`
-	CachedTokens int    `json:"cachedTokens"`
-	TotalTokens  int    `json:"totalTokens"`
-}
-
-type ModelTokenTrendData struct {
-	Trends []*ModelTokenTrend `json:"trends"`
-	Models []string           `json:"models"`
-	Dates  []string           `json:"dates"`
+// Performance statistics for a specific model on a given date
+type ModelPerformanceStat struct {
+	Date         string   `json:"date"`
+	ModelID      string   `json:"modelId"`
+	Throughput   *float64 `json:"throughput,omitempty"`
+	TtftMs       *float64 `json:"ttftMs,omitempty"`
+	RequestCount int      `json:"requestCount"`
 }
 
 type OnboardingInfo struct {

@@ -320,6 +320,82 @@ func TestInboundTransformer_TransformRequest(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "thinking enabled without budget_tokens",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens": 16000,
+					"messages": [{"role": "user", "content": "Hello"}],
+					"thinking": {"type": "enabled"}
+				}`),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid output_config effort value",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens": 1024,
+					"messages": [{"role": "user", "content": "Hello"}],
+					"output_config": {"effort": "banana"}
+				}`),
+			},
+			expectError: true,
+		},
+		{
+			name: "tool_choice type tool without name",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens": 1024,
+					"messages": [{"role": "user", "content": "Hello"}],
+					"tools": [{"name": "calculator", "description": "calc", "input_schema": {"type": "object"}}],
+					"tool_choice": {"type": "tool"}
+				}`),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid thinking type",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens": 16000,
+					"messages": [{"role": "user", "content": "Hello"}],
+					"thinking": {"type": "banana"}
+				}`),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid tool_choice type",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-sonnet-4-5-20250929",
+					"max_tokens": 1024,
+					"messages": [{"role": "user", "content": "Hello"}],
+					"tool_choice": {"type": "banana"}
+				}`),
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -962,6 +1038,301 @@ func TestInboundTransformer_TransformResponse(t *testing.T) {
 				if tt.validate != nil {
 					tt.validate(t, &anthropicResp)
 				}
+			}
+		})
+	}
+}
+
+func TestConvertAnthropicToolToLLM(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        Tool
+		expected     llm.Tool
+		expectedBool bool
+	}{
+		{
+			name: "regular function tool",
+			input: Tool{
+				Name:        "calculator",
+				Description: "Perform calculations",
+				InputSchema: json.RawMessage(`{"type": "object", "properties": {"expression": {"type": "string"}}}`),
+			},
+			expected: llm.Tool{
+				Type: "function",
+				Function: llm.Function{
+					Name:        "calculator",
+					Description: "Perform calculations",
+					Parameters:  json.RawMessage(`{"type": "object", "properties": {"expression": {"type": "string"}}}`),
+				},
+			},
+			expectedBool: true,
+		},
+		{
+			name: "web_search_20250305 native tool",
+			input: Tool{
+				Type: ToolTypeWebSearch20250305,
+				Name: WebSearchFunctionName,
+			},
+			expected: llm.Tool{
+				Type:      llm.ToolTypeWebSearch,
+				WebSearch: &llm.WebSearch{},
+			},
+			expectedBool: true,
+		},
+		{
+			name: "web_search with all parameters",
+			input: Tool{
+				Type:           ToolTypeWebSearch20250305,
+				Name:           WebSearchFunctionName,
+				MaxUses:        lo.ToPtr(int64(5)),
+				Strict:         lo.ToPtr(true),
+				AllowedDomains: []string{"example.com", "test.org"},
+				BlockedDomains: []string{"blocked.com"},
+				UserLocation: WebSearchToolUserLocation{
+					City:     "San Francisco",
+					Country:  "US",
+					Region:   "California",
+					Timezone: "America/Los_Angeles",
+					Type:     "approximate",
+				},
+			},
+			expected: llm.Tool{
+				Type: llm.ToolTypeWebSearch,
+				WebSearch: &llm.WebSearch{
+					MaxUses:        lo.ToPtr(int64(5)),
+					Strict:         lo.ToPtr(true),
+					AllowedDomains: []string{"example.com", "test.org"},
+					BlockedDomains: []string{"blocked.com"},
+					UserLocation: llm.WebSearchToolUserLocation{
+						City:     "San Francisco",
+						Country:  "US",
+						Region:   "California",
+						Timezone: "America/Los_Angeles",
+						Type:     "approximate",
+					},
+				},
+			},
+			expectedBool: true,
+		},
+		{
+			name: "web_search by name only (treated as function tool)",
+			input: Tool{
+				Name:    WebSearchFunctionName,
+				MaxUses: lo.ToPtr(int64(3)),
+			},
+			expected: llm.Tool{
+				Type: "function",
+				Function: llm.Function{
+					Name: WebSearchFunctionName,
+				},
+			},
+			expectedBool: true,
+		},
+		{
+			name: "unsupported native tool type",
+			input: Tool{
+				Type: "image_generation",
+				Name: "some_image_tool",
+			},
+			expected:     llm.Tool{},
+			expectedBool: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, ok := convertToolToLLM(tt.input)
+			require.Equal(t, tt.expectedBool, ok)
+			require.Equal(t, tt.expected.Type, result.Type)
+			require.Equal(t, tt.expected.Function.Name, result.Function.Name)
+			require.Equal(t, tt.expected.Function.Description, result.Function.Description)
+			require.Equal(t, tt.expected.Function.Parameters, result.Function.Parameters)
+
+			if tt.expected.WebSearch != nil {
+				require.NotNil(t, result.WebSearch)
+				require.Equal(t, tt.expected.WebSearch.MaxUses, result.WebSearch.MaxUses)
+				require.Equal(t, tt.expected.WebSearch.Strict, result.WebSearch.Strict)
+				require.Equal(t, tt.expected.WebSearch.AllowedDomains, result.WebSearch.AllowedDomains)
+				require.Equal(t, tt.expected.WebSearch.BlockedDomains, result.WebSearch.BlockedDomains)
+				require.Equal(t, tt.expected.WebSearch.UserLocation, result.WebSearch.UserLocation)
+			}
+		})
+	}
+}
+
+func TestConvertToolChoiceFromAnthropic(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *ToolChoice
+		validate func(t *testing.T, got *llm.ToolChoice)
+	}{
+		{
+			name: "anthropic auto -> llm auto",
+			input: &ToolChoice{
+				Type: "auto",
+			},
+			validate: func(t *testing.T, got *llm.ToolChoice) {
+				t.Helper()
+				require.NotNil(t, got)
+				require.NotNil(t, got.ToolChoice)
+				require.Equal(t, "auto", *got.ToolChoice)
+				require.Nil(t, got.NamedToolChoice)
+			},
+		},
+		{
+			name: "anthropic none -> llm none",
+			input: &ToolChoice{
+				Type: "none",
+			},
+			validate: func(t *testing.T, got *llm.ToolChoice) {
+				t.Helper()
+				require.NotNil(t, got)
+				require.NotNil(t, got.ToolChoice)
+				require.Equal(t, "none", *got.ToolChoice)
+				require.Nil(t, got.NamedToolChoice)
+			},
+		},
+		{
+			name: "anthropic any -> llm required",
+			input: &ToolChoice{
+				Type: "any",
+			},
+			validate: func(t *testing.T, got *llm.ToolChoice) {
+				t.Helper()
+				require.NotNil(t, got)
+				require.NotNil(t, got.ToolChoice)
+				require.Equal(t, "required", *got.ToolChoice)
+				require.Nil(t, got.NamedToolChoice)
+			},
+		},
+		{
+			name: "anthropic tool+name -> llm named tool choice",
+			input: &ToolChoice{
+				Type: "tool",
+				Name: lo.ToPtr("calculator"),
+			},
+			validate: func(t *testing.T, got *llm.ToolChoice) {
+				t.Helper()
+				require.NotNil(t, got)
+				require.Nil(t, got.ToolChoice)
+				require.NotNil(t, got.NamedToolChoice)
+				require.Equal(t, "function", got.NamedToolChoice.Type)
+				require.Equal(t, "calculator", got.NamedToolChoice.Function.Name)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convertAnthropicToolChoiceToLLM(tt.input)
+			tt.validate(t, got)
+		})
+	}
+}
+
+func TestInboundTransformer_WebSearchTool(t *testing.T) {
+	transformer := NewInboundTransformer()
+
+	tests := []struct {
+		name        string
+		httpReq     *httpclient.Request
+		expectError bool
+		validate    func(t *testing.T, result *llm.Request)
+	}{
+		{
+			name: "request with web_search_20250305 tool",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-3-sonnet-20240229",
+					"max_tokens": 1024,
+					"tools": [
+						{
+							"type": "web_search_20250305",
+							"name": "web_search",
+							"max_uses": 5
+						}
+					],
+					"messages": [
+						{
+							"role": "user",
+							"content": "Search for AI news"
+						}
+					]
+				}`),
+			},
+			expectError: false,
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Len(t, result.Tools, 1)
+				require.Equal(t, llm.ToolTypeWebSearch, result.Tools[0].Type)
+				require.NotNil(t, result.Tools[0].WebSearch)
+				require.NotNil(t, result.Tools[0].WebSearch.MaxUses)
+				require.Equal(t, int64(5), *result.Tools[0].WebSearch.MaxUses)
+			},
+		},
+		{
+			name: "request with web_search tool with full parameters",
+			httpReq: &httpclient.Request{
+				Headers: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: []byte(`{
+					"model": "claude-3-sonnet-20240229",
+					"max_tokens": 1024,
+					"tools": [
+						{
+							"type": "web_search_20250305",
+							"name": "web_search",
+							"max_uses": 10,
+							"strict": true,
+							"allowed_domains": ["example.com", "test.org"],
+							"user_location": {
+								"city": "San Francisco",
+								"country": "US",
+								"region": "California",
+								"timezone": "America/Los_Angeles",
+								"type": "approximate"
+							}
+						}
+					],
+					"messages": [
+						{
+							"role": "user",
+							"content": "Search for local news"
+						}
+					]
+				}`),
+			},
+			expectError: false,
+			validate: func(t *testing.T, result *llm.Request) {
+				t.Helper()
+				require.Len(t, result.Tools, 1)
+				require.Equal(t, llm.ToolTypeWebSearch, result.Tools[0].Type)
+				require.NotNil(t, result.Tools[0].WebSearch)
+				require.Equal(t, int64(10), *result.Tools[0].WebSearch.MaxUses)
+				require.Equal(t, true, *result.Tools[0].WebSearch.Strict)
+				require.Equal(t, []string{"example.com", "test.org"}, result.Tools[0].WebSearch.AllowedDomains)
+				require.Equal(t, "San Francisco", result.Tools[0].WebSearch.UserLocation.City)
+				require.Equal(t, "US", result.Tools[0].WebSearch.UserLocation.Country)
+				require.Equal(t, "California", result.Tools[0].WebSearch.UserLocation.Region)
+				require.Equal(t, "America/Los_Angeles", result.Tools[0].WebSearch.UserLocation.Timezone)
+				require.Equal(t, "approximate", result.Tools[0].WebSearch.UserLocation.Type)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := transformer.TransformRequest(t.Context(), tt.httpReq)
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				tt.validate(t, result)
 			}
 		})
 	}

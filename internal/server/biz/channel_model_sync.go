@@ -8,16 +8,14 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
+	"github.com/looplj/axonhub/internal/pkg/xregexp"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
 
 // syncChannelModels syncs supported models for all channels with auto_sync_supported_models enabled.
 // This function is called periodically (every hour) to keep model lists up to date.
 func (svc *ChannelService) syncChannelModels(ctx context.Context) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
 	// Query all enabled channels with auto_sync_supported_models = true
 	channels, err := svc.entFromContext(ctx).Channel.
 		Query().
@@ -78,32 +76,76 @@ func (svc *ChannelService) syncChannelModelsForChannel(ctx context.Context, ch *
 		return fmt.Errorf("model fetch returned error: %s", *result.Error)
 	}
 
-	// Extract model IDs
-	modelIDs := lo.Map(result.Models, func(m ModelIdentify, _ int) string {
+	// Extract model IDs from fetched models
+	fetchedModelIDs := lo.Map(result.Models, func(m ModelIdentify, _ int) string {
 		return m.ID
 	})
 
-	if len(modelIDs) == 0 {
-		log.Warn(ctx, "no models fetched for channel",
+	// Filter by auto_sync_model_pattern if set
+	if ch.AutoSyncModelPattern != "" {
+		if err := xregexp.ValidateRegex(ch.AutoSyncModelPattern); err != nil {
+			log.Warn(ctx, "invalid auto_sync_model_pattern, skipping filter",
+				log.Int("channel_id", ch.ID),
+				log.String("pattern", ch.AutoSyncModelPattern),
+				log.Cause(err))
+		} else {
+			before := len(fetchedModelIDs)
+			fetchedModelIDs = xregexp.Filter(fetchedModelIDs, ch.AutoSyncModelPattern)
+			log.Info(ctx, "filtered models by pattern",
+				log.Int("channel_id", ch.ID),
+				log.String("pattern", ch.AutoSyncModelPattern),
+				log.Int("before", before),
+				log.Int("after", len(fetchedModelIDs)))
+		}
+	}
+
+	// Read existing manual models from the channel
+	manualModels := ch.ManualModels
+	if manualModels == nil {
+		manualModels = []string{}
+	}
+
+	// Merge fetched models with manual models, removing duplicates
+	mergedModels := lo.Uniq(append(manualModels, fetchedModelIDs...))
+
+	if len(mergedModels) == 0 {
+		log.Warn(ctx, "no models to sync for channel (both fetched and manual are empty)",
 			log.Int("channel_id", ch.ID),
 			log.String("channel_name", ch.Name))
 
 		return nil
 	}
 
-	// Update channel's supported models
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-	if err := svc.entFromContext(ctx).Channel.
+	// Update channel's supported models with merged list
+	// Keep manual_models unchanged (preserve user's manually added models)
+	err = svc.entFromContext(ctx).Channel.
 		UpdateOneID(ch.ID).
-		SetSupportedModels(modelIDs).
-		Exec(ctx); err != nil {
+		SetSupportedModels(mergedModels).
+		Exec(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to update channel supported models: %w", err)
 	}
 
 	log.Info(ctx, "successfully synced models for channel",
 		log.Int("channel_id", ch.ID),
 		log.String("channel_name", ch.Name),
-		log.Int("model_count", len(modelIDs)))
+		log.Int("fetched_count", len(fetchedModelIDs)),
+		log.Int("manual_count", len(manualModels)),
+		log.Int("total_count", len(mergedModels)))
 
 	return nil
+}
+
+// SyncChannelModelsByID triggers an immediate model sync for a single channel by ID.
+func (svc *ChannelService) SyncChannelModelsByID(ctx context.Context, channelID int) error {
+	ch, err := svc.entFromContext(ctx).Channel.Get(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("failed to get channel: %w", err)
+	}
+
+	if !ch.AutoSyncSupportedModels {
+		return fmt.Errorf("auto sync is not enabled for this channel")
+	}
+
+	return svc.syncChannelModelsForChannel(ctx, ch)
 }

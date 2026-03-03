@@ -2,10 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
-	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/xerrors"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
 
@@ -21,7 +21,7 @@ func (p *pipeline) notStream(
 		// Apply error response middlewares
 		p.applyRawErrorResponseMiddlewares(ctx, err)
 
-		if httpErr, ok := xerrors.As[*httpclient.Error](err); ok {
+		if httpErr, ok := errors.AsType[*httpclient.Error](err); ok {
 			return nil, p.Outbound.TransformError(ctx, httpErr)
 		}
 
@@ -45,7 +45,7 @@ func (p *pipeline) notStream(
 		return nil, fmt.Errorf("failed to apply llm response middlewares: %w", err)
 	}
 
-	log.Debug(ctx, "LLM response", log.Any("response", llmResp))
+	slog.DebugContext(ctx, "LLM response", slog.Any("response", llmResp))
 
 	finalResp, err := p.Inbound.TransformResponse(ctx, llmResp)
 	if err != nil {

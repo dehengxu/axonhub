@@ -1,6 +1,7 @@
 package responses
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/samber/lo"
@@ -15,6 +16,21 @@ func TestConvertToolMessage(t *testing.T) {
 		msg      llm.Message
 		expected Item
 	}{
+		{
+			name: "custom tool output uses custom_tool_call_output",
+			msg: llm.Message{
+				Role:       "tool",
+				ToolCallID: lo.ToPtr("call_patch_001"),
+				Content: llm.MessageContent{
+					Content: lo.ToPtr("Patch applied successfully."),
+				},
+			},
+			expected: Item{
+				Type:   "custom_tool_call_output",
+				CallID: "call_patch_001",
+				Output: &Input{Text: lo.ToPtr("Patch applied successfully.")},
+			},
+		},
 		{
 			name: "tool message with simple content",
 			msg: llm.Message{
@@ -194,7 +210,11 @@ func TestConvertToolMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertToolMessage(tt.msg)
+			itemType := "function_call_output"
+			if tt.expected.Type != "" {
+				itemType = tt.expected.Type
+			}
+			result := convertToolMessageWithType(tt.msg, itemType)
 			require.Equal(t, tt.expected, result)
 		})
 	}
@@ -281,6 +301,52 @@ func TestConvertToTextOptions(t *testing.T) {
 			expected: &TextOptions{
 				Format: &TextFormat{
 					Type: "json_object",
+				},
+			},
+		},
+		{
+			name: "json_schema with name and schema",
+			req: &llm.Request{
+				ResponseFormat: &llm.ResponseFormat{
+					Type:       "json_schema",
+					JSONSchema: json.RawMessage(`{"name":"ping_response","schema":{"type":"object","properties":{"pong":{"type":"boolean"}},"required":["pong"],"additionalProperties":false}}`),
+				},
+			},
+			expected: &TextOptions{
+				Format: &TextFormat{
+					Type:   "json_schema",
+					Name:   "ping_response",
+					Schema: json.RawMessage(`{"type":"object","properties":{"pong":{"type":"boolean"}},"required":["pong"],"additionalProperties":false}`),
+				},
+			},
+		},
+		{
+			name: "json_schema with strict",
+			req: &llm.Request{
+				ResponseFormat: &llm.ResponseFormat{
+					Type:       "json_schema",
+					JSONSchema: json.RawMessage(`{"name":"test","strict":true,"schema":{"type":"object"}}`),
+				},
+			},
+			expected: &TextOptions{
+				Format: &TextFormat{
+					Type:   "json_schema",
+					Name:   "test",
+					Schema: json.RawMessage(`{"type":"object"}`),
+					Strict: lo.ToPtr(true),
+				},
+			},
+		},
+		{
+			name: "json_schema type without json_schema field",
+			req: &llm.Request{
+				ResponseFormat: &llm.ResponseFormat{
+					Type: "json_schema",
+				},
+			},
+			expected: &TextOptions{
+				Format: &TextFormat{
+					Type: "json_schema",
 				},
 			},
 		},

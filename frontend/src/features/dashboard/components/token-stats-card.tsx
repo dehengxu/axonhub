@@ -1,69 +1,44 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
+import { BarChart4 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { BarChart4, TrendingUp } from 'lucide-react';
-
 import { formatNumber } from '@/utils/format-number';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertTitle } from '@/components/ui/alert';
-import { useTokenStats, useModelTokenStats, useRequestsByModel } from '../data/dashboard';
-import { ModelTokenChart } from './model-token-chart';
-import { ModelTokenTable } from './model-token-table';
-import { ModelTokenStatsCard } from './model-token-stats-card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useTokenStats } from '../data/dashboard';
+
+type TimeRange = 'thisMonth' | 'thisWeek' | 'thisDay';
 
 export function TokenStatsCard() {
   const { t } = useTranslation();
   const { data: stats, isLoading, error } = useTokenStats();
-  const { data: modelStats } = useRequestsByModel();
-  const [selectedModels, setSelectedModels] = useState<string[]>([]);
-  const [showModelDetails, setShowModelDetails] = useState(false);
-  const [modelSortOrder, setModelSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Get available models from model stats
-  const availableModels = modelStats?.map((stat) => stat.modelId) || [];
-
-  // Get detailed model stats for all available models
-  const { data: detailedModelStats, isLoading: isLoadingModelStats } = useModelTokenStats(
-    selectedModels.length > 0 ? selectedModels : availableModels,
-    'day'
-  );
-
-  // Calculate total consumption across all models
-  const totals = useMemo(() => {
-    if (!detailedModelStats?.modelData || detailedModelStats.modelData.length === 0) {
-      return null;
-    }
-    return detailedModelStats.modelData.reduce(
-      (acc, curr) => ({
-        totalRequests: acc.totalRequests + curr.count,
-        totalPromptTokens: acc.totalPromptTokens + curr.promptTokens,
-        totalCompletionTokens: acc.totalCompletionTokens + curr.completionTokens,
-        totalTokens: acc.totalTokens + curr.totalTokens,
-      }),
-      { totalRequests: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0 }
-    );
-  }, [detailedModelStats]);
+  const [timeRange, setTimeRange] = useState<TimeRange>('thisDay');
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className='min-w-0'>
         <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
           <Skeleton className='h-4 w-[120px]' />
           <Skeleton className='h-4 w-4' />
         </CardHeader>
         <CardContent>
-          <div className='space-y-2'>
-            <Skeleton className='h-8 w-[80px]' />
-            <Skeleton className='mt-1 h-4 w-[140px]' />
+          <div className='flex items-end justify-between gap-2 sm:flex-col sm:gap-2 xl:flex-row xl:items-end xl:justify-between'>
+            <div className='text-center w-full sm:min-w-0 sm:flex sm:items-center sm:justify-between xl:block xl:flex-1 xl:text-center'>
+              <Skeleton className='h-4 w-[40px] sm:mb-0 xl:mb-1' />
+              <Skeleton className='h-6 w-[60px]' />
+            </div>
+            <div className='bg-border h-8 w-px shrink-0 sm:hidden xl:block'></div>
+            <div className='bg-border h-px w-full shrink-0 hidden sm:block xl:hidden'></div>
+            <div className='text-center w-full sm:min-w-0 sm:flex sm:items-center sm:justify-between xl:block xl:flex-1 xl:text-center'>
+              <Skeleton className='h-4 w-[40px] sm:mb-0 xl:mb-1' />
+              <Skeleton className='h-6 w-[60px]' />
+            </div>
+            <div className='bg-border h-8 w-px shrink-0 sm:hidden xl:block'></div>
+            <div className='bg-border h-px w-full shrink-0 hidden sm:block xl:hidden'></div>
+            <div className='text-center w-full sm:min-w-0 sm:flex sm:items-center sm:justify-between xl:block xl:flex-1 xl:text-center'>
+              <Skeleton className='h-4 w-[40px] sm:mb-0 xl:mb-1' />
+              <Skeleton className='h-6 w-[60px]' />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -72,16 +47,15 @@ export function TokenStatsCard() {
 
   if (error) {
     return (
-      <Card>
-        <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-          <div className='flex items-center gap-2'>
-            <div className='bg-primary/10 text-primary dark:bg-primary/20 rounded-lg p-1.5'>
+      <Card className='hover-card min-w-0'>
+        <CardHeader className='flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0 pb-2'>
+          <div className='flex items-center gap-2 min-w-0'>
+            <div className='bg-primary/10 text-primary dark:bg-primary/20 rounded-lg p-1.5 shrink-0'>
               <BarChart4 className='h-4 w-4' />
             </div>
-            <CardTitle className='text-sm font-medium'>{t('dashboard.cards.tokenStats')}</CardTitle>
+            <CardTitle className='text-sm font-medium truncate'>{t('dashboard.cards.tokenStats')}</CardTitle>
           </div>
-          <div className='flex items-center gap-1'>
-            {/* <span className='text-xs text-muted-foreground'>{t('dashboard.stats.this')}</span> */}
+          <div className='flex items-center gap-1 shrink-0'>
             <span className='bg-primary/10 text-primary dark:bg-primary/20 rounded-md px-2 py-1 text-xs'>{t('dashboard.stats.month')}</span>
           </div>
         </CardHeader>
@@ -92,78 +66,73 @@ export function TokenStatsCard() {
     );
   }
 
+  const getTokens = (range: TimeRange) => {
+    if (range === 'thisDay') {
+      return {
+        input: stats?.totalInputTokensToday || 0,
+        output: stats?.totalOutputTokensToday || 0,
+        cached: stats?.totalCachedTokensToday || 0,
+      };
+    }
+    if (range === 'thisMonth') {
+      return {
+        input: stats?.totalInputTokensThisMonth || 0,
+        output: stats?.totalOutputTokensThisMonth || 0,
+        cached: stats?.totalCachedTokensThisMonth || 0,
+      };
+    }
+    return {
+      input: stats?.totalInputTokensThisWeek || 0,
+      output: stats?.totalOutputTokensThisWeek || 0,
+      cached: stats?.totalCachedTokensThisWeek || 0,
+    };
+  };
+
+  const tokens = getTokens(timeRange);
+
   return (
-    <Card className='hover-card'>
-      <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+    <Card className='hover-card min-w-0'>
+      <CardHeader className='flex flex-wrap items-start sm:items-center justify-between gap-2 pb-2'>
         <div className='flex items-center gap-2'>
-          <div className='bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-full dark:bg-primary/20'>
+          <div className='bg-primary/10 text-primary dark:bg-primary/20 rounded-lg p-1.5 shrink-0'>
             <BarChart4 className='h-4 w-4' />
           </div>
-          <CardTitle className='text-sm font-medium'>{t('dashboard.cards.tokensByTime')}</CardTitle>
+          <CardTitle className='text-sm font-medium whitespace-normal leading-tight'>{t('dashboard.cards.tokenStats')}</CardTitle>
         </div>
-
-        {availableModels.length > 0 && (
-          <Dialog open={showModelDetails} onOpenChange={setShowModelDetails}>
-            <DialogTrigger asChild>
-              <Button variant='ghost' size='sm' className='h-8 gap-1'>
-                <TrendingUp className='h-3 w-3' />
-                {t('dashboard.stats.modelDetails')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className='sm:max-w-[90vw] max-w-[95vw] max-h-[90vh] overflow-y-auto'>
-              <DialogHeader>
-                <DialogTitle>{t('dashboard.stats.modelTokenStats')}</DialogTitle>
-                <DialogDescription>{t('dashboard.stats.detailedModelTokenConsumption')}</DialogDescription>
-              </DialogHeader>
-
-              {isLoadingModelStats ? null : totals ? (
-                <Alert className='mt-4'>
-                  <AlertTitle>{t('dashboard.stats.totalConsumption')}</AlertTitle>
-                  <div className='grid grid-cols-3 gap-4 mt-2'>
-                    <div>
-                      <div className='text-sm text-muted-foreground'>{t('dashboard.stats.totalRequests')}</div>
-                      <div className='text-xl font-bold'>{formatNumber(totals.totalRequests)}</div>
-                    </div>
-                    <div>
-                      <div className='text-sm text-muted-foreground'>{t('dashboard.stats.totalPromptTokens')}</div>
-                      <div className='text-xl font-bold'>{formatNumber(totals.totalPromptTokens)}</div>
-                    </div>
-                    <div>
-                      <div className='text-sm text-muted-foreground'>{t('dashboard.stats.totalTokens')}</div>
-                      <div className='text-xl font-bold'>{formatNumber(totals.totalTokens)}</div>
-                    </div>
-                  </div>
-                </Alert>
-              ) : null}
-
-              {isLoadingModelStats ? (
-                <div className='flex items-center justify-center h-64'>
-                  <Skeleton className='h-8 w-32' />
-                </div>
-              ) : detailedModelStats ? (
-                <ModelTokenStatsCard defaultModels={availableModels} />
-              ) : (
-                <div className='text-center py-8 text-muted-foreground'>{t('dashboard.stats.noModelData')}</div>
-              )}
-            </DialogContent>
-          </Dialog>
-        )}
+        <div className='flex items-center gap-1 shrink-0'>
+          {/* <span className='text-xs text-muted-foreground'>{t('dashboard.stats.this')}</span> */}
+          <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+            <TabsList className='h-6 p-0.5'>
+              <TabsTrigger value='thisMonth' className='h-5 px-2 text-[10px]'>
+                {t('dashboard.stats.month')}
+              </TabsTrigger>
+              <TabsTrigger value='thisWeek' className='h-5 px-2 text-[10px]'>
+                {t('dashboard.stats.week')}
+              </TabsTrigger>
+              <TabsTrigger value='thisDay' className='h-5 px-2 text-[10px]'>
+                {t('dashboard.stats.day')}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className='flex items-end justify-between'>
-          <div className='text-center'>
-            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.input')}</div>
-            <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalInputTokensThisMonth || 0)}</div>
+        <div className='flex items-end justify-between gap-2 sm:flex-col sm:gap-2 xl:flex-row xl:items-end xl:justify-between'>
+          <div className='text-center min-w-0 sm:flex sm:items-center sm:justify-between sm:w-full xl:block xl:text-center xl:flex-1'>
+            <div className='text-muted-foreground text-xs sm:mb-0 xl:mb-1'>{t('dashboard.stats.input')}</div>
+            <div className='font-mono text-lg font-bold'>{formatNumber(tokens.input)}</div>
           </div>
-          <div className='bg-border h-8 w-px'></div>
-          <div className='text-center'>
-            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.output')}</div>
-            <div className='text-lg font-bold font-mono'>{formatNumber(stats?.totalOutputTokensThisMonth || 0)}</div>
+          <div className='bg-border h-8 w-px shrink-0 sm:hidden xl:block'></div>
+          <div className='bg-border h-px w-full shrink-0 hidden sm:block xl:hidden'></div>
+          <div className='text-center min-w-0 sm:flex sm:items-center sm:justify-between sm:w-full xl:block xl:text-center xl:flex-1'>
+            <div className='text-muted-foreground text-xs sm:mb-0 xl:mb-1'>{t('dashboard.stats.output')}</div>
+            <div className='font-mono text-lg font-bold'>{formatNumber(tokens.output)}</div>
           </div>
-          <div className='bg-border h-8 w-px'></div>
-          <div className='text-center'>
-            <div className='text-xs text-muted-foreground mb-1'>{t('dashboard.stats.cached')}</div>
-            <div className='text-lg font-bold font-mono text-muted-foreground'>{formatNumber(stats?.totalCachedTokensThisMonth || 0)}</div>
+          <div className='bg-border h-8 w-px shrink-0 sm:hidden xl:block'></div>
+          <div className='bg-border h-px w-full shrink-0 hidden sm:block xl:hidden'></div>
+          <div className='text-center min-w-0 sm:flex sm:items-center sm:justify-between sm:w-full xl:block xl:text-center xl:flex-1'>
+            <div className='text-muted-foreground text-xs sm:mb-0 xl:mb-1'>{t('dashboard.stats.cached')}</div>
+            <div className='text-muted-foreground font-mono text-lg font-bold'>{formatNumber(tokens.cached)}</div>
           </div>
         </div>
       </CardContent>

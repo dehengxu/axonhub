@@ -9,10 +9,10 @@ import (
 
 	"github.com/samber/lo"
 
-	"github.com/looplj/axonhub/internal/pkg/xmap"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/auth"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/internal/pkg/xmap"
 	"github.com/looplj/axonhub/llm/transformer"
 	"github.com/looplj/axonhub/llm/transformer/shared"
 )
@@ -25,7 +25,7 @@ type Config struct {
 	BaseURL string `json:"base_url,omitempty"`
 
 	// RawURL is whether to use raw URL for requests, default is false.
-	// If true, the base URL will be used as is, without appending the version.
+	// If true, the request URL will be used as is, without appending the response endpoint.
 	RawURL bool `json:"raw_url,omitempty"`
 
 	// APIKeyProvider provides API keys for authentication, required.
@@ -54,11 +54,12 @@ func NewOutboundTransformerWithConfig(config *Config) (*OutboundTransformer, err
 		return nil, fmt.Errorf("API key provider is required")
 	}
 
-	if strings.HasSuffix(config.BaseURL, "#") {
+	if strings.HasSuffix(config.BaseURL, "##") {
 		config.RawURL = true
+		config.BaseURL = strings.TrimSuffix(config.BaseURL, "##")
+	} else {
+		config.BaseURL = transformer.NormalizeBaseURL(config.BaseURL, "v1")
 	}
-
-	config.BaseURL = transformer.NormalizeBaseURL(config.BaseURL, "v1")
 
 	return &OutboundTransformer{
 		config: config,
@@ -135,6 +136,9 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 			tools = append(tools, tool)
 			// Store image output format in TransformerMetadata
 			llmReq.TransformerMetadata["image_output_format"] = tool.OutputFormat
+		case llm.ToolTypeResponsesCustomTool:
+			tool := convertCustomToTool(item)
+			tools = append(tools, tool)
 		case "function":
 			tool := convertFunctionToTool(item)
 			tools = append(tools, tool)
@@ -210,7 +214,9 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 
 // buildFullRequestURL constructs the appropriate URL based on the platform.
 func (t *OutboundTransformer) buildFullRequestURL(_ *llm.Request) (string, error) {
-	// BaseURL is already normalized with version in NewOutboundTransformerWithConfig
+	if t.config.RawURL {
+		return t.config.BaseURL, nil
+	}
 	return t.config.BaseURL + "/responses", nil
 }
 
@@ -283,6 +289,21 @@ func (t *OutboundTransformer) TransformResponse(
 				Function: llm.FunctionCall{
 					Name:      outputItem.Name,
 					Arguments: outputItem.Arguments,
+				},
+			})
+		case "custom_tool_call":
+			// Custom tool call output
+			inputStr := ""
+			if outputItem.Input != nil {
+				inputStr = *outputItem.Input
+			}
+			toolCalls = append(toolCalls, llm.ToolCall{
+				ID:   outputItem.CallID,
+				Type: llm.ToolTypeResponsesCustomTool,
+				ResponseCustomToolCall: &llm.ResponseCustomToolCall{
+					CallID: outputItem.CallID,
+					Name:   outputItem.Name,
+					Input:  inputStr,
 				},
 			})
 		case "reasoning":

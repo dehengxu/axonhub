@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { ColumnDef } from '@tanstack/react-table';
 import { IconRoute, IconArrowsJoin2 } from '@tabler/icons-react';
 import { zhCN, enUS } from 'date-fns/locale';
-import { FileText } from 'lucide-react';
+import { FileText, ArrowLeftRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { extractNumberID } from '@/lib/utils';
 import { formatDuration } from '@/utils/format-duration';
@@ -18,6 +18,7 @@ import { useGeneralSettings } from '@/features/system/data/system';
 import { useRequestPermissions } from '../../../hooks/useRequestPermissions';
 import { Request } from '../data/schema';
 import { getStatusColor } from './help';
+import { calculateTokensPerSecond, useDisplayMode } from '../utils/tokens-per-second';
 
 export function useRequestsColumns(): ColumnDef<Request>[] {
   const { t, i18n } = useTranslation();
@@ -25,6 +26,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
   const permissions = useRequestPermissions();
   const { data: settings } = useGeneralSettings();
   const { navigateWithSearch } = usePaginationSearch({ defaultPageSize: 20 });
+  const [displayMode, setDisplayMode] = useDisplayMode();
 
   // Define all columns
   const columns: ColumnDef<Request>[] = [
@@ -267,7 +269,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
         return value.includes(row.getValue(id));
       },
       enableSorting: false,
-      enableHiding: false,
+      enableHiding: true,
     },
     {
       id: 'tokens',
@@ -391,6 +393,10 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
     },
     {
       id: 'cost',
+      accessorFn: (row) => {
+        const usageLog = row.usageLogs?.edges?.[0]?.node;
+        return usageLog?.totalCost ?? null;
+      },
       header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.cost')} />,
       enableSorting: false,
       enableHiding: true,
@@ -413,15 +419,46 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
     },
     {
       id: 'latency',
-      header: ({ column }) => <DataTableColumnHeader column={column} title={t('requests.columns.latency')} />,
+      accessorFn: (row) => row.metricsLatencyMs ?? null,
+      header: ({ column }) => (
+        <div className="flex items-center gap-1">
+          {displayMode === 'latency' ? (
+            <DataTableColumnHeader
+              column={column}
+              title={t('requests.columns.latency')}
+            />
+          ) : (
+            <span className="uppercase text-sm font-medium">{t('requests.columns.tokensPerSecond')}</span>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDisplayMode(prev => prev === 'latency' ? 'tokensPerSecond' : 'latency');
+            }}
+            className="cursor-pointer hover:text-primary transition-colors"
+            title={displayMode === 'latency' ? t('requests.columns.showTokensPerSecond') : t('requests.columns.showLatency')}
+            type="button"
+          >
+            <ArrowLeftRight className="h-3 w-3 text-muted-foreground" />
+          </button>
+        </div>
+      ),
       cell: ({ row }) => {
         const request = row.original;
         const latencyParts = [];
 
         if (request.status === 'completed') {
-          if (request.metricsLatencyMs != null) {
-            latencyParts.push(formatDuration(request.metricsLatencyMs));
+          if (displayMode === 'latency') {
+            if (request.metricsLatencyMs != null) {
+              latencyParts.push(formatDuration(request.metricsLatencyMs));
+            }
+          } else {
+            const tokensPerSecond = calculateTokensPerSecond(request);
+            if (tokensPerSecond !== '-') {
+              latencyParts.push(tokensPerSecond);
+            }
           }
+
           if (request.stream && request.metricsFirstTokenLatencyMs != null) {
             latencyParts.push(`TTFT: ${formatDuration(request.metricsFirstTokenLatencyMs)}`);
           }
@@ -433,8 +470,13 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
 
         return <div className='font-mono text-xs'>{latencyParts.join(' | ')}</div>;
       },
-      enableSorting: false,
+      enableSorting: true,
       enableHiding: true,
+      sortingFn: (rowA, rowB) => {
+        const a = rowA.original.metricsLatencyMs ?? 0;
+        const b = rowB.original.metricsLatencyMs ?? 0;
+        return a - b;
+      },
     },
     {
       id: 'details',
@@ -464,7 +506,7 @@ export function useRequestsColumns(): ColumnDef<Request>[] {
         return <div className='text-xs'>{format(date, 'yyyy-MM-dd HH:mm:ss', { locale })}</div>;
       },
       enableSorting: false,
-      enableHiding: false,
+      enableHiding: true,
     },
   ];
   return columns;

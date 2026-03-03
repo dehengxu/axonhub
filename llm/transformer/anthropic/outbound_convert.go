@@ -3,14 +3,11 @@ package anthropic
 import (
 	"github.com/samber/lo"
 
-	"github.com/looplj/axonhub/internal/pkg/xjson"
-	"github.com/looplj/axonhub/internal/pkg/xurl"
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/internal/pkg/xjson"
+	"github.com/looplj/axonhub/llm/internal/pkg/xurl"
 	"github.com/looplj/axonhub/llm/transformer/shared"
 )
-
-// ToolTypeWebSearch20250305 is an alias to llm.ToolTypeAnthropicWebSearch for package compatibility.
-const ToolTypeWebSearch20250305 = llm.ToolTypeAnthropicWebSearch
 
 // convertToAnthropicRequest converts ChatCompletionRequest to Anthropic MessageRequest.
 // Deprecated: Use convertToAnthropicRequestWithConfig instead.
@@ -21,7 +18,8 @@ func convertToAnthropicRequest(chatReq *llm.Request) *MessageRequest {
 // convertToAnthropicRequestWithConfig converts ChatCompletionRequest to Anthropic MessageRequest with config.
 func convertToAnthropicRequestWithConfig(chatReq *llm.Request, config *Config) *MessageRequest {
 	req := buildBaseRequest(chatReq, config)
-	req.Tools = convertTools(chatReq.Tools)
+	req.Tools = convertToolsAnthropic(chatReq.Tools, config)
+	req.ToolChoice = convertToolChoiceToAnthropic(chatReq.ToolChoice)
 	req.Messages = convertMessages(chatReq)
 	req.StopSequences = convertStopSequences(chatReq.Stop)
 
@@ -43,8 +41,22 @@ func buildBaseRequest(chatReq *llm.Request, config *Config) *MessageRequest {
 		req.Metadata = &AnthropicMetadata{UserID: chatReq.Metadata["user_id"]}
 	}
 
-	if chatReq.ReasoningEffort != "" || chatReq.ReasoningBudget != nil {
+	// Determine thinking config priority: adaptive > enabled > disabled
+	if chatReq.TransformerMetadata != nil {
+		if v, ok := chatReq.TransformerMetadata[TransformerMetadataKeyThinkingType].(string); ok && v == "adaptive" {
+			req.Thinking = &Thinking{Type: "adaptive"}
+		}
+	}
+
+	if req.Thinking == nil && (chatReq.ReasoningEffort != "" || chatReq.ReasoningBudget != nil) {
 		req.Thinking = buildThinking(chatReq, config)
+	}
+
+	// Restore output_config from TransformerMetadata
+	if chatReq.TransformerMetadata != nil {
+		if effort, ok := chatReq.TransformerMetadata[TransformerMetadataKeyOutputConfigEffort].(string); ok && effort != "" {
+			req.OutputConfig = &OutputConfig{Effort: effort}
+		}
 	}
 
 	return req
@@ -73,36 +85,92 @@ func buildThinking(chatReq *llm.Request, config *Config) *Thinking {
 	}
 }
 
-// convertTools converts LLM tools to Anthropic tools.
-func convertTools(tools []llm.Tool) []Tool {
+// convertToolsAnthropic converts LLM tools to Anthropic tools.
+// If the platform is not direct Anthropic API or Bedrock, anthropic native tools (like web_search) are filtered out.
+// Only web_search tool is supported as native tool, other native tools (image_generation, google_*, etc.) are ignored.
+func convertToolsAnthropic(tools []llm.Tool, config *Config) []Tool {
 	if len(tools) == 0 {
 		return nil
 	}
 
 	anthropicTools := make([]Tool, 0, len(tools))
 
+	supportsNativeTools := supportsAnthropicNativeTools(config)
+
 	for _, tool := range tools {
-		// Use shared helper to detect Anthropic native tools (web_search)
-		if llm.IsAnthropicNativeTool(tool) {
-			anthropicTools = append(anthropicTools, Tool{
-				Type: ToolTypeWebSearch20250305,
-				Name: llm.AnthropicWebSearchFunctionName,
-			})
-		} else if tool.Type == llm.ToolTypeFunction {
+		switch tool.Type {
+		case llm.ToolTypeFunction:
 			anthropicTools = append(anthropicTools, Tool{
 				Name:         tool.Function.Name,
 				Description:  tool.Function.Description,
 				InputSchema:  tool.Function.Parameters,
 				CacheControl: convertToAnthropicCacheControl(tool.CacheControl),
 			})
+		case llm.ToolTypeWebSearch:
+			// Already transformed Anthropic native tool type
+			// If platform doesn't support native tools, skip this tool
+			if !supportsNativeTools {
+				continue
+			}
+
+			anthropicTool := Tool{
+				Type: ToolTypeWebSearch20250305,
+				Name: WebSearchFunctionName,
+			}
+			// Copy web search parameters if available
+			if tool.WebSearch != nil {
+				anthropicTool.MaxUses = tool.WebSearch.MaxUses
+				anthropicTool.Strict = tool.WebSearch.Strict
+				anthropicTool.AllowedDomains = tool.WebSearch.AllowedDomains
+				anthropicTool.BlockedDomains = tool.WebSearch.BlockedDomains
+				anthropicTool.UserLocation = WebSearchToolUserLocation{
+					City:     tool.WebSearch.UserLocation.City,
+					Country:  tool.WebSearch.UserLocation.Country,
+					Region:   tool.WebSearch.UserLocation.Region,
+					Timezone: tool.WebSearch.UserLocation.Timezone,
+					Type:     tool.WebSearch.UserLocation.Type,
+				}
+			}
+
+			anthropicTools = append(anthropicTools, anthropicTool)
+		default:
+			// Ignore other native tools (image_generation, google_*, etc.)
+			continue
 		}
 	}
 
-	if len(anthropicTools) == 0 {
+	return anthropicTools
+}
+
+// convertToolChoiceToAnthropic converts llm.ToolChoice to Anthropic ToolChoice.
+func convertToolChoiceToAnthropic(src *llm.ToolChoice) *ToolChoice {
+	if src == nil {
 		return nil
 	}
 
-	return anthropicTools
+	// String-form tool_choice: "auto", "none", "any", "required"
+	if src.ToolChoice != nil {
+		choice := *src.ToolChoice
+
+		// OpenAI "required" is equivalent to Anthropic "any"
+		if choice == "required" {
+			choice = "any"
+		}
+
+		return &ToolChoice{
+			Type: choice,
+		}
+	}
+
+	// Named tool_choice: {type: "function", function: {name: "xxx"}}
+	if src.NamedToolChoice != nil && src.NamedToolChoice.Function.Name != "" {
+		return &ToolChoice{
+			Type: "tool",
+			Name: lo.ToPtr(src.NamedToolChoice.Function.Name),
+		}
+	}
+
+	return nil
 }
 
 // convertStopSequences converts stop sequences.

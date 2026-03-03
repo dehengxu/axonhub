@@ -10,11 +10,11 @@ import (
 	// Import bedrock package to register its decoder.
 	"github.com/samber/lo"
 
-	"github.com/looplj/axonhub/internal/pkg/xjson"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/auth"
 	_ "github.com/looplj/axonhub/llm/bedrock"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/internal/pkg/xjson"
 	"github.com/looplj/axonhub/llm/transformer"
 	"github.com/looplj/axonhub/llm/vertex"
 )
@@ -51,10 +51,6 @@ type Config struct {
 
 	// BaseURL is the base URL for the Anthropic API, required.
 	BaseURL string `json:"base_url,omitempty"`
-
-	// RawURL is whether to use raw URL for requests, default is false.
-	// If true, the base URL will be used as is, without appending the version.
-	RawURL bool `json:"raw_url,omitempty"`
 
 	// APIKeyProvider provides API keys for authentication, required.
 	APIKeyProvider auth.APIKeyProvider `json:"-"`
@@ -97,14 +93,6 @@ func NewOutboundTransformerWithConfig(config *Config) (transformer.Outbound, err
 			Outbound: t,
 			executor: executor,
 		}
-	}
-
-	// Note: ClaudeCode transformer is now in a separate package to avoid import cycles
-	// It should be created directly using claudecode.NewOutboundTransformer() with OAuth TokenProvider
-	// The channel builder handles this special case
-
-	if strings.HasSuffix(config.BaseURL, "#") {
-		config.RawURL = true
 	}
 
 	// For Vertex/Bedrock, don't normalize with version - they have special URL formats
@@ -164,8 +152,10 @@ func (t *OutboundTransformer) TransformRequest(
 	// Convert to Anthropic request format
 	anthropicReq := convertToAnthropicRequestWithConfig(llmReq, t.config)
 
-	// Apply cache_control breakpoint policy before serialization.
-	ensureCacheControl(anthropicReq)
+	// Apply cache_control breakpoint policy to optimize cache control if client requests with cache_control.
+	if countCacheControls(anthropicReq) > 0 {
+		optimizeCacheControl(anthropicReq)
+	}
 
 	// Determine endpoint based on platform
 	url, err := t.buildFullRequestURL(llmReq)

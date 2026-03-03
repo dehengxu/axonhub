@@ -165,6 +165,7 @@ Here are some screenshots of AxonHub in action:
 | **ZAI**                | ✅ Done    | -                            | Image Generation |
 | **AWS Bedrock**        | 🔄 Testing | Claude on AWS                | OpenAI, Anthropic, Gemini |
 | **Google Cloud**       | 🔄 Testing | Claude on GCP                | OpenAI, Anthropic, Gemini |
+| **NanoGPT**            | ✅ Done    | Various models, Image Gen    | OpenAI, Anthropic, Gemini, Image Generation |
 
 ---
 
@@ -181,7 +182,7 @@ cd axonhub_*
 ./axonhub
 
 # Open http://localhost:8090
-# Default login: admin@axonhub.com / admin
+# First run: Follow the setup wizard to initialize the system (create admin account, password must be at least 6 characters)
 ```
 
 That's it! Now configure your first AI channel and start calling models through AxonHub.
@@ -462,7 +463,7 @@ For detailed SDK usage examples and code samples, please refer to the API docume
 
 ## 🛠️ Development Guide
 
-For detailed development instructions, architecture design, and contribution guidelines, please see [docs/en/guides/development.md](docs/en/guides/development.md).
+For detailed development instructions, architecture design, and contribution guidelines, please see [docs/en/development/development.md](docs/en/development/development.md).
 
 ---
 

@@ -1232,7 +1232,10 @@ type ChannelMutation struct {
 	appenddisabled_api_keys      []objects.DisabledAPIKey
 	supported_models             *[]string
 	appendsupported_models       []string
+	manual_models                *[]string
+	appendmanual_models          []string
 	auto_sync_supported_models   *bool
+	auto_sync_model_pattern      *string
 	tags                         *[]string
 	appendtags                   []string
 	default_test_model           *string
@@ -1800,6 +1803,71 @@ func (m *ChannelMutation) ResetSupportedModels() {
 	m.appendsupported_models = nil
 }
 
+// SetManualModels sets the "manual_models" field.
+func (m *ChannelMutation) SetManualModels(s []string) {
+	m.manual_models = &s
+	m.appendmanual_models = nil
+}
+
+// ManualModels returns the value of the "manual_models" field in the mutation.
+func (m *ChannelMutation) ManualModels() (r []string, exists bool) {
+	v := m.manual_models
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldManualModels returns the old "manual_models" field's value of the Channel entity.
+// If the Channel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMutation) OldManualModels(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldManualModels is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldManualModels requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldManualModels: %w", err)
+	}
+	return oldValue.ManualModels, nil
+}
+
+// AppendManualModels adds s to the "manual_models" field.
+func (m *ChannelMutation) AppendManualModels(s []string) {
+	m.appendmanual_models = append(m.appendmanual_models, s...)
+}
+
+// AppendedManualModels returns the list of values that were appended to the "manual_models" field in this mutation.
+func (m *ChannelMutation) AppendedManualModels() ([]string, bool) {
+	if len(m.appendmanual_models) == 0 {
+		return nil, false
+	}
+	return m.appendmanual_models, true
+}
+
+// ClearManualModels clears the value of the "manual_models" field.
+func (m *ChannelMutation) ClearManualModels() {
+	m.manual_models = nil
+	m.appendmanual_models = nil
+	m.clearedFields[channel.FieldManualModels] = struct{}{}
+}
+
+// ManualModelsCleared returns if the "manual_models" field was cleared in this mutation.
+func (m *ChannelMutation) ManualModelsCleared() bool {
+	_, ok := m.clearedFields[channel.FieldManualModels]
+	return ok
+}
+
+// ResetManualModels resets all changes to the "manual_models" field.
+func (m *ChannelMutation) ResetManualModels() {
+	m.manual_models = nil
+	m.appendmanual_models = nil
+	delete(m.clearedFields, channel.FieldManualModels)
+}
+
 // SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
 func (m *ChannelMutation) SetAutoSyncSupportedModels(b bool) {
 	m.auto_sync_supported_models = &b
@@ -1834,6 +1902,55 @@ func (m *ChannelMutation) OldAutoSyncSupportedModels(ctx context.Context) (v boo
 // ResetAutoSyncSupportedModels resets all changes to the "auto_sync_supported_models" field.
 func (m *ChannelMutation) ResetAutoSyncSupportedModels() {
 	m.auto_sync_supported_models = nil
+}
+
+// SetAutoSyncModelPattern sets the "auto_sync_model_pattern" field.
+func (m *ChannelMutation) SetAutoSyncModelPattern(s string) {
+	m.auto_sync_model_pattern = &s
+}
+
+// AutoSyncModelPattern returns the value of the "auto_sync_model_pattern" field in the mutation.
+func (m *ChannelMutation) AutoSyncModelPattern() (r string, exists bool) {
+	v := m.auto_sync_model_pattern
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoSyncModelPattern returns the old "auto_sync_model_pattern" field's value of the Channel entity.
+// If the Channel object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMutation) OldAutoSyncModelPattern(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoSyncModelPattern is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoSyncModelPattern requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoSyncModelPattern: %w", err)
+	}
+	return oldValue.AutoSyncModelPattern, nil
+}
+
+// ClearAutoSyncModelPattern clears the value of the "auto_sync_model_pattern" field.
+func (m *ChannelMutation) ClearAutoSyncModelPattern() {
+	m.auto_sync_model_pattern = nil
+	m.clearedFields[channel.FieldAutoSyncModelPattern] = struct{}{}
+}
+
+// AutoSyncModelPatternCleared returns if the "auto_sync_model_pattern" field was cleared in this mutation.
+func (m *ChannelMutation) AutoSyncModelPatternCleared() bool {
+	_, ok := m.clearedFields[channel.FieldAutoSyncModelPattern]
+	return ok
+}
+
+// ResetAutoSyncModelPattern resets all changes to the "auto_sync_model_pattern" field.
+func (m *ChannelMutation) ResetAutoSyncModelPattern() {
+	m.auto_sync_model_pattern = nil
+	delete(m.clearedFields, channel.FieldAutoSyncModelPattern)
 }
 
 // SetTags sets the "tags" field.
@@ -2532,7 +2649,7 @@ func (m *ChannelMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 20)
 	if m.created_at != nil {
 		fields = append(fields, channel.FieldCreatedAt)
 	}
@@ -2563,8 +2680,14 @@ func (m *ChannelMutation) Fields() []string {
 	if m.supported_models != nil {
 		fields = append(fields, channel.FieldSupportedModels)
 	}
+	if m.manual_models != nil {
+		fields = append(fields, channel.FieldManualModels)
+	}
 	if m.auto_sync_supported_models != nil {
 		fields = append(fields, channel.FieldAutoSyncSupportedModels)
+	}
+	if m.auto_sync_model_pattern != nil {
+		fields = append(fields, channel.FieldAutoSyncModelPattern)
 	}
 	if m.tags != nil {
 		fields = append(fields, channel.FieldTags)
@@ -2615,8 +2738,12 @@ func (m *ChannelMutation) Field(name string) (ent.Value, bool) {
 		return m.DisabledAPIKeys()
 	case channel.FieldSupportedModels:
 		return m.SupportedModels()
+	case channel.FieldManualModels:
+		return m.ManualModels()
 	case channel.FieldAutoSyncSupportedModels:
 		return m.AutoSyncSupportedModels()
+	case channel.FieldAutoSyncModelPattern:
+		return m.AutoSyncModelPattern()
 	case channel.FieldTags:
 		return m.Tags()
 	case channel.FieldDefaultTestModel:
@@ -2660,8 +2787,12 @@ func (m *ChannelMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldDisabledAPIKeys(ctx)
 	case channel.FieldSupportedModels:
 		return m.OldSupportedModels(ctx)
+	case channel.FieldManualModels:
+		return m.OldManualModels(ctx)
 	case channel.FieldAutoSyncSupportedModels:
 		return m.OldAutoSyncSupportedModels(ctx)
+	case channel.FieldAutoSyncModelPattern:
+		return m.OldAutoSyncModelPattern(ctx)
 	case channel.FieldTags:
 		return m.OldTags(ctx)
 	case channel.FieldDefaultTestModel:
@@ -2755,12 +2886,26 @@ func (m *ChannelMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSupportedModels(v)
 		return nil
+	case channel.FieldManualModels:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetManualModels(v)
+		return nil
 	case channel.FieldAutoSyncSupportedModels:
 		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAutoSyncSupportedModels(v)
+		return nil
+	case channel.FieldAutoSyncModelPattern:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoSyncModelPattern(v)
 		return nil
 	case channel.FieldTags:
 		v, ok := value.([]string)
@@ -2874,6 +3019,12 @@ func (m *ChannelMutation) ClearedFields() []string {
 	if m.FieldCleared(channel.FieldDisabledAPIKeys) {
 		fields = append(fields, channel.FieldDisabledAPIKeys)
 	}
+	if m.FieldCleared(channel.FieldManualModels) {
+		fields = append(fields, channel.FieldManualModels)
+	}
+	if m.FieldCleared(channel.FieldAutoSyncModelPattern) {
+		fields = append(fields, channel.FieldAutoSyncModelPattern)
+	}
 	if m.FieldCleared(channel.FieldTags) {
 		fields = append(fields, channel.FieldTags)
 	}
@@ -2908,6 +3059,12 @@ func (m *ChannelMutation) ClearField(name string) error {
 		return nil
 	case channel.FieldDisabledAPIKeys:
 		m.ClearDisabledAPIKeys()
+		return nil
+	case channel.FieldManualModels:
+		m.ClearManualModels()
+		return nil
+	case channel.FieldAutoSyncModelPattern:
+		m.ClearAutoSyncModelPattern()
 		return nil
 	case channel.FieldTags:
 		m.ClearTags()
@@ -2962,8 +3119,14 @@ func (m *ChannelMutation) ResetField(name string) error {
 	case channel.FieldSupportedModels:
 		m.ResetSupportedModels()
 		return nil
+	case channel.FieldManualModels:
+		m.ResetManualModels()
+		return nil
 	case channel.FieldAutoSyncSupportedModels:
 		m.ResetAutoSyncSupportedModels()
+		return nil
+	case channel.FieldAutoSyncModelPattern:
+		m.ResetAutoSyncModelPattern()
 		return nil
 	case channel.FieldTags:
 		m.ResetTags()
@@ -10226,6 +10389,8 @@ type PromptMutation struct {
 	role            *string
 	content         *string
 	status          *prompt.Status
+	_order          *int
+	add_order       *int
 	settings        *objects.PromptSettings
 	clearedFields   map[string]struct{}
 	projects        map[int]struct{}
@@ -10698,6 +10863,62 @@ func (m *PromptMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetOrder sets the "order" field.
+func (m *PromptMutation) SetOrder(i int) {
+	m._order = &i
+	m.add_order = nil
+}
+
+// Order returns the value of the "order" field in the mutation.
+func (m *PromptMutation) Order() (r int, exists bool) {
+	v := m._order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrder returns the old "order" field's value of the Prompt entity.
+// If the Prompt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromptMutation) OldOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrder: %w", err)
+	}
+	return oldValue.Order, nil
+}
+
+// AddOrder adds i to the "order" field.
+func (m *PromptMutation) AddOrder(i int) {
+	if m.add_order != nil {
+		*m.add_order += i
+	} else {
+		m.add_order = &i
+	}
+}
+
+// AddedOrder returns the value that was added to the "order" field in this mutation.
+func (m *PromptMutation) AddedOrder() (r int, exists bool) {
+	v := m.add_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOrder resets all changes to the "order" field.
+func (m *PromptMutation) ResetOrder() {
+	m._order = nil
+	m.add_order = nil
+}
+
 // SetSettings sets the "settings" field.
 func (m *PromptMutation) SetSettings(os objects.PromptSettings) {
 	m.settings = &os
@@ -10822,7 +11043,7 @@ func (m *PromptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PromptMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.created_at != nil {
 		fields = append(fields, prompt.FieldCreatedAt)
 	}
@@ -10849,6 +11070,9 @@ func (m *PromptMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, prompt.FieldStatus)
+	}
+	if m._order != nil {
+		fields = append(fields, prompt.FieldOrder)
 	}
 	if m.settings != nil {
 		fields = append(fields, prompt.FieldSettings)
@@ -10879,6 +11103,8 @@ func (m *PromptMutation) Field(name string) (ent.Value, bool) {
 		return m.Content()
 	case prompt.FieldStatus:
 		return m.Status()
+	case prompt.FieldOrder:
+		return m.Order()
 	case prompt.FieldSettings:
 		return m.Settings()
 	}
@@ -10908,6 +11134,8 @@ func (m *PromptMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldContent(ctx)
 	case prompt.FieldStatus:
 		return m.OldStatus(ctx)
+	case prompt.FieldOrder:
+		return m.OldOrder(ctx)
 	case prompt.FieldSettings:
 		return m.OldSettings(ctx)
 	}
@@ -10982,6 +11210,13 @@ func (m *PromptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetStatus(v)
 		return nil
+	case prompt.FieldOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrder(v)
+		return nil
 	case prompt.FieldSettings:
 		v, ok := value.(objects.PromptSettings)
 		if !ok {
@@ -11003,6 +11238,9 @@ func (m *PromptMutation) AddedFields() []string {
 	if m.addproject_id != nil {
 		fields = append(fields, prompt.FieldProjectID)
 	}
+	if m.add_order != nil {
+		fields = append(fields, prompt.FieldOrder)
+	}
 	return fields
 }
 
@@ -11015,6 +11253,8 @@ func (m *PromptMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDeletedAt()
 	case prompt.FieldProjectID:
 		return m.AddedProjectID()
+	case prompt.FieldOrder:
+		return m.AddedOrder()
 	}
 	return nil, false
 }
@@ -11037,6 +11277,13 @@ func (m *PromptMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddProjectID(v)
+		return nil
+	case prompt.FieldOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOrder(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Prompt numeric field %s", name)
@@ -11091,6 +11338,9 @@ func (m *PromptMutation) ResetField(name string) error {
 		return nil
 	case prompt.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case prompt.FieldOrder:
+		m.ResetOrder()
 		return nil
 	case prompt.FieldSettings:
 		m.ResetSettings()
@@ -12134,6 +12384,11 @@ type RequestMutation struct {
 	addmetrics_latency_ms             *int64
 	metrics_first_token_latency_ms    *int64
 	addmetrics_first_token_latency_ms *int64
+	content_saved                     *bool
+	content_storage_id                *int
+	addcontent_storage_id             *int
+	content_storage_key               *string
+	content_saved_at                  *time.Time
 	clearedFields                     map[string]struct{}
 	api_key                           *int
 	clearedapi_key                    bool
@@ -13209,6 +13464,210 @@ func (m *RequestMutation) ResetMetricsFirstTokenLatencyMs() {
 	delete(m.clearedFields, request.FieldMetricsFirstTokenLatencyMs)
 }
 
+// SetContentSaved sets the "content_saved" field.
+func (m *RequestMutation) SetContentSaved(b bool) {
+	m.content_saved = &b
+}
+
+// ContentSaved returns the value of the "content_saved" field in the mutation.
+func (m *RequestMutation) ContentSaved() (r bool, exists bool) {
+	v := m.content_saved
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentSaved returns the old "content_saved" field's value of the Request entity.
+// If the Request object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestMutation) OldContentSaved(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentSaved is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentSaved requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentSaved: %w", err)
+	}
+	return oldValue.ContentSaved, nil
+}
+
+// ResetContentSaved resets all changes to the "content_saved" field.
+func (m *RequestMutation) ResetContentSaved() {
+	m.content_saved = nil
+}
+
+// SetContentStorageID sets the "content_storage_id" field.
+func (m *RequestMutation) SetContentStorageID(i int) {
+	m.content_storage_id = &i
+	m.addcontent_storage_id = nil
+}
+
+// ContentStorageID returns the value of the "content_storage_id" field in the mutation.
+func (m *RequestMutation) ContentStorageID() (r int, exists bool) {
+	v := m.content_storage_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentStorageID returns the old "content_storage_id" field's value of the Request entity.
+// If the Request object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestMutation) OldContentStorageID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentStorageID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentStorageID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentStorageID: %w", err)
+	}
+	return oldValue.ContentStorageID, nil
+}
+
+// AddContentStorageID adds i to the "content_storage_id" field.
+func (m *RequestMutation) AddContentStorageID(i int) {
+	if m.addcontent_storage_id != nil {
+		*m.addcontent_storage_id += i
+	} else {
+		m.addcontent_storage_id = &i
+	}
+}
+
+// AddedContentStorageID returns the value that was added to the "content_storage_id" field in this mutation.
+func (m *RequestMutation) AddedContentStorageID() (r int, exists bool) {
+	v := m.addcontent_storage_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearContentStorageID clears the value of the "content_storage_id" field.
+func (m *RequestMutation) ClearContentStorageID() {
+	m.content_storage_id = nil
+	m.addcontent_storage_id = nil
+	m.clearedFields[request.FieldContentStorageID] = struct{}{}
+}
+
+// ContentStorageIDCleared returns if the "content_storage_id" field was cleared in this mutation.
+func (m *RequestMutation) ContentStorageIDCleared() bool {
+	_, ok := m.clearedFields[request.FieldContentStorageID]
+	return ok
+}
+
+// ResetContentStorageID resets all changes to the "content_storage_id" field.
+func (m *RequestMutation) ResetContentStorageID() {
+	m.content_storage_id = nil
+	m.addcontent_storage_id = nil
+	delete(m.clearedFields, request.FieldContentStorageID)
+}
+
+// SetContentStorageKey sets the "content_storage_key" field.
+func (m *RequestMutation) SetContentStorageKey(s string) {
+	m.content_storage_key = &s
+}
+
+// ContentStorageKey returns the value of the "content_storage_key" field in the mutation.
+func (m *RequestMutation) ContentStorageKey() (r string, exists bool) {
+	v := m.content_storage_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentStorageKey returns the old "content_storage_key" field's value of the Request entity.
+// If the Request object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestMutation) OldContentStorageKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentStorageKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentStorageKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentStorageKey: %w", err)
+	}
+	return oldValue.ContentStorageKey, nil
+}
+
+// ClearContentStorageKey clears the value of the "content_storage_key" field.
+func (m *RequestMutation) ClearContentStorageKey() {
+	m.content_storage_key = nil
+	m.clearedFields[request.FieldContentStorageKey] = struct{}{}
+}
+
+// ContentStorageKeyCleared returns if the "content_storage_key" field was cleared in this mutation.
+func (m *RequestMutation) ContentStorageKeyCleared() bool {
+	_, ok := m.clearedFields[request.FieldContentStorageKey]
+	return ok
+}
+
+// ResetContentStorageKey resets all changes to the "content_storage_key" field.
+func (m *RequestMutation) ResetContentStorageKey() {
+	m.content_storage_key = nil
+	delete(m.clearedFields, request.FieldContentStorageKey)
+}
+
+// SetContentSavedAt sets the "content_saved_at" field.
+func (m *RequestMutation) SetContentSavedAt(t time.Time) {
+	m.content_saved_at = &t
+}
+
+// ContentSavedAt returns the value of the "content_saved_at" field in the mutation.
+func (m *RequestMutation) ContentSavedAt() (r time.Time, exists bool) {
+	v := m.content_saved_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContentSavedAt returns the old "content_saved_at" field's value of the Request entity.
+// If the Request object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RequestMutation) OldContentSavedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContentSavedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContentSavedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContentSavedAt: %w", err)
+	}
+	return oldValue.ContentSavedAt, nil
+}
+
+// ClearContentSavedAt clears the value of the "content_saved_at" field.
+func (m *RequestMutation) ClearContentSavedAt() {
+	m.content_saved_at = nil
+	m.clearedFields[request.FieldContentSavedAt] = struct{}{}
+}
+
+// ContentSavedAtCleared returns if the "content_saved_at" field was cleared in this mutation.
+func (m *RequestMutation) ContentSavedAtCleared() bool {
+	_, ok := m.clearedFields[request.FieldContentSavedAt]
+	return ok
+}
+
+// ResetContentSavedAt resets all changes to the "content_saved_at" field.
+func (m *RequestMutation) ResetContentSavedAt() {
+	m.content_saved_at = nil
+	delete(m.clearedFields, request.FieldContentSavedAt)
+}
+
 // ClearAPIKey clears the "api_key" edge to the APIKey entity.
 func (m *RequestMutation) ClearAPIKey() {
 	m.clearedapi_key = true
@@ -13486,7 +13945,7 @@ func (m *RequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RequestMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, request.FieldCreatedAt)
 	}
@@ -13547,6 +14006,18 @@ func (m *RequestMutation) Fields() []string {
 	if m.metrics_first_token_latency_ms != nil {
 		fields = append(fields, request.FieldMetricsFirstTokenLatencyMs)
 	}
+	if m.content_saved != nil {
+		fields = append(fields, request.FieldContentSaved)
+	}
+	if m.content_storage_id != nil {
+		fields = append(fields, request.FieldContentStorageID)
+	}
+	if m.content_storage_key != nil {
+		fields = append(fields, request.FieldContentStorageKey)
+	}
+	if m.content_saved_at != nil {
+		fields = append(fields, request.FieldContentSavedAt)
+	}
 	return fields
 }
 
@@ -13595,6 +14066,14 @@ func (m *RequestMutation) Field(name string) (ent.Value, bool) {
 		return m.MetricsLatencyMs()
 	case request.FieldMetricsFirstTokenLatencyMs:
 		return m.MetricsFirstTokenLatencyMs()
+	case request.FieldContentSaved:
+		return m.ContentSaved()
+	case request.FieldContentStorageID:
+		return m.ContentStorageID()
+	case request.FieldContentStorageKey:
+		return m.ContentStorageKey()
+	case request.FieldContentSavedAt:
+		return m.ContentSavedAt()
 	}
 	return nil, false
 }
@@ -13644,6 +14123,14 @@ func (m *RequestMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldMetricsLatencyMs(ctx)
 	case request.FieldMetricsFirstTokenLatencyMs:
 		return m.OldMetricsFirstTokenLatencyMs(ctx)
+	case request.FieldContentSaved:
+		return m.OldContentSaved(ctx)
+	case request.FieldContentStorageID:
+		return m.OldContentStorageID(ctx)
+	case request.FieldContentStorageKey:
+		return m.OldContentStorageKey(ctx)
+	case request.FieldContentSavedAt:
+		return m.OldContentSavedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Request field %s", name)
 }
@@ -13793,6 +14280,34 @@ func (m *RequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetricsFirstTokenLatencyMs(v)
 		return nil
+	case request.FieldContentSaved:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentSaved(v)
+		return nil
+	case request.FieldContentStorageID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentStorageID(v)
+		return nil
+	case request.FieldContentStorageKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentStorageKey(v)
+		return nil
+	case request.FieldContentSavedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContentSavedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Request field %s", name)
 }
@@ -13807,6 +14322,9 @@ func (m *RequestMutation) AddedFields() []string {
 	if m.addmetrics_first_token_latency_ms != nil {
 		fields = append(fields, request.FieldMetricsFirstTokenLatencyMs)
 	}
+	if m.addcontent_storage_id != nil {
+		fields = append(fields, request.FieldContentStorageID)
+	}
 	return fields
 }
 
@@ -13819,6 +14337,8 @@ func (m *RequestMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedMetricsLatencyMs()
 	case request.FieldMetricsFirstTokenLatencyMs:
 		return m.AddedMetricsFirstTokenLatencyMs()
+	case request.FieldContentStorageID:
+		return m.AddedContentStorageID()
 	}
 	return nil, false
 }
@@ -13841,6 +14361,13 @@ func (m *RequestMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddMetricsFirstTokenLatencyMs(v)
+		return nil
+	case request.FieldContentStorageID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddContentStorageID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Request numeric field %s", name)
@@ -13879,6 +14406,15 @@ func (m *RequestMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(request.FieldMetricsFirstTokenLatencyMs) {
 		fields = append(fields, request.FieldMetricsFirstTokenLatencyMs)
+	}
+	if m.FieldCleared(request.FieldContentStorageID) {
+		fields = append(fields, request.FieldContentStorageID)
+	}
+	if m.FieldCleared(request.FieldContentStorageKey) {
+		fields = append(fields, request.FieldContentStorageKey)
+	}
+	if m.FieldCleared(request.FieldContentSavedAt) {
+		fields = append(fields, request.FieldContentSavedAt)
 	}
 	return fields
 }
@@ -13923,6 +14459,15 @@ func (m *RequestMutation) ClearField(name string) error {
 		return nil
 	case request.FieldMetricsFirstTokenLatencyMs:
 		m.ClearMetricsFirstTokenLatencyMs()
+		return nil
+	case request.FieldContentStorageID:
+		m.ClearContentStorageID()
+		return nil
+	case request.FieldContentStorageKey:
+		m.ClearContentStorageKey()
+		return nil
+	case request.FieldContentSavedAt:
+		m.ClearContentSavedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Request nullable field %s", name)
@@ -13991,6 +14536,18 @@ func (m *RequestMutation) ResetField(name string) error {
 		return nil
 	case request.FieldMetricsFirstTokenLatencyMs:
 		m.ResetMetricsFirstTokenLatencyMs()
+		return nil
+	case request.FieldContentSaved:
+		m.ResetContentSaved()
+		return nil
+	case request.FieldContentStorageID:
+		m.ResetContentStorageID()
+		return nil
+	case request.FieldContentStorageKey:
+		m.ResetContentStorageKey()
+		return nil
+	case request.FieldContentSavedAt:
+		m.ResetContentSavedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Request field %s", name)

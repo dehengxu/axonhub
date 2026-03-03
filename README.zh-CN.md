@@ -167,6 +167,7 @@
 | **ZAI**                | ✅ 已完成   | -                            | Image Generation |
 | **AWS Bedrock**        | 🔄 测试中  | Claude on AWS                | OpenAI, Anthropic, Gemini |
 | **Google Cloud**       | 🔄 测试中  | Claude on GCP                | OpenAI, Anthropic, Gemini |
+| **NanoGPT**            | ✅ 已完成  | 多种模型、图像生成             | OpenAI, Anthropic, Gemini, Image Generation |
 
 ---
 
@@ -184,7 +185,7 @@ cd axonhub_*
 ./axonhub
 
 # 打开 http://localhost:8090
-# 默认登录：admin@axonhub.com / admin
+# 首次运行：按照初始化向导设置系统（创建管理员账号，密码至少需要 6 位）
 ```
 
 就这样！现在配置你的第一个 AI 渠道，开始通过 AxonHub 调用模型。
@@ -440,7 +441,7 @@ AxonHub 提供灵活的模型管理系统，支持通过模型关联将抽象模
 
 ## 🛠️ 开发指南
 
-详细的开发说明、架构设计和贡献指南，请查看 [docs/zh/guides/development.md](docs/zh/guides/development.md)。
+详细的开发说明、架构设计和贡献指南，请查看 [docs/zh/development/development.md](docs/zh/development/development.md)。
 
 ---
 

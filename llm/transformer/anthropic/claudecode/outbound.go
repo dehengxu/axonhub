@@ -44,6 +44,7 @@ var claudeCodeHeaders = [][]string{
 type Params struct {
 	TokenProvider oauth.TokenGetter // OAuth token provider (required)
 	BaseURL       string            // Base URL for the Anthropic API (optional)
+	IsOfficial    bool              // Whether the channel uses official OAuth credentials
 }
 
 // NewOutboundTransformer creates a new ClaudeCodeTransformer with OAuth authentication.
@@ -67,8 +68,9 @@ func NewOutboundTransformer(params Params) (*ClaudeCodeTransformer, error) {
 	}
 
 	return &ClaudeCodeTransformer{
-		Outbound: outbound,
-		tokens:   params.TokenProvider,
+		Outbound:   outbound,
+		tokens:     params.TokenProvider,
+		isOfficial: params.IsOfficial,
 	}, nil
 }
 
@@ -76,7 +78,8 @@ func NewOutboundTransformer(params Params) (*ClaudeCodeTransformer, error) {
 // It wraps an OutboundTransformer and adds Claude Code specific headers and system message.
 type ClaudeCodeTransformer struct {
 	transformer.Outbound
-	tokens oauth.TokenGetter
+	tokens     oauth.TokenGetter
+	isOfficial bool
 }
 
 // TransformRequest overrides the base TransformRequest to add Claude Code specific modifications.
@@ -117,8 +120,11 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 	// Apply structured transformations before serialization
 	reqCopy = *disableThinkingIfToolChoiceForcedStructured(&reqCopy)
 	reqCopy = *injectClaudeCodeSystemMessageStructured(&reqCopy)
+	if t.isOfficial {
+		reqCopy = *ensureBillingSystemMessageCCH(&reqCopy)
+	}
 	reqCopy = *injectFakeUserIDStructured(&reqCopy)
-	if isClaudeOAuthToken(apiKey) && !keepClientUA {
+	if t.isOfficial && !keepClientUA {
 		reqCopy = *applyClaudeToolPrefixStructured(&reqCopy, toolPrefix)
 	}
 
@@ -163,7 +169,7 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 		httpReq.Metadata = make(map[string]string)
 	}
 
-	if isClaudeOAuthToken(apiKey) && !keepClientUA {
+	if t.isOfficial && !keepClientUA {
 		httpReq.Metadata["strip_tool_prefix"] = "true"
 	}
 

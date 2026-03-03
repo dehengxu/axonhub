@@ -80,7 +80,9 @@ var schemaGraph = func() *sqlgraph.Schema {
 			channel.FieldCredentials:             {Type: field.TypeJSON, Column: channel.FieldCredentials},
 			channel.FieldDisabledAPIKeys:         {Type: field.TypeJSON, Column: channel.FieldDisabledAPIKeys},
 			channel.FieldSupportedModels:         {Type: field.TypeJSON, Column: channel.FieldSupportedModels},
+			channel.FieldManualModels:            {Type: field.TypeJSON, Column: channel.FieldManualModels},
 			channel.FieldAutoSyncSupportedModels: {Type: field.TypeBool, Column: channel.FieldAutoSyncSupportedModels},
+			channel.FieldAutoSyncModelPattern:    {Type: field.TypeString, Column: channel.FieldAutoSyncModelPattern},
 			channel.FieldTags:                    {Type: field.TypeJSON, Column: channel.FieldTags},
 			channel.FieldDefaultTestModel:        {Type: field.TypeString, Column: channel.FieldDefaultTestModel},
 			channel.FieldPolicies:                {Type: field.TypeJSON, Column: channel.FieldPolicies},
@@ -262,6 +264,7 @@ var schemaGraph = func() *sqlgraph.Schema {
 			prompt.FieldRole:        {Type: field.TypeString, Column: prompt.FieldRole},
 			prompt.FieldContent:     {Type: field.TypeString, Column: prompt.FieldContent},
 			prompt.FieldStatus:      {Type: field.TypeEnum, Column: prompt.FieldStatus},
+			prompt.FieldOrder:       {Type: field.TypeInt, Column: prompt.FieldOrder},
 			prompt.FieldSettings:    {Type: field.TypeJSON, Column: prompt.FieldSettings},
 		},
 	}
@@ -319,6 +322,10 @@ var schemaGraph = func() *sqlgraph.Schema {
 			request.FieldClientIP:                   {Type: field.TypeString, Column: request.FieldClientIP},
 			request.FieldMetricsLatencyMs:           {Type: field.TypeInt64, Column: request.FieldMetricsLatencyMs},
 			request.FieldMetricsFirstTokenLatencyMs: {Type: field.TypeInt64, Column: request.FieldMetricsFirstTokenLatencyMs},
+			request.FieldContentSaved:               {Type: field.TypeBool, Column: request.FieldContentSaved},
+			request.FieldContentStorageID:           {Type: field.TypeInt, Column: request.FieldContentStorageID},
+			request.FieldContentStorageKey:          {Type: field.TypeString, Column: request.FieldContentStorageKey},
+			request.FieldContentSavedAt:             {Type: field.TypeTime, Column: request.FieldContentSavedAt},
 		},
 	}
 	graph.Nodes[12] = &sqlgraph.Node{
@@ -1455,9 +1462,19 @@ func (f *ChannelFilter) WhereSupportedModels(p entql.BytesP) {
 	f.Where(p.Field(channel.FieldSupportedModels))
 }
 
+// WhereManualModels applies the entql json.RawMessage predicate on the manual_models field.
+func (f *ChannelFilter) WhereManualModels(p entql.BytesP) {
+	f.Where(p.Field(channel.FieldManualModels))
+}
+
 // WhereAutoSyncSupportedModels applies the entql bool predicate on the auto_sync_supported_models field.
 func (f *ChannelFilter) WhereAutoSyncSupportedModels(p entql.BoolP) {
 	f.Where(p.Field(channel.FieldAutoSyncSupportedModels))
+}
+
+// WhereAutoSyncModelPattern applies the entql string predicate on the auto_sync_model_pattern field.
+func (f *ChannelFilter) WhereAutoSyncModelPattern(p entql.StringP) {
+	f.Where(p.Field(channel.FieldAutoSyncModelPattern))
 }
 
 // WhereTags applies the entql json.RawMessage predicate on the tags field.
@@ -2473,6 +2490,11 @@ func (f *PromptFilter) WhereStatus(p entql.StringP) {
 	f.Where(p.Field(prompt.FieldStatus))
 }
 
+// WhereOrder applies the entql int predicate on the order field.
+func (f *PromptFilter) WhereOrder(p entql.IntP) {
+	f.Where(p.Field(prompt.FieldOrder))
+}
+
 // WhereSettings applies the entql json.RawMessage predicate on the settings field.
 func (f *PromptFilter) WhereSettings(p entql.BytesP) {
 	f.Where(p.Field(prompt.FieldSettings))
@@ -2734,6 +2756,26 @@ func (f *RequestFilter) WhereMetricsLatencyMs(p entql.Int64P) {
 // WhereMetricsFirstTokenLatencyMs applies the entql int64 predicate on the metrics_first_token_latency_ms field.
 func (f *RequestFilter) WhereMetricsFirstTokenLatencyMs(p entql.Int64P) {
 	f.Where(p.Field(request.FieldMetricsFirstTokenLatencyMs))
+}
+
+// WhereContentSaved applies the entql bool predicate on the content_saved field.
+func (f *RequestFilter) WhereContentSaved(p entql.BoolP) {
+	f.Where(p.Field(request.FieldContentSaved))
+}
+
+// WhereContentStorageID applies the entql int predicate on the content_storage_id field.
+func (f *RequestFilter) WhereContentStorageID(p entql.IntP) {
+	f.Where(p.Field(request.FieldContentStorageID))
+}
+
+// WhereContentStorageKey applies the entql string predicate on the content_storage_key field.
+func (f *RequestFilter) WhereContentStorageKey(p entql.StringP) {
+	f.Where(p.Field(request.FieldContentStorageKey))
+}
+
+// WhereContentSavedAt applies the entql time.Time predicate on the content_saved_at field.
+func (f *RequestFilter) WhereContentSavedAt(p entql.TimeP) {
+	f.Where(p.Field(request.FieldContentSavedAt))
 }
 
 // WhereHasAPIKey applies a predicate to check if query has an edge api_key.
