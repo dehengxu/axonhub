@@ -24,6 +24,16 @@ type ChannelModelsCandidate struct {
 	Models   []biz.ChannelModelEntry
 }
 
+// resolvedAssociationCandidate keeps the association-level metadata produced by
+// resolution so request-dependent filtering can run afterwards without mixing
+// conditional logic into association matching.
+type resolvedAssociationCandidate struct {
+	channel  *biz.Channel
+	priority int
+	models   []biz.ChannelModelEntry
+	when     *objects.ModelAssociationWhen
+}
+
 // CandidateSelector defines the interface for selecting channel model candidates.
 type CandidateSelector interface {
 	Select(ctx context.Context, req *llm.Request) ([]*ChannelModelsCandidate, error)
@@ -31,10 +41,12 @@ type CandidateSelector interface {
 
 // associationCacheEntry stores cached association resolution results.
 type associationCacheEntry struct {
-	candidates              []*ChannelModelsCandidate
+	associations            []*objects.ModelAssociation
+	candidates              []*resolvedAssociationCandidate
 	channelCount            int
 	latestChannelUpdateTime time.Time
-	latestModelUpdatedAt    time.Time
+	latestModelUpdateTime   time.Time
+	channelCacheVersion     int64
 	cachedAt                time.Time
 }
 
@@ -136,9 +148,20 @@ func (s *DefaultSelector) selectModelCandidates(ctx context.Context, req *llm.Re
 		)
 	}
 
-	candidates, err := s.resolveAssociations(ctx, model, model.Settings.Associations)
+	resolvedCandidates, err := s.resolveAssociations(ctx, model, model.Settings.Associations)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve associations: %w", err)
+	}
+
+	candidates := filterResolvedCandidatesForRequest(ctx, req, resolvedCandidates)
+	if len(candidates) == 0 {
+		if log.DebugEnabled(ctx) {
+			log.Debug(ctx, "no candidates matched request conditions",
+				log.String("model", req.Model),
+			)
+		}
+
+		return []*ChannelModelsCandidate{}, nil
 	}
 
 	if log.DebugEnabled(ctx) {
@@ -152,13 +175,23 @@ func (s *DefaultSelector) selectModelCandidates(ctx context.Context, req *llm.Re
 	return candidates, nil
 }
 
-// resolveAssociations uses biz.MatchAssociations to resolve model associations
-// and converts the results to ChannelModelCandidate.
-// Results are cached per model ID and invalidated when channel count, latest update time, or model update time changes.
-func (s *DefaultSelector) resolveAssociations(ctx context.Context, model *ent.Model, associations []*objects.ModelAssociation) ([]*ChannelModelsCandidate, error) {
+// resolveAssociations resolves model associations into an intermediate form that
+// still retains each association's `When` condition. The caller can then apply
+// request-specific filtering in a dedicated pass after structural matching.
+// Results are cached per model ID and invalidated when channel count, latest
+// update time, or model update time changes.
+func (s *DefaultSelector) resolveAssociations(
+	ctx context.Context,
+	model *ent.Model,
+	associations []*objects.ModelAssociation,
+) ([]*resolvedAssociationCandidate, error) {
+	// Read version before channels to avoid storing an older channel snapshot with
+	// a newer cache version if the enabled-channels cache swaps between the reads.
+	// The inverse interleaving only causes a conservative cache miss.
+	channelCacheVersion := s.ChannelService.GetCacheVersion()
 	channels := s.ChannelService.GetEnabledChannels()
 	if len(channels) == 0 {
-		return []*ChannelModelsCandidate{}, nil
+		return []*resolvedAssociationCandidate{}, nil
 	}
 
 	if log.DebugEnabled(ctx) {
@@ -173,26 +206,28 @@ func (s *DefaultSelector) resolveAssociations(ctx context.Context, model *ent.Mo
 	modelID := model.ModelID
 	channelCount := len(channels)
 	latestChannelUpdateTime := s.getLatestChannelUpdateTime(channels)
-	latestModelUpdatedAt := model.UpdatedAt
+	latestModelUpdateTime := model.UpdatedAt
 
 	// Try to get from cache
 	s.cacheMu.RLock()
 
 	if entry, ok := s.associationCache[modelID]; ok {
 		// Check if cache is still valid:
-		// 1. Channel count hasn't changed
-		// 2. No channel has been updated
-		// 3. Model hasn't been updated
-		// 4. Cache hasn't expired (5 minutes)
-		if entry.channelCount == channelCount &&
+		// 1. Channel cache version hasn't changed (most reliable: detects any cache swap)
+		// 2. Channel count hasn't changed
+		// 3. No channel has been updated
+		// 4. Model hasn't been updated
+		// 5. Cache hasn't expired (5 minutes)
+		if entry.channelCacheVersion == channelCacheVersion &&
+			entry.channelCount == channelCount &&
 			entry.latestChannelUpdateTime.Equal(latestChannelUpdateTime) &&
-			entry.latestModelUpdatedAt.Equal(latestModelUpdatedAt) &&
+			entry.latestModelUpdateTime.Equal(latestModelUpdateTime) &&
 			time.Since(entry.cachedAt) < associationCacheTTL {
 			s.cacheMu.RUnlock()
 
 			if log.DebugEnabled(ctx) {
 				log.Debug(ctx, "using cached association resolution",
-					log.String("modelID", modelID),
+					log.String("model_id", modelID),
 					log.Int("candidates", len(entry.candidates)),
 					log.Duration("age", time.Since(entry.cachedAt)))
 			}
@@ -203,26 +238,30 @@ func (s *DefaultSelector) resolveAssociations(ctx context.Context, model *ent.Mo
 
 	s.cacheMu.RUnlock()
 
-	// Cache miss or invalid, resolve associations
-	connections := biz.MatchAssociations(associations, channels)
+	// Cache miss or invalid, resolve associations first. Request-specific `When`
+	// filtering is intentionally deferred to a separate pass afterwards.
+	matches := biz.MatchAssociations(associations, channels)
 
 	if log.DebugEnabled(ctx) {
 		log.Debug(ctx, "association matching results",
 			log.String("model", model.ModelID),
-			log.Int("connections_found", len(connections)),
-			log.Any("connections", lo.Map(connections, func(conn *biz.ModelChannelConnection, _ int) map[string]any {
-				return map[string]any{
-					"channel_id":   conn.Channel.ID,
-					"channel_name": conn.Channel.Name,
-					"priority":     conn.Priority,
-					"model_count":  len(conn.Models),
-					"models": lo.Map(conn.Models, func(entry biz.ChannelModelEntry, _ int) map[string]any {
-						return map[string]any{
-							"request_model": entry.RequestModel,
-							"actual_model":  entry.ActualModel,
-						}
-					}),
-				}
+			log.Int("matched_associations", len(matches)),
+			log.Any("connections", lo.FlatMap(matches, func(match *biz.AssociationMatch, _ int) []map[string]any {
+				return lo.Map(match.Connections, func(conn *biz.ModelChannelConnection, _ int) map[string]any {
+					return map[string]any{
+						"channel_id":   conn.Channel.ID,
+						"channel_name": conn.Channel.Name,
+						"priority":     conn.Priority,
+						"model_count":  len(conn.Models),
+						"has_when":     match.Association != nil && match.Association.When != nil,
+						"models": lo.Map(conn.Models, func(entry biz.ChannelModelEntry, _ int) map[string]any {
+							return map[string]any{
+								"request_model": entry.RequestModel,
+								"actual_model":  entry.ActualModel,
+							}
+						}),
+					}
+				})
 			})),
 		)
 	}
@@ -233,57 +272,34 @@ func (s *DefaultSelector) resolveAssociations(ctx context.Context, model *ent.Mo
 		channelMap[ch.ID] = ch
 	}
 
-	type candidateKey struct {
-		channelID int
-		priority  int
-	}
-
-	candidates := make([]*ChannelModelsCandidate, 0, len(connections))
-	candidateIndexByKey := make(map[candidateKey]int, len(connections))
-	seenActualModelsByKey := make(map[candidateKey]map[string]struct{}, len(connections))
-
-	for _, conn := range connections {
-		bizCh, found := channelMap[conn.Channel.ID]
-		if !found || bizCh == nil {
-			continue
-		}
-
-		key := candidateKey{channelID: bizCh.ID, priority: conn.Priority}
-
-		idx, ok := candidateIndexByKey[key]
-		if !ok {
-			candidates = append(candidates, &ChannelModelsCandidate{
-				Channel:  bizCh,
-				Priority: conn.Priority,
-				Models:   []biz.ChannelModelEntry{},
-			})
-			idx = len(candidates) - 1
-			candidateIndexByKey[key] = idx
-			seenActualModelsByKey[key] = make(map[string]struct{})
-		}
-
-		seenActualModels := seenActualModelsByKey[key]
-
-		for _, entry := range conn.Models {
-			if _, exists := seenActualModels[entry.ActualModel]; exists {
+	resolvedCandidates := make([]*resolvedAssociationCandidate, 0, len(matches))
+	for _, match := range matches {
+		for _, conn := range match.Connections {
+			bizCh, found := channelMap[conn.Channel.ID]
+			if !found || bizCh == nil {
 				continue
 			}
 
-			seenActualModels[entry.ActualModel] = struct{}{}
-			candidates[idx].Models = append(candidates[idx].Models, entry)
+			resolvedCandidates = append(resolvedCandidates, &resolvedAssociationCandidate{
+				channel:  bizCh,
+				priority: conn.Priority,
+				models:   append([]biz.ChannelModelEntry(nil), conn.Models...),
+				when:     match.Association.When,
+			})
 		}
 	}
 
 	if log.DebugEnabled(ctx) {
-		log.Debug(ctx, "final candidates after processing",
-			log.String("model", model.ModelID),
-			log.Int("final_candidates", len(candidates)),
-			log.Any("final_candidates_detail", lo.Map(candidates, func(candidate *ChannelModelsCandidate, _ int) map[string]any {
+		log.Debug(ctx, "resolved association candidates",
+			log.String("model", modelID),
+			log.Int("resolved_candidates", len(resolvedCandidates)),
+			log.Any("resolved_candidates_detail", lo.Map(resolvedCandidates, func(candidate *resolvedAssociationCandidate, _ int) map[string]any {
 				return map[string]any{
-					"channel_id":   candidate.Channel.ID,
-					"channel_name": candidate.Channel.Name,
-					"priority":     candidate.Priority,
-					"model_count":  len(candidate.Models),
+					"channel_id":   candidate.channel.ID,
+					"channel_name": candidate.channel.Name,
+					"priority":     candidate.priority,
+					"model_count":  len(candidate.models),
+					"has_when":     candidate.when != nil,
 				}
 			})),
 		)
@@ -292,21 +308,81 @@ func (s *DefaultSelector) resolveAssociations(ctx context.Context, model *ent.Mo
 	// Update cache
 	s.cacheMu.Lock()
 	s.associationCache[modelID] = &associationCacheEntry{
-		candidates:              candidates,
+		associations:            append([]*objects.ModelAssociation(nil), associations...),
+		candidates:              resolvedCandidates,
 		channelCount:            channelCount,
 		latestChannelUpdateTime: latestChannelUpdateTime,
-		latestModelUpdatedAt:    latestModelUpdatedAt,
+		latestModelUpdateTime:   latestModelUpdateTime,
+		channelCacheVersion:     channelCacheVersion,
 		cachedAt:                time.Now(),
 	}
 	s.cacheMu.Unlock()
 
 	if log.DebugEnabled(ctx) {
 		log.Debug(ctx, "cached association resolution",
-			log.String("modelID", modelID),
-			log.Int("candidates", len(candidates)))
+			log.String("cache_key", model.ModelID),
+			log.Int("candidates", len(resolvedCandidates)))
 	}
 
-	return candidates, nil
+	return resolvedCandidates, nil
+}
+
+func aggregateChannelModelCandidates(resolvedCandidates []*resolvedAssociationCandidate) []*ChannelModelsCandidate {
+	type candidateKey struct {
+		channelID int
+		priority  int
+	}
+
+	type channelModelKey struct {
+		channelID   int
+		actualModel string
+	}
+
+	candidates := make([]*ChannelModelsCandidate, 0, len(resolvedCandidates))
+	candidateIndexByKey := make(map[candidateKey]int, len(resolvedCandidates))
+	seenChannelModels := make(map[channelModelKey]struct{}, len(resolvedCandidates))
+
+	for _, resolved := range resolvedCandidates {
+		if resolved == nil || resolved.channel == nil {
+			continue
+		}
+
+		key := candidateKey{channelID: resolved.channel.ID, priority: resolved.priority}
+
+		modelsToAppend := make([]biz.ChannelModelEntry, 0, len(resolved.models))
+		for _, entry := range resolved.models {
+			modelKey := channelModelKey{
+				channelID:   resolved.channel.ID,
+				actualModel: entry.ActualModel,
+			}
+			if _, exists := seenChannelModels[modelKey]; exists {
+				continue
+			}
+
+			seenChannelModels[modelKey] = struct{}{}
+
+			modelsToAppend = append(modelsToAppend, entry)
+		}
+
+		if len(modelsToAppend) == 0 {
+			continue
+		}
+
+		idx, ok := candidateIndexByKey[key]
+		if !ok {
+			candidates = append(candidates, &ChannelModelsCandidate{
+				Channel:  resolved.channel,
+				Priority: resolved.priority,
+				Models:   []biz.ChannelModelEntry{},
+			})
+			idx = len(candidates) - 1
+			candidateIndexByKey[key] = idx
+		}
+
+		candidates[idx].Models = append(candidates[idx].Models, modelsToAppend...)
+	}
+
+	return candidates
 }
 
 // getLatestChannelUpdateTime returns the latest update time among all channels.
@@ -420,7 +496,8 @@ func (s *LoadBalancedSelector) Select(ctx context.Context, req *llm.Request) ([]
 		group := priorityGroups[p]
 
 		// Apply load balancing to sort candidates within this priority group.
-		sortedCandidates := s.loadBalancer.Sort(ctx, group, req.Model)
+		useStream := req.Stream != nil && *req.Stream
+		sortedCandidates := s.loadBalancer.Sort(ctx, group, req.Model, useStream)
 
 		// Add candidates, but stop if we have enough
 		remaining := requiredCount - len(result)
@@ -448,18 +525,19 @@ func (s *LoadBalancedSelector) Select(ctx context.Context, req *llm.Request) ([]
 }
 
 // TagsFilterSelector is a decorator that filters candidates by allowed channel tags.
-// Uses OR logic: a candidate passes if its channel contains any of the allowed tags.
 type TagsFilterSelector struct {
-	wrapped     CandidateSelector
-	allowedTags []string
+	wrapped   CandidateSelector
+	tags      []string
+	matchMode objects.ChannelTagsMatchMode
 }
 
-// WithTagsFilterSelector creates a selector that filters by tags.
-// If allowedTags is empty, all candidates from the wrapped selector are returned.
-func WithTagsFilterSelector(wrapped CandidateSelector, allowedTags []string) *TagsFilterSelector {
+// WithChannelTagsFilterSelector creates a selector that filters by tags and match mode.
+// If tags is empty, all candidates from the wrapped selector are returned.
+func WithChannelTagsFilterSelector(wrapped CandidateSelector, tags []string, matchMode objects.ChannelTagsMatchMode) *TagsFilterSelector {
 	return &TagsFilterSelector{
-		wrapped:     wrapped,
-		allowedTags: allowedTags,
+		wrapped:   wrapped,
+		tags:      tags,
+		matchMode: matchMode,
 	}
 }
 
@@ -469,28 +547,19 @@ func (s *TagsFilterSelector) Select(ctx context.Context, req *llm.Request) ([]*C
 		return nil, err
 	}
 
-	// If no allowed tags specified, return all candidates
-	if len(s.allowedTags) == 0 {
+	if len(s.tags) == 0 {
 		return candidates, nil
 	}
 
-	// Build allowed set for O(1) lookup
-	allowedSet := lo.SliceToMap(s.allowedTags, func(tag string) (string, struct{}) {
-		return tag, struct{}{}
-	})
-
-	// Filter candidates: keep only those whose channel has at least one allowed tag (OR logic)
 	candidates = lo.Filter(candidates, func(c *ChannelModelsCandidate, _ int) bool {
-		for _, tag := range c.Channel.Tags {
-			if _, ok := allowedSet[tag]; ok {
-				return true
-			}
-		}
-
-		return false
+		return matchChannelTagsFilter(s.tags, s.matchMode, c.Channel.Tags)
 	})
 
 	return candidates, nil
+}
+
+func matchChannelTagsFilter(allowedTags []string, matchMode objects.ChannelTagsMatchMode, channelTags []string) bool {
+	return objects.MatchChannelTags(allowedTags, matchMode, channelTags)
 }
 
 // SpecifiedChannelSelector allows selecting specific channels (including disabled ones) for testing.

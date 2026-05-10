@@ -15,6 +15,7 @@ import (
 	"github.com/looplj/axonhub/llm/pipeline"
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
+	"github.com/looplj/axonhub/llm/transformer/shared"
 )
 
 // OutboundPersistentStream wraps a stream and tracks all responses for final saving to database.
@@ -35,6 +36,7 @@ type OutboundPersistentStream struct {
 	perf           *biz.PerformanceRecord
 	responseChunks []*httpclient.StreamEvent
 	closed         bool
+	state          *PersistenceState
 }
 
 var _ streams.Stream[*httpclient.StreamEvent] = (*OutboundPersistentStream)(nil)
@@ -48,8 +50,9 @@ func NewOutboundPersistentStream(
 	usageLogService *biz.UsageLogService,
 	outboundTransformer transformer.Outbound,
 	perf *biz.PerformanceRecord,
+	state *PersistenceState,
 ) *OutboundPersistentStream {
-	return &OutboundPersistentStream{
+	s := &OutboundPersistentStream{
 		ctx:             ctx,
 		stream:          stream,
 		request:         request,
@@ -60,7 +63,10 @@ func NewOutboundPersistentStream(
 		perf:            perf,
 		responseChunks:  make([]*httpclient.StreamEvent, 0),
 		closed:          false,
+		state:           state,
 	}
+
+	return s
 }
 
 func (ts *OutboundPersistentStream) Next() bool {
@@ -71,6 +77,12 @@ func (ts *OutboundPersistentStream) Current() *httpclient.StreamEvent {
 	event := ts.stream.Current()
 	if event != nil {
 		ts.responseChunks = append(ts.responseChunks, event)
+		// Check if this is a terminal event, which indicates the stream completed successfully.
+		// For Chat Completions API this is the raw [DONE] event; for Responses API this is
+		// response.completed; for Anthropic Messages API this is message_stop.
+		if isTerminalStreamEvent(event) {
+			ts.state.StreamCompleted = true
+		}
 	}
 
 	return event
@@ -88,11 +100,28 @@ func (ts *OutboundPersistentStream) Close() error {
 	ts.closed = true
 	ctx := ts.ctx
 
-	log.Debug(ctx, "Closing persistent stream", log.Int("chunk_count", len(ts.responseChunks)))
+	log.Debug(ctx, "Closing persistent stream", log.Int("chunk_count", len(ts.responseChunks)), log.Bool("received_done", ts.state.StreamCompleted))
 
 	streamErr := ts.stream.Err()
-	if streamErr != nil {
-		// Use context without cancellation to ensure persistence even if client canceled
+	ctxErr := ctx.Err()
+
+	// If we received the [DONE] event, treat the stream as successfully completed
+	// even if there's a context cancellation error. This handles the case where
+	// the client disconnects immediately after receiving the last chunk.
+	if ts.state.StreamCompleted {
+		ts.logFinalizationDecision(ctx, "terminal_event_completed", streamErr, ctxErr, true, nil)
+		// Stream completed successfully - perform final persistence
+		log.Debug(ctx, "Stream completed successfully (received [DONE]), performing final persistence")
+		ts.persistResponseChunks(ctx)
+
+		return ts.stream.Close()
+	}
+
+	// If there's an explicit stream error (not just context cancellation), treat as failure
+	// regardless of what chunks we have. Stream errors indicate the upstream response
+	// was incomplete or corrupted.
+	if streamErr != nil && !errors.Is(streamErr, context.Canceled) && !errors.Is(streamErr, context.DeadlineExceeded) {
+		ts.logFinalizationDecision(ctx, "explicit_stream_error", streamErr, ctxErr, false, nil)
 		persistCtx, cancel := xcontext.DetachWithTimeout(ctx, 10*time.Second)
 		defer cancel()
 
@@ -105,12 +134,98 @@ func (ts *OutboundPersistentStream) Close() error {
 		return ts.stream.Close()
 	}
 
+	var responseBody []byte
+	var meta llm.ResponseMeta
+	var aggErr error
+	aggregatedCompleted := false
+
+	if len(ts.responseChunks) > 0 {
+		responseBody, meta, aggErr = ts.transformer.AggregateStreamChunks(context.WithoutCancel(ctx), ts.responseChunks)
+		aggregatedCompleted = aggErr == nil && isCompletedAggregated(meta)
+		ts.logFinalizationDecision(ctx, "aggregated_outbound_chunks", streamErr, ctxErr, aggregatedCompleted, aggErr)
+		if aggregatedCompleted {
+			log.Debug(ctx, "Stream has valid complete response without terminal event, treating as completed")
+			ts.state.StreamCompleted = true
+		}
+	} else {
+		ts.logFinalizationDecision(ctx, "no_outbound_chunks_to_aggregate", streamErr, ctxErr, false, nil)
+	}
+
+	// ended without a terminal event / complete aggregated response.
+	if (ctxErr != nil || streamErr != nil) && !ts.state.StreamCompleted {
+		ts.logFinalizationDecision(ctx, "incomplete_stream_with_error", streamErr, ctxErr, aggregatedCompleted, aggErr)
+		persistCtx, cancel := xcontext.DetachWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		errToReport := streamErr
+		if errToReport == nil {
+			errToReport = ctxErr
+		}
+		if errToReport == nil {
+			errToReport = errors.New("stream ended without terminal event or completed response")
+		}
+
+		if ts.requestExec != nil {
+			if err := ts.RequestService.UpdateRequestExecutionStatusFromError(persistCtx, ts.requestExec.ID, errToReport); err != nil {
+				log.Warn(persistCtx, "Failed to update request execution status from error", log.Cause(err))
+			}
+		}
+
+		return ts.stream.Close()
+	}
+
+	if !ts.state.StreamCompleted {
+		ts.logFinalizationDecision(ctx, "incomplete_stream_without_terminal_event", streamErr, ctxErr, aggregatedCompleted, aggErr)
+		persistCtx, cancel := xcontext.DetachWithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		errToReport := errors.New("stream ended without terminal event or completed response")
+		if ts.requestExec != nil {
+			if err := ts.RequestService.UpdateRequestExecutionStatusFromError(persistCtx, ts.requestExec.ID, errToReport); err != nil {
+				log.Warn(persistCtx, "Failed to update request execution status from error", log.Cause(err))
+			}
+		}
+
+		return ts.stream.Close()
+	}
+
 	// Stream completed successfully - perform final persistence
 	log.Debug(ctx, "Stream completed successfully, performing final persistence")
+	decision := "completed_after_aggregation"
+	if len(responseBody) == 0 {
+		decision = "completed_via_chunk_persistence"
+	}
+	ts.logFinalizationDecision(ctx, decision, streamErr, ctxErr, aggregatedCompleted, aggErr)
 
-	ts.persistResponseChunks(ctx)
+	if len(responseBody) > 0 {
+		ts.persistAggregatedResponse(context.WithoutCancel(ctx), responseBody, meta)
+	} else {
+		ts.persistResponseChunks(ctx)
+	}
 
 	return ts.stream.Close()
+}
+
+func (ts *OutboundPersistentStream) logFinalizationDecision(ctx context.Context, decision string, streamErr error, ctxErr error, aggregatedCompleted bool, aggregatedErr error) {
+	fields := []log.Field{
+		log.String("decision", decision),
+		log.Bool("terminal_event_seen", ts.state.StreamCompleted),
+		log.Int("chunk_count", len(ts.responseChunks)),
+		log.String("api_format", string(ts.transformer.APIFormat())),
+		log.Bool("aggregated_completed", aggregatedCompleted),
+	}
+
+	if streamErr != nil {
+		fields = append(fields, log.String("stream_err", streamErr.Error()))
+	}
+	if ctxErr != nil {
+		fields = append(fields, log.String("ctx_err", ctxErr.Error()))
+	}
+	if aggregatedErr != nil {
+		fields = append(fields, log.String("aggregated_err", aggregatedErr.Error()))
+	}
+
+	log.Debug(ctx, "Outbound stream finalization decision", fields...)
 }
 
 func (ts *OutboundPersistentStream) persistResponseChunks(ctx context.Context) {
@@ -132,57 +247,69 @@ func (ts *OutboundPersistentStream) persistResponseChunks(ctx context.Context) {
 			return
 		}
 
-		// Try to create usage log from aggregated response
-		if usage := meta.Usage; usage != nil {
-			_, err = ts.UsageLogService.CreateUsageLogFromRequest(persistCtx, ts.request, ts.requestExec, usage)
-			if err != nil {
-				log.Warn(persistCtx, "Failed to create usage log from request", log.Cause(err))
-			}
-		}
-
-		// Build latency metrics from performance record
-		var metrics *biz.LatencyMetrics
-
-		if ts.perf != nil {
-			firstTokenLatencyMs, requestLatencyMs, _ := ts.perf.Calculate()
-
-			metrics = &biz.LatencyMetrics{
-				LatencyMs: &requestLatencyMs,
-			}
-			if ts.perf.Stream && ts.perf.FirstTokenTime != nil {
-				metrics.FirstTokenLatencyMs = &firstTokenLatencyMs
-			}
-		}
-
-		err = ts.RequestService.UpdateRequestExecutionCompleted(
-			persistCtx,
-			ts.requestExec.ID,
-			meta.ID,
-			responseBody,
-			metrics,
-		)
-		if err != nil {
-			log.Warn(
-				persistCtx,
-				"Failed to update request execution with chunks, trying basic completion",
-				log.Cause(err),
-			)
-		}
-
-		// Save all response chunks at once
-		if err := ts.RequestService.SaveRequestExecutionChunks(persistCtx, ts.requestExec.ID, ts.responseChunks); err != nil {
-			log.Warn(persistCtx, "Failed to save request execution chunks", log.Cause(err))
-		}
+		ts.persistAggregatedResponse(persistCtx, responseBody, meta)
 	}
 }
 
-// PersistentOutboundTransformer wraps an outbound transformer with enhanced capabilities.
+func (ts *OutboundPersistentStream) persistAggregatedResponse(ctx context.Context, responseBody []byte, meta llm.ResponseMeta) {
+	if ts.requestExec == nil {
+		return
+	}
+
+	// Try to create usage log from aggregated response
+	if usage := meta.Usage; usage != nil {
+		_, err := ts.UsageLogService.CreateUsageLogFromRequest(ctx, ts.request, ts.requestExec, usage)
+		if err != nil {
+			log.Warn(ctx, "Failed to create usage log from request", log.Cause(err))
+		}
+	}
+
+	// Build latency metrics from performance record
+	var metrics *biz.LatencyMetrics
+
+	if ts.perf != nil {
+		firstTokenLatencyMs, requestLatencyMs, _ := ts.perf.Calculate()
+
+		metrics = &biz.LatencyMetrics{
+			LatencyMs: &requestLatencyMs,
+		}
+		if ts.perf.Stream && ts.perf.FirstTokenTime != nil {
+			metrics.FirstTokenLatencyMs = &firstTokenLatencyMs
+		}
+	}
+
+	err := ts.RequestService.UpdateRequestExecutionCompleted(
+		ctx,
+		ts.requestExec.ID,
+		meta.ID,
+		responseBody,
+		metrics,
+	)
+	if err != nil {
+		log.Warn(
+			ctx,
+			"Failed to update request execution with chunks, trying basic completion",
+			log.Cause(err),
+		)
+	}
+
+	// Save all response chunks at once
+	if err := ts.RequestService.SaveRequestExecutionChunks(ctx, ts.requestExec.ID, ts.responseChunks); err != nil {
+		log.Warn(ctx, "Failed to save request execution chunks", log.Cause(err))
+	}
+}
+
+func isCompletedAggregated(meta llm.ResponseMeta) bool {
+	return meta.Usage != nil && meta.Usage.CompletionTokens > 0
+}
+
+var errSkipCandidateByCircuitBreaker = errors.New("skip candidate by circuit breaker")
+
+// PersistentOutboundTransformer wraps an outbound transformer with shared persistence state.
 type PersistentOutboundTransformer struct {
 	wrapped transformer.Outbound
 	state   *PersistenceState
 }
-
-var errSkipCandidateByCircuitBreaker = errors.New("skip candidate by circuit breaker")
 
 // APIFormat returns the API format of the transformer.
 func (p *PersistentOutboundTransformer) APIFormat() llm.APIFormat {
@@ -220,8 +347,43 @@ func (p *PersistentOutboundTransformer) TransformRequest(ctx context.Context, ll
 
 	// Apply channel transform options to create a new request
 	llmRequest = applyTransformOptions(llmRequest, candidate.Channel.Settings)
+	llmRequest = filterResponseCustomToolMessagesForNonResponsesOutbound(llmRequest, p.wrapped.APIFormat())
 
 	return p.wrapped.TransformRequest(ctx, llmRequest)
+}
+
+func filterResponseCustomToolMessagesForNonResponsesOutbound(
+	llmRequest *llm.Request,
+	outboundFormat llm.APIFormat,
+) *llm.Request {
+	if llmRequest == nil {
+		return nil
+	}
+
+	if !isResponsesFormat(llmRequest.APIFormat) || isResponsesFormat(outboundFormat) || !containsResponseCustomToolMessages(llmRequest.Messages) {
+		return llmRequest
+	}
+
+	cloned := *llmRequest
+	cloned.Messages = shared.FilterOutResponseCustomToolMessages(llmRequest.Messages)
+
+	return &cloned
+}
+
+func isResponsesFormat(format llm.APIFormat) bool {
+	return format == llm.APIFormatOpenAIResponse || format == llm.APIFormatOpenAIResponseCompact
+}
+
+func containsResponseCustomToolMessages(messages []llm.Message) bool {
+	for _, msg := range messages {
+		for _, toolCall := range msg.ToolCalls {
+			if toolCall.Type == llm.ToolTypeResponsesCustomTool || toolCall.ResponseCustomToolCall != nil {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (p *PersistentOutboundTransformer) TransformResponse(ctx context.Context, response *httpclient.Response) (*llm.Response, error) {
@@ -238,6 +400,7 @@ func (p *PersistentOutboundTransformer) TransformStream(ctx context.Context, str
 		p.state.UsageLogService,
 		p.wrapped, // Pass the wrapped outbound transformer for chunk aggregation
 		p.state.Perf,
+		p.state,
 	)
 
 	return p.wrapped.TransformStream(ctx, persistentStream)
@@ -262,7 +425,7 @@ func (p *PersistentOutboundTransformer) GetRequest() *ent.Request {
 
 // GetCurrentChannel returns the current channel.
 func (p *PersistentOutboundTransformer) GetCurrentChannel() *biz.Channel {
-	if p.state.CurrentCandidate == nil {
+	if p.state == nil || p.state.CurrentCandidate == nil {
 		return nil
 	}
 
@@ -289,9 +452,27 @@ func (p *PersistentOutboundTransformer) HasMoreChannels() bool {
 	return p.state.CurrentCandidateIndex+1 < len(p.state.ChannelModelsCandidates)
 }
 
+// resetPassThroughStreamState cancels the current attempt's fan-out goroutine (if any)
+// and clears pass-through stream state so the next attempt starts with a clean slate.
+// Must be called before every retry to prevent goroutine leaks and data races on
+// state.RawStreamErrRef.
+func (p *PersistentOutboundTransformer) resetPassThroughStreamState() {
+	if p.state.RawStreamCancel != nil {
+		p.state.RawStreamCancel()
+		p.state.RawStreamCancel = nil
+	}
+
+	p.state.RawStreamCh = nil
+	p.state.RawStreamErrRef = nil
+}
+
 // NextChannel moves to the next available candidate for retry.
 // It implements the pipeline.Retryable interface.
 func (p *PersistentOutboundTransformer) NextChannel(ctx context.Context) error {
+	// Cancel any in-flight pass-through stream goroutine from the previous attempt
+	// so it exits promptly and releases its upstream HTTP connection.
+	p.resetPassThroughStreamState()
+
 	p.state.CurrentCandidateIndex++
 
 	p.state.CurrentModelIndex = 0
@@ -330,6 +511,36 @@ func (p *PersistentOutboundTransformer) CanRetry(err error) bool {
 		return false
 	}
 
+	// Empty response detection: allow same-channel retry so the pipeline can
+	// re-execute the request against the same (or next model in the) channel.
+	if errors.Is(err, pipeline.ErrEmptyResponse) {
+		log.Debug(context.Background(), "empty response detected",
+			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
+		)
+
+		return true
+	}
+
+	// 429 Too Many Requests: check if Retry-After header is present
+	if httpclient.HasRetryAfterHeader(err) {
+		// If Retry-After header is present, skip same-channel retry
+		// (the channel is explicitly rate-limited by upstream)
+		log.Debug(context.Background(), "429 with Retry-After, skipping same-channel retry",
+			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
+		)
+
+		return false
+	}
+
+	// 429 without Retry-After header, allow same-channel retry (might be transient rate limit)
+	if httpclient.IsRateLimitErr(err) {
+		log.Debug(context.Background(), "429 without Retry-After, allowing same-channel retry",
+			log.Int("channel_id", p.state.CurrentCandidate.Channel.ID),
+		)
+
+		return true
+	}
+
 	// if there are more models available in the current candidate, try the next model.
 	if p.state.CurrentModelIndex+1 < len(p.state.CurrentCandidate.Models) {
 		return true
@@ -347,6 +558,10 @@ func (p *PersistentOutboundTransformer) PrepareForRetry(ctx context.Context) err
 
 	// Reset request execution for the same channel.
 	p.state.RequestExec = nil
+
+	// Cancel any in-flight pass-through stream goroutine from the previous attempt
+	// so it exits promptly and releases its upstream HTTP connection.
+	p.resetPassThroughStreamState()
 
 	// If there's another model in the list, advance to it.
 	if p.state.CurrentModelIndex+1 < len(candidate.Models) {
@@ -400,7 +615,11 @@ func (p *PersistentOutboundTransformer) CustomizeExecutor(executor pipeline.Exec
 
 	// 1. Apply proxy settings. Test proxy override takes precedence over channel settings.
 	if p.state.Proxy != nil {
-		customizedExecutor = httpclient.NewHttpClientWithProxy(p.state.Proxy)
+		if channel.HTTPClient != nil {
+			customizedExecutor = channel.HTTPClient.WithProxy(p.state.Proxy)
+		} else {
+			customizedExecutor = httpclient.NewHttpClientWithProxy(p.state.Proxy)
+		}
 	} else if channel.HTTPClient != nil {
 		// Use the channel's own HTTP client, which is pre-configured with its proxy settings.
 		customizedExecutor = channel.HTTPClient

@@ -10,8 +10,14 @@ import (
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
+	"github.com/looplj/axonhub/llm/transformer/shared"
 )
 
+// streamState tracks state across streaming events.
+type streamState struct {
+	toolCallIndex int
+	scope         shared.TransportScope
+}
 // TransformStream transforms the HTTP stream response to the unified response format.
 // Gemini's stream is a stream of GenerateContentResponse.
 func (t *OutboundTransformer) TransformStream(
@@ -29,6 +35,15 @@ func (t *OutboundTransformer) TransformStream(
 func (t *OutboundTransformer) TransformStreamChunk(
 	ctx context.Context,
 	event *httpclient.StreamEvent,
+) (*llm.Response, error) {
+	scope, _ := shared.GetTransportScope(ctx)
+	return t.transformStreamChunkWithState(event, &streamState{scope: scope})
+}
+
+// transformStreamChunkWithState transforms a single Gemini streaming chunk with state tracking.
+func (t *OutboundTransformer) transformStreamChunkWithState(
+	event *httpclient.StreamEvent,
+	state *streamState,
 ) (*llm.Response, error) {
 	if event == nil || len(event.Data) == 0 {
 		return nil, nil
@@ -51,8 +66,11 @@ func (t *OutboundTransformer) TransformStreamChunk(
 		return nil, transformer.ErrInvalidResponse
 	}
 
-	// Convert to unified response format (streaming)
-	return convertGeminiToLLMResponse(&resp, true), nil
+	// Convert to unified response format (streaming) with tool call index tracking
+	llmResp, nextIndex := convertGeminiToLLMResponseWithState(&resp, true, state.toolCallIndex, state.scope)
+	state.toolCallIndex = nextIndex
+
+	return llmResp, nil
 }
 
 // AggregateStreamChunks aggregates Gemini streaming response chunks into a complete response.

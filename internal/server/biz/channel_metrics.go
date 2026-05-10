@@ -9,7 +9,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 
 	"github.com/looplj/axonhub/internal/ent"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/pkg/ringbuffer"
@@ -19,7 +18,21 @@ import (
 const (
 	// defaultPerformanceWindowSize is the default size of the sliding window in seconds (10 minutes).
 	defaultPerformanceWindowSize = 600
+
+	// MinLatencyMs is the minimum latency value (10ms) used for tokens/second calculations.
+	// This matches the frontend standard MINIMUM_LATENCY_MS_FOR_CACHE_HITS.
+	MinLatencyMs = 10
 )
+
+// ClampLatency enforces the minimum latency value to prevent extreme TPS calculations.
+// Returns the latency if it's >= MinLatencyMs, otherwise returns MinLatencyMs.
+func ClampLatency(latencyMs int64) int64 {
+	if latencyMs < MinLatencyMs {
+		return MinLatencyMs
+	}
+
+	return latencyMs
+}
 
 // channelMetrics holds the performance metrics for a channel in memory.
 type channelMetrics struct {
@@ -32,11 +45,10 @@ type channelMetrics struct {
 	aggregatedMetrics *AggregatedMetrics
 }
 
-// LoadChannelPerformances loads channel performance metrics from request_execution table.
+// loadChannelPerformances loads channel performance metrics from request_execution table.
 // It queries the last 6 hours of data to initialize in-memory metrics for load balancing.
 // Uses a single GROUP BY query to fetch all channel metrics at once for better performance.
-func (svc *ChannelService) LoadChannelPerformances(ctx context.Context) error {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+func (svc *ChannelService) loadChannelPerformances(ctx context.Context) error {
 	client := svc.entFromContext(ctx)
 
 	// Query last 6 hours of request execution data
@@ -145,25 +157,6 @@ func (svc *ChannelService) populateChannelMetrics(cm *channelMetrics, m *channel
 	// It will be tracked in real-time as requests are processed.
 }
 
-// InitializeChannelPerformance initializes in-memory performance metrics for a newly created channel.
-// Note: Performance metrics are no longer persisted to database, only kept in memory.
-func (svc *ChannelService) InitializeChannelPerformance(ctx context.Context, channelID int) error {
-	log.Info(ctx, "initializing in-memory channel performance metrics", log.Int("channel_id", channelID))
-
-	svc.channelPerfMetricsLock.Lock()
-	defer svc.channelPerfMetricsLock.Unlock()
-
-	if svc.channelPerfMetrics == nil {
-		svc.channelPerfMetrics = make(map[int]*channelMetrics)
-	}
-
-	if _, exists := svc.channelPerfMetrics[channelID]; !exists {
-		svc.channelPerfMetrics[channelID] = newChannelMetrics(channelID)
-	}
-
-	return nil
-}
-
 // timeSlotMetrics holds metrics for a specific second.
 type timeSlotMetrics struct {
 	metricsRecord
@@ -187,13 +180,29 @@ type AggregatedMetrics struct {
 
 	LastSelectedAt *time.Time
 	LastFailureAt  *time.Time
+
+	// StreamingFirstTokenLatencyEWMA is the EWMA of first-token latency for streaming requests.
+	StreamingFirstTokenLatencyEWMA float64
+	// StreamingTokensPerSecondEWMA is the EWMA of completion throughput for streaming requests.
+	StreamingTokensPerSecondEWMA float64
+	// StreamingSampleCount tracks streaming samples recorded for latency-aware scoring.
+	StreamingSampleCount int64
+	// NonStreamingLatencyEWMA is the EWMA of total request latency for non-streaming requests.
+	NonStreamingLatencyEWMA float64
+	// NonStreamingSampleCount tracks non-streaming samples recorded for latency-aware scoring.
+	NonStreamingSampleCount int64
 }
 
 func (m *AggregatedMetrics) Clone() *AggregatedMetrics {
 	return &AggregatedMetrics{
-		metricsRecord:  m.metricsRecord,
-		LastSelectedAt: m.LastSelectedAt,
-		LastFailureAt:  m.LastFailureAt,
+		metricsRecord:                  m.metricsRecord,
+		LastSelectedAt:                 m.LastSelectedAt,
+		LastFailureAt:                  m.LastFailureAt,
+		StreamingFirstTokenLatencyEWMA: m.StreamingFirstTokenLatencyEWMA,
+		StreamingTokensPerSecondEWMA:   m.StreamingTokensPerSecondEWMA,
+		StreamingSampleCount:           m.StreamingSampleCount,
+		NonStreamingLatencyEWMA:        m.NonStreamingLatencyEWMA,
+		NonStreamingSampleCount:        m.NonStreamingSampleCount,
 	}
 }
 
@@ -210,6 +219,8 @@ func newChannelMetrics(channelID int) *channelMetrics {
 	return cm
 }
 
+const latencyEWMAAlpha = 0.3
+
 // recordSuccess records a successful request to the channel metrics.
 func (cm *channelMetrics) recordSuccess(slot *timeSlotMetrics, perf *PerformanceRecord) {
 	slot.SuccessCount++
@@ -218,6 +229,38 @@ func (cm *channelMetrics) recordSuccess(slot *timeSlotMetrics, perf *Performance
 
 	// Reset consecutive failures on success
 	cm.aggregatedMetrics.ConsecutiveFailures = 0
+
+	firstTokenLatencyMs, requestLatencyMs, tokensPerSecond := perf.Calculate()
+
+	if perf.Stream && perf.FirstTokenTime != nil {
+		firstTokenLatency := float64(firstTokenLatencyMs)
+		if cm.aggregatedMetrics.StreamingSampleCount == 0 {
+			cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA = firstTokenLatency
+		} else {
+			cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA = latencyEWMAAlpha*firstTokenLatency + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA
+		}
+
+		if tokensPerSecond > 0 {
+			if cm.aggregatedMetrics.StreamingSampleCount == 0 {
+				cm.aggregatedMetrics.StreamingTokensPerSecondEWMA = tokensPerSecond
+			} else {
+				cm.aggregatedMetrics.StreamingTokensPerSecondEWMA = latencyEWMAAlpha*tokensPerSecond + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.StreamingTokensPerSecondEWMA
+			}
+		}
+
+		cm.aggregatedMetrics.StreamingSampleCount++
+
+		return
+	}
+
+	latency := float64(requestLatencyMs)
+	if cm.aggregatedMetrics.NonStreamingSampleCount == 0 {
+		cm.aggregatedMetrics.NonStreamingLatencyEWMA = latency
+	} else {
+		cm.aggregatedMetrics.NonStreamingLatencyEWMA = latencyEWMAAlpha*latency + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.NonStreamingLatencyEWMA
+	}
+
+	cm.aggregatedMetrics.NonStreamingSampleCount++
 }
 
 // recordFailure records a failed request to the channel metrics.
@@ -349,7 +392,7 @@ func (svc *ChannelService) RecordPerformance(ctx context.Context, perf *Performa
 			log.Int("channel_id", perf.ChannelID),
 			log.String("key_suffix", keySuffix), // Only log last 4 chars for security
 			log.Bool("success", perf.Success),
-			log.Any("error_code", perf.ErrorStatusCode),
+			log.Any("error_code", perf.ResponseStatusCode),
 		)
 	}
 }
@@ -387,13 +430,6 @@ func (cm *channelMetrics) cleanupExpiredSlots(cutoff time.Time) {
 	cm.window.CleanupBefore(cutoffTs)
 }
 
-// startPerformanceProcess starts the background goroutine to flush metrics to database.
-func (svc *ChannelService) startPerformanceProcess() {
-	for perf := range svc.perfCh {
-		svc.RecordPerformance(context.Background(), perf)
-	}
-}
-
 // GetChannelMetrics returns performance metrics for the channel.
 // If in-memory metrics are not available (e.g., after restart), it falls back to database values.
 func (svc *ChannelService) GetChannelMetrics(ctx context.Context, channelID int) (*AggregatedMetrics, error) {
@@ -405,12 +441,9 @@ func (svc *ChannelService) GetChannelMetrics(ctx context.Context, channelID int)
 		return &AggregatedMetrics{}, nil
 	}
 
-	// Return a copy of the aggregated metrics to avoid concurrent modification
-	return &AggregatedMetrics{
-		metricsRecord:  cm.aggregatedMetrics.metricsRecord,
-		LastSelectedAt: cm.aggregatedMetrics.LastSelectedAt,
-		LastFailureAt:  cm.aggregatedMetrics.LastFailureAt,
-	}, nil
+	// Return a full copy of the aggregated metrics to avoid concurrent modification
+	// while preserving all load-balancing signals, including latency EWMA.
+	return cm.aggregatedMetrics.Clone(), nil
 }
 
 // IncrementChannelSelection increments the request count for a channel at selection time.
@@ -449,26 +482,34 @@ func (svc *ChannelService) IncrementChannelSelection(channelID int) {
 }
 
 func deriveErrorMessage(errorCode int) string {
-	return http.StatusText(errorCode)
+	if text := http.StatusText(errorCode); text != "" {
+		return text
+	}
+
+	return fmt.Sprintf("Error %d", errorCode)
 }
 
 // PerformanceRecord contains performance metrics collected during request processing.
 type PerformanceRecord struct {
 	ChannelID        int
 	APIKey           string // API key used for the request (sensitive, do not log full value)
-	StartTime        time.Time
-	FirstTokenTime   *time.Time
-	EndTime          time.Time
-	Stream           bool
+	StartTime           time.Time
+	FirstTokenTime      *time.Time
+	ReasoningStartTime  *time.Time
+	ReasoningEndTime    *time.Time
+	EndTime             time.Time
+	Stream              bool
 	Success          bool
 	Canceled         bool
 	RequestCompleted bool
 
-	// If error status code is 0, it means the request is successful.
-	ErrorStatusCode int
+	// If response status code is 0, it means the request is successful.
+	ResponseStatusCode int
+	CompletionTokens   int64
 }
 
 // Calculate calculates performance metrics from collected data.
+// It enforces minimum latency to prevent extreme TPS calculations.
 func (m *PerformanceRecord) Calculate() (firstTokenLatencyMs int64, requestLatencyMs int64, tokensPerSecond float64) {
 	totalDuration := m.EndTime.Sub(m.StartTime)
 	requestLatencyMs = totalDuration.Milliseconds()
@@ -479,7 +520,30 @@ func (m *PerformanceRecord) Calculate() (firstTokenLatencyMs int64, requestLaten
 		firstTokenLatencyMs = firstTokenLatency.Milliseconds()
 	}
 
+	// Enforce minimum latency to prevent extreme TPS calculations
+	requestLatencyMs = ClampLatency(requestLatencyMs)
+	firstTokenLatencyMs = ClampLatency(firstTokenLatencyMs)
+
+	if m.CompletionTokens > 0 {
+		effectiveLatencyMs := requestLatencyMs
+		if m.Stream && m.FirstTokenTime != nil {
+			effectiveLatencyMs = requestLatencyMs - firstTokenLatencyMs
+			effectiveLatencyMs = ClampLatency(effectiveLatencyMs)
+		}
+
+		tokensPerSecond = float64(m.CompletionTokens) / (float64(effectiveLatencyMs) / 1000.0)
+	}
+
 	return firstTokenLatencyMs, requestLatencyMs, tokensPerSecond
+}
+
+// CalculateReasoningDurationMs calculates the reasoning duration.
+func (m *PerformanceRecord) CalculateReasoningDurationMs() int64 {
+	if m.ReasoningStartTime == nil || m.ReasoningEndTime == nil {
+		return 0
+	}
+	duration := m.ReasoningEndTime.Sub(*m.ReasoningStartTime)
+	return duration.Milliseconds()
 }
 
 // MarkSuccess marks the request as completed.
@@ -497,10 +561,26 @@ func (m *PerformanceRecord) MarkFirstToken() {
 	}
 }
 
+// MarkReasoningStart marks the reasoning start time.
+func (m *PerformanceRecord) MarkReasoningStart() {
+	if m.ReasoningStartTime == nil {
+		now := time.Now()
+		m.ReasoningStartTime = &now
+	}
+}
+
+// MarkReasoningEnd marks the reasoning end time.
+func (m *PerformanceRecord) MarkReasoningEnd() {
+	if m.ReasoningEndTime == nil {
+		now := time.Now()
+		m.ReasoningEndTime = &now
+	}
+}
+
 // MarkFailed marks the request as failed.
 func (m *PerformanceRecord) MarkFailed(errorCode int) {
 	m.Success = false
-	m.ErrorStatusCode = errorCode
+	m.ResponseStatusCode = errorCode
 	m.RequestCompleted = true
 	m.EndTime = time.Now()
 }

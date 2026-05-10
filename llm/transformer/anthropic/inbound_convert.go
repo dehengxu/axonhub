@@ -6,9 +6,9 @@ import (
 
 	"github.com/samber/lo"
 
-	"github.com/looplj/axonhub/internal/pkg/xjson"
-	"github.com/looplj/axonhub/internal/pkg/xurl"
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/internal/pkg/xjson"
+	"github.com/looplj/axonhub/llm/internal/pkg/xurl"
 )
 
 func convertImageSourceToLLMImageURLPart(source *ImageSource, cacheControl *CacheControl) (llm.MessageContentPart, bool) {
@@ -65,6 +65,13 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 	}
 	if anthropicReq.Metadata != nil {
 		chatReq.Metadata["user_id"] = anthropicReq.Metadata.UserID
+	}
+
+	// Propagate the top-level cache_control (Anthropic automatic caching)
+	// through the pipeline so the Anthropic outbound transformer can restore
+	// it on the upstream request and bypass its own breakpoint optimization.
+	if anthropicReq.CacheControl != nil {
+		chatReq.TransformerMetadata[TransformerMetadataKeyCacheControl] = anthropicReq.CacheControl
 	}
 
 	// Convert messages
@@ -271,16 +278,10 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 	if len(anthropicReq.Tools) > 0 {
 		tools := make([]llm.Tool, 0, len(anthropicReq.Tools))
 		for _, tool := range anthropicReq.Tools {
-			llmTool := llm.Tool{
-				Type: "function",
-				Function: llm.Function{
-					Name:        tool.Name,
-					Description: tool.Description,
-					Parameters:  tool.InputSchema,
-				},
-				CacheControl: convertToLLMCacheControl(tool.CacheControl),
+			llmTool, ok := convertToolToLLM(tool)
+			if ok {
+				tools = append(tools, llmTool)
 			}
-			tools = append(tools, llmTool)
 		}
 
 		chatReq.Tools = tools
@@ -299,13 +300,80 @@ func convertToLLMRequest(anthropicReq *MessageRequest) (*llm.Request, error) {
 		}
 	}
 
+	// Convert tool_choice
+	if anthropicReq.ToolChoice != nil {
+		chatReq.ToolChoice = convertAnthropicToolChoiceToLLM(anthropicReq.ToolChoice)
+	}
+
 	// Convert thinking configuration to reasoning effort and preserve budget
-	if anthropicReq.Thinking != nil && anthropicReq.Thinking.Type == "enabled" {
-		chatReq.ReasoningEffort = thinkingBudgetToReasoningEffort(anthropicReq.Thinking.BudgetTokens)
-		chatReq.ReasoningBudget = lo.ToPtr(anthropicReq.Thinking.BudgetTokens)
+	if anthropicReq.Thinking != nil {
+		switch anthropicReq.Thinking.Type {
+		case "enabled":
+			chatReq.ReasoningEffort = thinkingBudgetToReasoningEffort(anthropicReq.Thinking.BudgetTokens)
+			chatReq.ReasoningBudget = lo.ToPtr(anthropicReq.Thinking.BudgetTokens)
+
+			if anthropicReq.Thinking.Display != "" {
+				chatReq.TransformerMetadata[TransformerMetadataKeyThinkingDisplay] = anthropicReq.Thinking.Display
+			}
+		case "adaptive":
+			// Adaptive thinking doesn't require a budget; preserve the type marker via TransformerMetadata.
+			chatReq.TransformerMetadata[TransformerMetadataKeyThinkingType] = "adaptive"
+			// Set a default reasoning effort so other outbound transformers (e.g., OpenAI) can use it.
+			// Anthropic's official default for adaptive thinking is "high".
+			chatReq.ReasoningEffort = "high"
+
+			if anthropicReq.Thinking.Display != "" {
+				chatReq.TransformerMetadata[TransformerMetadataKeyThinkingDisplay] = anthropicReq.Thinking.Display
+			}
+		}
+	}
+
+	// Convert output_config
+	if anthropicReq.OutputConfig != nil && anthropicReq.OutputConfig.Effort != "" {
+		chatReq.TransformerMetadata[TransformerMetadataKeyOutputConfigEffort] = anthropicReq.OutputConfig.Effort
+		// Map output_config effort to reasoning_effort so other outbound transformers can use it.
+		// Anthropic "max" has no direct equivalent in other providers; map to "xhigh"
+		// so downstream transformers can handle it explicitly.
+		if anthropicReq.OutputConfig.Effort == "max" {
+			chatReq.ReasoningEffort = "xhigh"
+		} else {
+			chatReq.ReasoningEffort = anthropicReq.OutputConfig.Effort
+		}
 	}
 
 	return chatReq, nil
+}
+
+// convertAnthropicToolChoiceToLLM converts Anthropic ToolChoice to llm.ToolChoice.
+func convertAnthropicToolChoiceToLLM(src *ToolChoice) *llm.ToolChoice {
+	if src == nil {
+		return nil
+	}
+
+	switch src.Type {
+	case "auto", "none":
+		return &llm.ToolChoice{
+			ToolChoice: lo.ToPtr(src.Type),
+		}
+	case "any":
+		// Anthropic "any" is equivalent to OpenAI "required"
+		return &llm.ToolChoice{
+			ToolChoice: lo.ToPtr("required"),
+		}
+	case "tool":
+		if src.Name != nil {
+			return &llm.ToolChoice{
+				NamedToolChoice: &llm.NamedToolChoice{
+					Type: "function",
+					Function: llm.ToolFunction{
+						Name: *src.Name,
+					},
+				},
+			}
+		}
+	}
+
+	return nil
 }
 
 func convertToAnthropicResponse(chatResp *llm.Response) *Message {
@@ -333,15 +401,19 @@ func convertToAnthropicResponse(chatResp *llm.Response) *Message {
 
 			// Handle reasoning content (thinking) first if present
 			if (message.ReasoningContent != nil && *message.ReasoningContent != "") || (message.ReasoningSignature != nil && *message.ReasoningSignature != "") {
+				thinkingContent := message.ReasoningContent
+				if thinkingContent == nil {
+					thinkingContent = lo.ToPtr("")
+				}
 				thinkingBlock := MessageContentBlock{
 					Type:     "thinking",
-					Thinking: message.ReasoningContent,
+					Thinking: thinkingContent,
 				}
-				if message.ReasoningSignature != nil {
-					thinkingBlock.Signature = message.ReasoningSignature
-				} else {
-					thinkingBlock.Signature = lo.ToPtr("")
-				}
+			if message.ReasoningSignature != nil {
+				thinkingBlock.Signature = message.ReasoningSignature
+			} else {
+				thinkingBlock.Signature = lo.ToPtr(generateSignature())
+			}
 
 				contentBlocks = append(contentBlocks, thinkingBlock)
 			}
@@ -444,4 +516,43 @@ func convertToAnthropicResponse(chatResp *llm.Response) *Message {
 	}
 
 	return resp
+}
+
+// convertToolToLLM converts an Anthropic Tool to llm.Tool.
+// For web_search_20250305 native tools, it converts to llm.ToolTypeWebSearch type.
+// For regular function tools, it converts to llm.ToolTypeFunction type.
+func convertToolToLLM(tool Tool) (llm.Tool, bool) {
+	switch tool.Type {
+	case ToolTypeWebSearch20250305, WebSearchFunctionName:
+		return llm.Tool{
+			Type:         llm.ToolTypeWebSearch,
+			CacheControl: convertToLLMCacheControl(tool.CacheControl),
+			WebSearch: &llm.WebSearch{
+				MaxUses:        tool.MaxUses,
+				Strict:         tool.Strict,
+				AllowedDomains: tool.AllowedDomains,
+				BlockedDomains: tool.BlockedDomains,
+				UserLocation: llm.WebSearchToolUserLocation{
+					City:     tool.UserLocation.City,
+					Country:  tool.UserLocation.Country,
+					Region:   tool.UserLocation.Region,
+					Timezone: tool.UserLocation.Timezone,
+					Type:     tool.UserLocation.Type,
+				},
+			},
+		}, true
+	case "", "custom":
+		return llm.Tool{
+			Type: llm.ToolTypeFunction,
+			Function: llm.Function{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.InputSchema,
+			},
+			CacheControl: convertToLLMCacheControl(tool.CacheControl),
+		}, true
+	default:
+		// Ignore other native tools (image_generation, google_*, etc.)
+		return llm.Tool{}, false
+	}
 }

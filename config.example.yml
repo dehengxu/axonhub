@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://github.com/looplj/axonhub/releases/latest/download/config.schema.json
 # AxonHub Configuration Example
 # Copy this file to config.yml and modify as needed
 
@@ -17,6 +18,7 @@ server:
     claude_code_trace_enabled: false # Enable extracting trace IDs from Claude Code request metadata (env: AXONHUB_SERVER_TRACE_CLAUDE_CODE_TRACE_ENABLED)
     codex_trace_enabled: false # Enable extracting trace IDs from Codex Session_id header (env: AXONHUB_SERVER_TRACE_CODEX_TRACE_ENABLED)
   debug: false                  # Enable debug mode (env: AXONHUB_SERVER_DEBUG)
+  disable_ssl_verify: false     # Disable SSL certificate verification for self-signed certificates (env: AXONHUB_SERVER_DISABLE_SSL_VERIFY)
   cors:
     enabled: true               # Enable CORS middleware (env: AXONHUB_SERVER_CORS_ENABLED)
     debug: false                # Enable CORS debug logging (env: AXONHUB_SERVER_CORS_DEBUG)
@@ -43,12 +45,22 @@ server:
     exposed_headers: []         # Exposed headers (env: AXONHUB_SERVER_CORS_EXPOSED_HEADERS)
     allow_credentials: true     # Allow credentials (env: AXONHUB_SERVER_CORS_ALLOW_CREDENTIALS)
     max_age: 1m                  # Max age for preflight cache in seconds (env: AXONHUB_SERVER_CORS_MAX_AGE)
+  api:
+    auth:
+      allow_no_auth: false       # Allow requests without API key (env: AXONHUB_SERVER_API_AUTH_ALLOW_NO_AUTH)
+      key_prefix: "ah"           # API key prefix (env: AXONHUB_SERVER_API_AUTH_KEY_PREFIX)
+                                 # Default: "ah"
+                                 # Examples: "sk" generates "sk-<64hex>", "myapp" generates "myapp-<64hex>"
 
 # Database configuration
 db:
   dialect: "sqlite3"            # Database dialect: sqlite3, postgres, mysql (env: AXONHUB_DB_DIALECT)
-  dsn: "file:axonhub.db?cache=shared&_fk=1"  # Database connection string (env: AXONHUB_DB_DSN)
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"  # Database connection string (env: AXONHUB_DB_DSN)
   debug: false                  # Enable database debug logging (env: AXONHUB_DB_DEBUG)
+  max_open_conns: 20            # Maximum open DB connections shared by the app (env: AXONHUB_DB_MAX_OPEN_CONNS)
+  max_idle_conns: 10            # Maximum idle DB connections kept in the pool (env: AXONHUB_DB_MAX_IDLE_CONNS)
+  conn_max_lifetime: "30m"      # Recycle DB connections before server/network timeouts (env: AXONHUB_DB_CONN_MAX_LIFETIME)
+  conn_max_idle_time: "10m"     # Close long-idle pooled connections (env: AXONHUB_DB_CONN_MAX_IDLE_TIME)
 
 # Cache configuration
 cache:
@@ -119,6 +131,14 @@ gc:
                                  # "0 2 * * *"     - Daily at 2:00 AM
                                  # "0 3 * * 0"     - Weekly on Sunday at 3:00 AM
                                  # "0 4 1 * *"     - Monthly on 1st day at 4:00 AM
+  vacuum_enabled: false          # Enable VACUUM after cleanup (env: AXONHUB_GC_VACUUM_ENABLED)
+                                 # Supported for SQLite and PostgreSQL
+                                 # SQLite: Rebuilds database file to reclaim space
+                                 # PostgreSQL: Reclaims space from dead tuples
+  vacuum_full: false             # Use VACUUM FULL for PostgreSQL (env: AXONHUB_GC_VACUUM_FULL)
+                                 # true = VACUUM FULL (reclaims more space but locks tables)
+                                 # false = VACUUM (allows concurrent operations)
+                                 # Note: SQLite always uses plain VACUUM
 
 # Provider Quota configuration
 provider_quota:

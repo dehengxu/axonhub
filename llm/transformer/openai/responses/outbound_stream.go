@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/samber/lo"
 
-	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/streams"
@@ -24,7 +24,8 @@ func (t *OutboundTransformer) TransformStream(
 	doneEvent := lo.ToPtr(llm.DoneStreamEvent)
 	streamWithDone := streams.AppendStream(stream, doneEvent)
 
-	return streams.NoNil(newResponsesOutboundStream(streamWithDone)), nil
+	scope, _ := shared.GetTransportScope(ctx)
+	return streams.NoNil(newResponsesOutboundStream(streamWithDone, scope)), nil
 }
 
 // responsesOutboundStream wraps a stream and maintains state during processing.
@@ -40,10 +41,12 @@ type responsesOutboundStream struct {
 
 // outboundStreamState holds the state for a streaming session.
 type outboundStreamState struct {
-	responseID    string
-	responseModel string
-	usage         *llm.Usage
-	created       int64
+	responseID         string
+	responseModel      string
+	previousResponseID *string
+	usage              *llm.Usage
+	created            int64
+	scope              shared.TransportScope
 
 	// Content accumulation
 	textContent      strings.Builder
@@ -59,7 +62,7 @@ type outboundStreamState struct {
 	hasEncryptedReasoning   bool
 }
 
-func newResponsesOutboundStream(stream streams.Stream[*httpclient.StreamEvent]) *responsesOutboundStream {
+func newResponsesOutboundStream(stream streams.Stream[*httpclient.StreamEvent], scope shared.TransportScope) *responsesOutboundStream {
 	return &responsesOutboundStream{
 		stream: stream,
 		state: &outboundStreamState{
@@ -67,6 +70,7 @@ func newResponsesOutboundStream(stream streams.Stream[*httpclient.StreamEvent]) 
 			itemToCallID:            make(map[string]string),
 			toolCallIndex:           make(map[string]int),
 			encryptedContentEmitted: make(map[string]bool),
+			scope:                   scope,
 		},
 	}
 }
@@ -125,16 +129,17 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		return fmt.Errorf("failed to unmarshal responses api stream event: %w", err)
 	}
 
-	if log.DebugEnabled(context.Background()) {
-		log.Debug(context.Background(), "received response stream event", log.Any("event", streamEvent))
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		slog.DebugContext(context.Background(), "received response stream event", slog.Any("event", streamEvent))
 	}
 
 	// Build base response
 	resp := &llm.Response{
-		Object:  "chat.completion.chunk",
-		ID:      s.state.responseID,
-		Model:   s.state.responseModel,
-		Created: s.state.created,
+		Object:             "chat.completion.chunk",
+		ID:                 s.state.responseID,
+		Model:              s.state.responseModel,
+		Created:            s.state.created,
+		PreviousResponseID: s.state.previousResponseID,
 	}
 
 	//nolint:exhaustive //Only process events we care about.
@@ -144,10 +149,12 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			s.state.responseID = streamEvent.Response.ID
 			s.state.responseModel = streamEvent.Response.Model
 			s.state.created = streamEvent.Response.CreatedAt
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
 
 			resp.ID = s.state.responseID
 			resp.Model = s.state.responseModel
 			resp.Created = s.state.created
+			resp.PreviousResponseID = s.state.previousResponseID
 
 			if streamEvent.Response.Usage != nil {
 				s.state.usage = streamEvent.Response.Usage.ToUsage()
@@ -170,6 +177,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			s.state.responseID = streamEvent.Response.ID
 			s.state.responseModel = streamEvent.Response.Model
 			s.state.created = streamEvent.Response.CreatedAt
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
 
 			if streamEvent.Response.Usage != nil {
 				s.state.usage = streamEvent.Response.Usage.ToUsage()
@@ -198,7 +206,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 					{
 						Index: 0,
 						Delta: &llm.Message{
-							ReasoningSignature: shared.EncodeOpenAIEncryptedContent(item.EncryptedContent),
+							ReasoningSignature: shared.EncodeOpenAIEncryptedContentInScope(item.EncryptedContent, s.state.scope),
 						},
 					},
 				}
@@ -236,6 +244,41 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 					},
 				},
 			}
+
+		case "custom_tool_call":
+			// Custom tool call - initialize tracking, input will be streamed via delta events
+			toolCallIdx := len(s.state.toolCalls)
+			s.state.toolCalls[item.CallID] = &llm.ToolCall{
+				ID:   item.CallID,
+				Type: llm.ToolTypeResponsesCustomTool,
+				ResponseCustomToolCall: &llm.ResponseCustomToolCall{
+					CallID: item.CallID,
+					Name:   item.Name,
+					Input:  "",
+				},
+			}
+			s.state.itemToCallID[item.ID] = item.CallID
+			s.state.toolCallIndex[item.CallID] = toolCallIdx
+
+			resp.Choices = []llm.Choice{
+				{
+					Index: 0,
+					Delta: &llm.Message{
+						ToolCalls: []llm.ToolCall{
+							{
+								ID:    item.CallID,
+								Type:  llm.ToolTypeResponsesCustomTool,
+								Index: toolCallIdx,
+								ResponseCustomToolCall: &llm.ResponseCustomToolCall{
+									CallID: item.CallID,
+									Name:   item.Name,
+								},
+							},
+						},
+					},
+				},
+			}
+
 		default:
 			// For other item types (e.g., message), skip - no meaningful content to emit
 			return nil // Intentionally skip this event
@@ -279,6 +322,54 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			if tc, ok := s.state.toolCalls[streamEvent.CallID]; ok {
 				tc.Function.Name = streamEvent.Name
 				tc.Function.Arguments = streamEvent.Arguments
+			}
+		}
+
+		return nil // Intentionally skip this event
+
+	case StreamEventTypeCustomToolCallInputDelta:
+		// Custom tool call input delta - accumulate and emit as tool call delta
+		if streamEvent.ItemID != nil {
+			callID, ok := s.state.itemToCallID[*streamEvent.ItemID]
+			if !ok {
+				callID = *streamEvent.ItemID
+			}
+
+			if tc, ok := s.state.toolCalls[callID]; ok {
+				tc.ResponseCustomToolCall.Input += streamEvent.Delta
+				toolCallIdx := s.state.toolCallIndex[callID]
+
+				resp.Choices = []llm.Choice{
+					{
+						Index: 0,
+						Delta: &llm.Message{
+							ToolCalls: []llm.ToolCall{
+								{
+									Index: toolCallIdx,
+									Type:  llm.ToolTypeResponsesCustomTool,
+									ResponseCustomToolCall: &llm.ResponseCustomToolCall{
+										CallID: callID,
+										Name:   tc.ResponseCustomToolCall.Name,
+										Input:  streamEvent.Delta,
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+		}
+
+	case StreamEventTypeCustomToolCallInputDone:
+		// Custom tool call input completed - update state but don't emit an event
+		if streamEvent.ItemID != nil {
+			callID, ok := s.state.itemToCallID[*streamEvent.ItemID]
+			if !ok {
+				callID = *streamEvent.ItemID
+			}
+
+			if tc, ok := s.state.toolCalls[callID]; ok {
+				tc.ResponseCustomToolCall.Input = streamEvent.Input
 			}
 		}
 
@@ -331,6 +422,11 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 
 	case StreamEventTypeResponseCompleted:
 		// Response completed - emit two events: one with finish_reason, one with usage
+		if streamEvent.Response != nil {
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
+			resp.PreviousResponseID = s.state.previousResponseID
+		}
+
 		finishReason := "stop"
 		if len(s.state.toolCalls) > 0 {
 			finishReason = "tool_calls"
@@ -349,12 +445,13 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		if streamEvent.Response != nil && streamEvent.Response.Usage != nil {
 			s.state.usage = streamEvent.Response.Usage.ToUsage()
 			usageResp := &llm.Response{
-				Object:  "chat.completion.chunk",
-				ID:      s.state.responseID,
-				Model:   s.state.responseModel,
-				Created: s.state.created,
-				Choices: []llm.Choice{},
-				Usage:   s.state.usage,
+				Object:             "chat.completion.chunk",
+				ID:                 s.state.responseID,
+				Model:              s.state.responseModel,
+				Created:            s.state.created,
+				PreviousResponseID: s.state.previousResponseID,
+				Choices:            []llm.Choice{},
+				Usage:              s.state.usage,
 			}
 
 			s.enqueue(resp)
@@ -388,7 +485,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			Detail: llm.ErrorDetail{
 				Code:    streamEvent.Code,
 				Message: streamEvent.Message,
-				Param:   streamEvent.Param,
+				Param:   lo.FromPtr(streamEvent.Param),
 			},
 		}
 

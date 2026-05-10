@@ -24,27 +24,41 @@ func selectCandidates(inbound *PersistentInboundTransformer) pipeline.Middleware
 
 		selector := inbound.state.CandidateSelector
 
+		// Project-level profile filtering (upper boundary)
+		if inbound.state.APIKey != nil {
+			if project := inbound.state.APIKey.Edges.Project; project != nil {
+				if projectProfile := project.GetActiveProfile(); projectProfile != nil {
+					if len(projectProfile.ChannelIDs) > 0 {
+						selector = WithSelectedChannelsSelector(selector, projectProfile.ChannelIDs)
+					}
+
+					if len(projectProfile.ChannelTags) > 0 {
+						selector = WithChannelTagsFilterSelector(selector, projectProfile.ChannelTags, projectProfile.ChannelTagsMatchMode)
+					}
+				}
+			}
+		}
+
+		// Key-level profile filtering (narrows further within project scope)
 		if profile := inbound.state.APIKey.GetActiveProfile(); profile != nil {
-			// 先应用 ChannelIDs 过滤
 			if len(profile.ChannelIDs) > 0 {
 				selector = WithSelectedChannelsSelector(selector, profile.ChannelIDs)
 			}
 
-			// 再应用 ChannelTags 过滤（链式装饰器，与 IDs 取交集）
 			if len(profile.ChannelTags) > 0 {
-				selector = WithTagsFilterSelector(selector, profile.ChannelTags)
+				selector = WithChannelTagsFilterSelector(selector, profile.ChannelTags, profile.ChannelTagsMatchMode)
 			}
 		}
 
-		// 应用 Google 原生工具过滤（仅对 Gemini 原生 API 格式生效）
-		if inbound.APIFormat() == llm.APIFormatGeminiContents {
+		// Apply Google native tools filter (only for Gemini native API format)
+		if llmRequest.APIFormat == llm.APIFormatGeminiContents {
 			selector = WithGoogleNativeToolsSelector(selector)
 		}
 
-		// 应用 Anthropic 原生工具过滤（对所有 API 格式生效）
-		// 无论通过 OpenAI 还是 Anthropic 格式入口，只要包含 web_search 工具，
-		// 都需要优先路由到支持 Anthropic 原生工具的渠道
-		selector = WithAnthropicNativeToolsSelector(selector)
+		// Apply Anthropic native tools filter (only for Anthropic message API format)
+		if llmRequest.APIFormat == llm.APIFormatAnthropicMessage {
+			selector = WithAnthropicNativeToolsSelector(selector)
+		}
 
 		selector = WithStreamPolicySelector(selector)
 

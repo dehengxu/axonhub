@@ -130,9 +130,12 @@ dumps
 .gocache
 
 config.yml
-internal/server/static/dist
+internal/server/static/dist/*
+!internal/server/static/dist/.gitkeep
 *.b64
 coverage.out
+*.test
+*.backup
 
 # E2E testing artifacts
 scripts/e2e/.e2e-backend.pid
@@ -148,3 +151,13 @@ tools
 mise.toml
 locales_backup
 .sisyphus
+
+# Chunkhound local database
+.chunkhound/
+.superset/
+.snow/
+config.schema.json
+*.db-shm
+*.db-wal
+*.agent/summary
+.factory

@@ -23,6 +23,7 @@ export function RetrySettings() {
     maxSingleChannelRetries: 2,
     retryDelayMs: 1000,
     loadBalancerStrategy: 'adaptive',
+    emptyResponseDetection: false,
     autoDisableChannel: {
       enabled: false,
       statuses: [],
@@ -37,6 +38,7 @@ export function RetrySettings() {
         maxSingleChannelRetries: retryPolicy.maxSingleChannelRetries,
         retryDelayMs: retryPolicy.retryDelayMs,
         loadBalancerStrategy: retryPolicy.loadBalancerStrategy,
+        emptyResponseDetection: retryPolicy.emptyResponseDetection,
         autoDisableChannel: {
           enabled: retryPolicy.autoDisableChannel?.enabled || false,
           statuses: retryPolicy.autoDisableChannel?.statuses || [],
@@ -208,6 +210,21 @@ export function RetrySettings() {
                 </div>
               </div>
 
+              {/* Empty Response Detection */}
+              <div className='flex items-center justify-between'>
+                <div className='space-y-0.5'>
+                  <Label htmlFor='empty-response-detection' className='text-base'>
+                    {t('system.retry.emptyResponseDetection.label')}
+                  </Label>
+                  <div className='text-muted-foreground text-sm'>{t('system.retry.emptyResponseDetection.description')}</div>
+                </div>
+                <Switch
+                  id='empty-response-detection'
+                  checked={formData.emptyResponseDetection || false}
+                  onCheckedChange={(checked) => handleInputChange('emptyResponseDetection', checked)}
+                />
+              </div>
+
               <Separator />
 
               {/* Auto Disable Channel */}
@@ -249,7 +266,6 @@ export function RetrySettings() {
                               min='400'
                               max='599'
                             />
-                            <span className='text-muted-foreground text-sm'>{t('system.retry.autoDisableChannel.statuses.times')}</span>
                             <Input
                               type='number'
                               placeholder={t('system.retry.autoDisableChannel.statuses.timesPlaceholder')}
@@ -259,6 +275,7 @@ export function RetrySettings() {
                               min='1'
                               max='100'
                             />
+                            <span className='text-muted-foreground text-sm'>{t('system.retry.autoDisableChannel.statuses.times')}</span>
                             <Button type='button' variant='ghost' size='icon' onClick={() => removeStatus(index)}>
                               <Trash2 className='h-4 w-4' />
                             </Button>

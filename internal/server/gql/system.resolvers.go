@@ -8,10 +8,13 @@ package gql
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"entgo.io/ent/privacy"
+	"github.com/looplj/axonhub/internal/authz"
 	"github.com/looplj/axonhub/internal/build"
+	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/objects"
+	"github.com/looplj/axonhub/internal/scopes"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/samber/lo"
 )
@@ -50,6 +53,16 @@ func (r *mutationResolver) UpdateRetryPolicy(ctx context.Context, input biz.Retr
 	err := r.systemService.SetRetryPolicy(ctx, &input)
 	if err != nil {
 		return false, fmt.Errorf("failed to update retry policy: %w", err)
+	}
+
+	return true, nil
+}
+
+// UpdateWebhookNotifierConfig is the resolver for the updateWebhookNotifierConfig field.
+func (r *mutationResolver) UpdateWebhookNotifierConfig(ctx context.Context, input biz.WebhookNotifierConfig) (bool, error) {
+	err := r.systemService.SetWebhookNotifierConfig(ctx, &input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update webhook notifier config: %w", err)
 	}
 
 	return true, nil
@@ -107,7 +120,15 @@ func (r *mutationResolver) CompleteAutoDisableChannelOnboarding(ctx context.Cont
 
 // UpdateSystemChannelSettings is the resolver for the updateSystemChannelSettings field.
 func (r *mutationResolver) UpdateSystemChannelSettings(ctx context.Context, input biz.SystemChannelSettings) (bool, error) {
-	err := r.systemService.SetChannelSetting(ctx, input)
+	setting := *r.systemService.ChannelSettingOrDefault(ctx)
+	if input.Probe.Frequency != "" {
+		setting.Probe = input.Probe
+	}
+	if input.AutoSync.Frequency != "" {
+		setting.AutoSync = input.AutoSync
+	}
+
+	err := r.systemService.SetChannelSetting(ctx, setting)
 	if err != nil {
 		return false, fmt.Errorf("failed to update channel setting: %w", err)
 	}
@@ -125,16 +146,104 @@ func (r *mutationResolver) UpdateSystemGeneralSettings(ctx context.Context, inpu
 	return true, nil
 }
 
+// UpdateVideoStorageSettings is the resolver for the updateVideoStorageSettings field.
+func (r *mutationResolver) UpdateVideoStorageSettings(ctx context.Context, input biz.VideoStorageSettings) (bool, error) {
+	err := r.systemService.SetVideoStorageSettings(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to update video storage settings: %w", err)
+	}
+
+	return true, nil
+}
+
 // CheckProviderQuotas is the resolver for the checkProviderQuotas field.
 func (r *mutationResolver) CheckProviderQuotas(ctx context.Context) (bool, error) {
 	if r.providerQuotaService == nil {
 		return false, fmt.Errorf("provider quota service is not available")
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	r.providerQuotaService.ManualCheck(ctx)
 
 	return true, nil
+}
+
+// TriggerGcCleanup is the resolver for the triggerGcCleanup field.
+func (r *mutationResolver) TriggerGcCleanup(ctx context.Context) (bool, error) {
+	if !scopes.UserHasScope(ctx, scopes.ScopeWriteSettings) {
+		return false, fmt.Errorf("permission denied: requires write:settings scope")
+	}
+
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				// Log the panic or handle it - assuming there's a logging mechanism or just preventing crash
+				fmt.Printf("Recovered from panic in GC goroutine: %v\n", rec)
+			}
+		}()
+
+		// Use a detached context with system bypass for background execution
+		bgCtx := authz.WithSystemBypass(context.WithoutCancel(ctx), "manual-gc-cleanup")
+		_ = r.gcWorker.RunCleanupNow(bgCtx)
+	}()
+
+	return true, nil
+}
+
+// SaveProxyPreset is the resolver for the saveProxyPreset field.
+func (r *mutationResolver) SaveProxyPreset(ctx context.Context, input biz.ProxyPreset) (bool, error) {
+	err := r.systemService.SaveProxyPreset(ctx, input)
+	if err != nil {
+		return false, fmt.Errorf("failed to save proxy preset: %w", err)
+	}
+
+	return true, nil
+}
+
+// DeleteProxyPreset is the resolver for the deleteProxyPreset field.
+func (r *mutationResolver) DeleteProxyPreset(ctx context.Context, url string) (bool, error) {
+	err := r.systemService.DeleteProxyPreset(ctx, url)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete proxy preset: %w", err)
+	}
+
+	return true, nil
+}
+
+// UpdateUserAgentPassThroughSettings is the resolver for the updateUserAgentPassThroughSettings field.
+func (r *mutationResolver) UpdateUserAgentPassThroughSettings(ctx context.Context, input UpdateUserAgentPassThroughSettingsInput) (bool, error) {
+	err := r.systemService.SetUserAgentPassThrough(ctx, input.Enabled)
+	if err != nil {
+		return false, fmt.Errorf("failed to update user-agent pass-through settings: %w", err)
+	}
+
+	return true, nil
+}
+
+// ClearCache is the resolver for the clearCache field.
+func (r *mutationResolver) ClearCache(ctx context.Context, input ClearCacheInput) (*ClearCachePayload, error) {
+	user, ok := contexts.GetUser(ctx)
+	if !ok || user == nil || !user.IsOwner {
+		return nil, ErrNotOwner
+	}
+
+	targets := normalizeDiagnosticsTargets(input.Targets)
+
+	for _, target := range targets {
+		switch target {
+		case DiagnosticsTargetChannelCache:
+			if err := r.channelService.ReloadEnabledChannelsCache(ctx); err != nil {
+				return nil, fmt.Errorf("failed to clear cache for %s: %w", target, err)
+			}
+		default:
+			return nil, fmt.Errorf("unsupported cache target: %s", target)
+		}
+	}
+
+	return &ClearCachePayload{
+		Success: true,
+		Message: "cache cleared successfully",
+		Targets: targets,
+	}, nil
 }
 
 // SystemStatus is the resolver for the systemStatus field.
@@ -151,8 +260,6 @@ func (r *queryResolver) SystemStatus(ctx context.Context) (*SystemStatus, error)
 
 // BrandSettings is the resolver for the brandSettings field.
 func (r *queryResolver) BrandSettings(ctx context.Context) (*BrandSettings, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
 	brandName, err := r.systemService.BrandName(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get brand name: %w", err)
@@ -177,6 +284,11 @@ func (r *queryResolver) StoragePolicy(ctx context.Context) (*biz.StoragePolicy, 
 // RetryPolicy is the resolver for the retryPolicy field.
 func (r *queryResolver) RetryPolicy(ctx context.Context) (*biz.RetryPolicy, error) {
 	return r.systemService.RetryPolicy(ctx)
+}
+
+// WebhookNotifierConfig is the resolver for the webhookNotifierConfig field.
+func (r *queryResolver) WebhookNotifierConfig(ctx context.Context) (*biz.WebhookNotifierConfig, error) {
+	return r.systemService.WebhookNotifierConfig(ctx)
 }
 
 // SystemModelSettings is the resolver for the systemModelSettings field.
@@ -272,4 +384,69 @@ func (r *queryResolver) SystemChannelSettings(ctx context.Context) (*biz.SystemC
 // SystemGeneralSettings is the resolver for the systemGeneralSettings field.
 func (r *queryResolver) SystemGeneralSettings(ctx context.Context) (*biz.SystemGeneralSettings, error) {
 	return r.systemService.GeneralSettings(ctx)
+}
+
+// VideoStorageSettings is the resolver for the videoStorageSettings field.
+func (r *queryResolver) VideoStorageSettings(ctx context.Context) (*biz.VideoStorageSettings, error) {
+	return r.systemService.VideoStorageSettings(ctx)
+}
+
+// ProxyPresets is the resolver for the proxyPresets field.
+func (r *queryResolver) ProxyPresets(ctx context.Context) ([]*biz.ProxyPreset, error) {
+	presets, err := r.systemService.ProxyPresets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proxy presets: %w", err)
+	}
+
+	return lo.ToSlicePtr(presets), nil
+}
+
+// UserAgentPassThroughSettings is the resolver for the userAgentPassThroughSettings field.
+func (r *queryResolver) UserAgentPassThroughSettings(ctx context.Context) (*UserAgentPassThroughSettings, error) {
+	enabled, err := r.systemService.UserAgentPassThrough(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user-agent pass-through settings: %w", err)
+	}
+
+	return &UserAgentPassThroughSettings{
+		Enabled: enabled,
+	}, nil
+}
+
+// GetCacheDiagnostics is the resolver for the getCacheDiagnostics field.
+func (r *queryResolver) GetCacheDiagnostics(ctx context.Context, input *GetCacheDiagnosticsInput) (*GetCacheDiagnosticsPayload, error) {
+	user, ok := contexts.GetUser(ctx)
+	if !ok || user == nil || !user.IsOwner {
+		return nil, ErrNotOwner
+	}
+
+	var targets []DiagnosticsTarget
+	if input != nil {
+		targets = input.Targets
+	}
+
+	data, err := buildChannelModelCacheDiagnosticsExport(
+		ctx,
+		r.client,
+		r.channelService,
+		r.modelService,
+		r.systemService,
+		r.defaultSelector,
+		r.candidateSelectorDiagnostics,
+		targets,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build cache diagnostics export: %w", err)
+	}
+
+	content, err := marshalChannelModelCacheDiagnosticsExport(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetCacheDiagnosticsPayload{
+		FileName: fmt.Sprintf("axonhub-channel-model-cache-diagnostics-%s.json", time.Now().UTC().Format("20060102T150405Z")),
+		Content:  content,
+		Targets:  normalizeDiagnosticsTargets(targets),
+	}, nil
 }

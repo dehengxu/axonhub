@@ -8,6 +8,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/server/backup"
 	"github.com/looplj/axonhub/internal/server/biz"
+	"github.com/looplj/axonhub/internal/server/gc"
 	"github.com/looplj/axonhub/internal/server/orchestrator"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
@@ -38,10 +39,13 @@ type Resolver struct {
 	backupService                  *backup.BackupService
 	channelProbeService            *biz.ChannelProbeService
 	promptService                  *biz.PromptService
+	promptProtectionRuleService    *biz.PromptProtectionRuleService
 	providerQuotaService           *biz.ProviderQuotaService
-	httpClient                     *httpclient.HttpClient
 	modelFetcher                   *biz.ModelFetcher
+	defaultSelector                *orchestrator.DefaultSelector
+	candidateSelectorDiagnostics   *orchestrator.CandidateSelectorDiagnostics
 	TestChannelOrchestrator        *orchestrator.TestChannelOrchestrator
+	gcWorker                       *gc.Worker
 }
 
 // NewSchema creates a graphql executable schema.
@@ -64,9 +68,13 @@ func NewSchema(
 	backupService *backup.BackupService,
 	channelProbeService *biz.ChannelProbeService,
 	promptService *biz.PromptService,
+	promptProtectionRuleService *biz.PromptProtectionRuleService,
 	providerQuotaService *biz.ProviderQuotaService,
+	defaultSelector *orchestrator.DefaultSelector,
+	candidateSelectorDiagnostics *orchestrator.CandidateSelectorDiagnostics,
+	httpClient *httpclient.HttpClient,
+	gcWorker *gc.Worker,
 ) graphql.ExecutableSchema {
-	httpClient := httpclient.NewHttpClient()
 	modelFetcher := biz.NewModelFetcher(httpClient, channelService)
 
 	return NewExecutableSchema(Config{
@@ -88,10 +96,13 @@ func NewSchema(
 			backupService:                  backupService,
 			channelProbeService:            channelProbeService,
 			promptService:                  promptService,
+			promptProtectionRuleService:    promptProtectionRuleService,
 			providerQuotaService:           providerQuotaService,
-			httpClient:                     httpClient,
 			modelFetcher:                   modelFetcher,
-			TestChannelOrchestrator:        orchestrator.NewTestChannelOrchestrator(channelService, requestService, systemService, usageLogService, httpClient),
+			defaultSelector:                defaultSelector,
+			candidateSelectorDiagnostics:   candidateSelectorDiagnostics,
+			TestChannelOrchestrator:        orchestrator.NewTestChannelOrchestrator(channelService, requestService, systemService, usageLogService, promptProtectionRuleService, httpClient),
+			gcWorker:                       gcWorker,
 		},
 	})
 }

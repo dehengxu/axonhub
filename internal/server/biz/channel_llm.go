@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/channelmodelprice"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/llm/auth"
@@ -23,6 +23,7 @@ import (
 	"github.com/looplj/axonhub/llm/transformer/bailian"
 	"github.com/looplj/axonhub/llm/transformer/deepseek"
 	"github.com/looplj/axonhub/llm/transformer/doubao"
+	"github.com/looplj/axonhub/llm/transformer/fireworks"
 	"github.com/looplj/axonhub/llm/transformer/gemini"
 	geminioai "github.com/looplj/axonhub/llm/transformer/gemini/openai"
 	"github.com/looplj/axonhub/llm/transformer/jina"
@@ -30,13 +31,27 @@ import (
 	"github.com/looplj/axonhub/llm/transformer/modelscope"
 	"github.com/looplj/axonhub/llm/transformer/moonshot"
 	"github.com/looplj/axonhub/llm/transformer/nanogpt"
+	"github.com/looplj/axonhub/llm/transformer/ollama"
 	"github.com/looplj/axonhub/llm/transformer/openai"
 	"github.com/looplj/axonhub/llm/transformer/openai/codex"
+	"github.com/looplj/axonhub/llm/transformer/openai/copilot"
 	"github.com/looplj/axonhub/llm/transformer/openai/responses"
 	"github.com/looplj/axonhub/llm/transformer/openrouter"
 	"github.com/looplj/axonhub/llm/transformer/xai"
 	"github.com/looplj/axonhub/llm/transformer/zai"
 )
+
+type AutoRefresher interface {
+	StartAutoRefresh(ctx context.Context, opts oauth.AutoRefreshOptions)
+	StopAutoRefresh()
+}
+
+func setupAutoRefresh(ch *Channel, refresher AutoRefresher, opts oauth.AutoRefreshOptions) {
+	ch.startTokenProvider = func() {
+		refresher.StartAutoRefresh(context.Background(), opts)
+	}
+	ch.stopTokenProvider = refresher.StopAutoRefresh
+}
 
 func (c *Channel) IsModelSupported(model string) bool {
 	entries := c.GetModelEntries()
@@ -78,6 +93,16 @@ func getProxyConfig(channelSettings *objects.ChannelSettings) *httpclient.ProxyC
 	}
 
 	return channelSettings.Proxy
+}
+
+// getHttpClient returns the injected default HTTP client when no custom proxy is configured,
+// or creates a new one with proxy support (inheriting TLS settings from the default client).
+func (svc *ChannelService) getHttpClient(channelSettings *objects.ChannelSettings) *httpclient.HttpClient {
+	if channelSettings == nil || channelSettings.Proxy == nil {
+		return svc.httpClient
+	}
+
+	return svc.httpClient.WithProxy(channelSettings.Proxy)
 }
 
 // buildChannel creates a Channel with precomputed caches (transformer is set separately).
@@ -146,6 +171,11 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		if !c.Credentials.IsOAuth() && len(enabledKeys) == 0 {
 			return nil, fmt.Errorf("missing credentials: oauth or api key required for channel %s", c.Name)
 		}
+	case channel.TypeGithubCopilot:
+		// GitHub Copilot requires OAuth credentials with device flow (strict OAuth only)
+		if !c.Credentials.IsOAuth() {
+			return nil, fmt.Errorf("missing oauth credentials for channel %s", c.Name)
+		}
 	case channel.TypeAntigravity:
 		// Antigravity transformer currently consumes the single legacy APIKey field directly.
 		if strings.TrimSpace(c.Credentials.APIKey) == "" {
@@ -161,12 +191,25 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		}
 	}
 
-	httpClient := httpclient.NewHttpClientWithProxy(getProxyConfig(c.Settings))
+	httpClient := svc.getHttpClient(c.Settings)
 	ch := buildChannel(c, httpClient)
+	accountIdentity := strconv.Itoa(c.ID)
 
 	switch c.Type {
 	case channel.TypeDoubao, channel.TypeVolcengine:
 		transformer, err := doubao.NewOutboundTransformerWithConfig(&doubao.Config{
+			BaseURL:        c.BaseURL,
+			APIKeyProvider: getAPIKeyProvider(ch),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
+		}
+
+		ch.Outbound = transformer
+
+		return ch, nil
+	case channel.TypeFireworks:
+		transformer, err := fireworks.NewOutboundTransformerWithConfig(&fireworks.Config{
 			BaseURL:        c.BaseURL,
 			APIKeyProvider: getAPIKeyProvider(ch),
 		})
@@ -193,6 +236,19 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		transformer, err := nanogpt.NewOutboundTransformerWithConfig(&nanogpt.Config{
 			BaseURL:        c.BaseURL,
 			APIKeyProvider: getAPIKeyProvider(ch),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
+		}
+
+		ch.Outbound = transformer
+
+		return ch, nil
+	case channel.TypeNanogptResponses:
+		transformer, err := responses.NewOutboundTransformerWithConfig(&responses.Config{
+			BaseURL:         c.BaseURL,
+			APIKeyProvider:  getAPIKeyProvider(ch),
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -264,9 +320,10 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		return ch, nil
 	case channel.TypeAnthropic, channel.TypeMinimaxAnthropic:
 		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-			Type:           anthropic.PlatformDirect,
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			Type:            anthropic.PlatformDirect,
+			BaseURL:         c.BaseURL,
+			AccountIdentity: accountIdentity,
+			APIKeyProvider:  getAPIKeyProvider(ch),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -305,22 +362,21 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 			tokens := claudecode.NewTokenProvider(oauth.TokenProviderParams{
 				Credentials: creds,
 				HTTPClient:  httpClient,
-				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+				OnRefreshed: svc.onTokenRefreshed(c),
 			})
 
 			transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
-				TokenProvider: tokens,
-				BaseURL:       c.BaseURL,
+				TokenProvider:   tokens,
+				BaseURL:         c.BaseURL,
+				IsOfficial:      true,
+				AccountIdentity: accountIdentity,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
 			}
 
 			ch.Outbound = transformer
-			ch.startTokenProvider = func() {
-				tokens.StartAutoRefresh(context.Background(), oauth.AutoRefreshOptions{})
-			}
-			ch.stopTokenProvider = tokens.StopAutoRefresh
+			setupAutoRefresh(ch, tokens, oauth.AutoRefreshOptions{})
 
 			return ch, nil
 		}
@@ -330,8 +386,10 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		tokens := oauth.NewAPIKeyTokenProvider(apiKeyProvider.Get)
 
 		transformer, err := claudecode.NewOutboundTransformer(claudecode.Params{
-			TokenProvider: tokens,
-			BaseURL:       c.BaseURL,
+			TokenProvider:   tokens,
+			BaseURL:         c.BaseURL,
+			IsOfficial:      false,
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create claudecode outbound transformer: %w", err)
@@ -408,9 +466,10 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 
 	case channel.TypeAnthropicAWS:
 		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-			Type:           anthropic.PlatformBedrock,
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			Type:            anthropic.PlatformBedrock,
+			BaseURL:         c.BaseURL,
+			AccountIdentity: accountIdentity,
+			APIKeyProvider:  getAPIKeyProvider(ch),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -427,10 +486,11 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		}
 
 		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-			Type:      anthropic.PlatformVertex,
-			Region:    c.Credentials.GCP.Region,
-			ProjectID: c.Credentials.GCP.ProjectID,
-			JSONData:  c.Credentials.GCP.JSONData,
+			Type:            anthropic.PlatformVertex,
+			Region:          c.Credentials.GCP.Region,
+			ProjectID:       c.Credentials.GCP.ProjectID,
+			JSONData:        c.Credentials.GCP.JSONData,
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -460,8 +520,9 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		return ch, nil
 	case channel.TypeGeminiOpenai:
 		transformer, err := geminioai.NewOutboundTransformerWithConfig(&geminioai.Config{
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			BaseURL:         c.BaseURL,
+			APIKeyProvider:  getAPIKeyProvider(ch),
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -486,6 +547,20 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		transformer, err := bailian.NewOutboundTransformerWithConfig(&bailian.Config{
 			BaseURL:        c.BaseURL,
 			APIKeyProvider: getAPIKeyProvider(ch),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
+		}
+
+		ch.Outbound = transformer
+
+		return ch, nil
+	case channel.TypeBailianAnthropic, channel.TypeMoonshotCoding:
+		transformer, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
+			Type:            anthropic.PlatformDirect,
+			BaseURL:         c.BaseURL,
+			AccountIdentity: accountIdentity,
+			APIKeyProvider:  getAPIKeyProvider(ch),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -524,22 +599,20 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 			p := codex.NewTokenProvider(codex.TokenProviderParams{
 				Credentials: creds,
 				HTTPClient:  httpClient,
-				OnRefreshed: svc.refreshOAuthTokenFunc(c),
+				OnRefreshed: svc.onTokenRefreshed(c),
 			})
 
 			transformer, err := codex.NewOutboundTransformer(codex.Params{
-				TokenProvider: p,
-				BaseURL:       c.BaseURL,
+				TokenProvider:   p,
+				BaseURL:         c.BaseURL,
+				AccountIdentity: accountIdentity,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create codex outbound transformer: %w", err)
 			}
 
 			ch.Outbound = transformer
-			ch.startTokenProvider = func() {
-				p.StartAutoRefresh(context.Background(), oauth.AutoRefreshOptions{})
-			}
-			ch.stopTokenProvider = p.StopAutoRefresh
+			setupAutoRefresh(ch, p, oauth.AutoRefreshOptions{})
 
 			return ch, nil
 		}
@@ -549,8 +622,9 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		tokens := oauth.NewAPIKeyTokenProvider(apiKeyProvider.Get)
 
 		transformer, err := codex.NewOutboundTransformer(codex.Params{
-			TokenProvider: tokens,
-			BaseURL:       c.BaseURL,
+			TokenProvider:   tokens,
+			BaseURL:         c.BaseURL,
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create codex outbound transformer: %w", err)
@@ -559,13 +633,73 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		ch.Outbound = transformer
 
 		return ch, nil
+	case channel.TypeGithubCopilot:
+		// GitHub Copilot requires OAuth credentials with device flow
+		if !c.Credentials.IsOAuth() {
+			return nil, fmt.Errorf("missing oauth credentials for channel %s", c.Name)
+		}
+
+		credsJSON := strings.TrimSpace(c.Credentials.APIKey)
+		if credsJSON == "" {
+			return nil, fmt.Errorf("github_copilot channel %s has no credentials", c.Name)
+		}
+
+		if c.Credentials.OAuth != nil {
+			o := c.Credentials.OAuth
+
+			creds, err := (&oauth.OAuthCredentials{
+				AccessToken:  o.AccessToken,
+				RefreshToken: o.RefreshToken,
+				ClientID:     o.ClientID,
+				ExpiresAt:    o.ExpiresAt,
+				TokenType:    o.TokenType,
+				Scopes:       o.Scopes,
+			}).ToJSON()
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode github_copilot oauth credentials for channel %s: %w", c.Name, err)
+			}
+
+			credsJSON = creds
+		}
+
+		creds, err := oauth.ParseCredentialsJSON(credsJSON)
+		if err != nil {
+			return nil, fmt.Errorf("github_copilot channel %s has invalid credentials: %w", c.Name, err)
+		}
+
+		// Create CopilotTokenProvider with the token exchanger
+		p, err := copilot.NewTokenProvider(copilot.TokenProviderParams{
+			Credentials: creds,
+			HTTPClient:  httpClient,
+			OnRefreshed: svc.onTokenRefreshed(c),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create CopilotTokenProvider: %w", err)
+		}
+
+		// Create the Copilot outbound transformer with LiteLLM headers
+		transformer, err := copilot.NewOutboundTransformer(copilot.OutboundTransformerParams{
+			TokenProvider: p,
+			BaseURL:       c.BaseURL,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create github_copilot outbound transformer: %w", err)
+		}
+		ch.Outbound = transformer
+		setupAutoRefresh(ch, p, oauth.AutoRefreshOptions{
+			Interval:      5 * time.Minute,
+			RefreshBefore: 5 * time.Minute,
+		})
+
+		return ch, nil
 	case channel.TypeOpenai, channel.TypeDeepinfra, channel.TypeMinimax, channel.TypeXiaomi,
 		channel.TypePpio, channel.TypeSiliconflow,
 		channel.TypeVercel, channel.TypeAihubmix, channel.TypeBurncloud, channel.TypeGithub:
 		transformer, err := openai.NewOutboundTransformerWithConfig(&openai.Config{
-			PlatformType:   openai.PlatformOpenAI,
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			PlatformType:    openai.PlatformOpenAI,
+			BaseURL:         c.BaseURL,
+			AccountIdentity: accountIdentity,
+			APIKeyProvider:  getAPIKeyProvider(ch),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -576,8 +710,9 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		return ch, nil
 	case channel.TypeOpenaiResponses:
 		transformer, err := responses.NewOutboundTransformerWithConfig(&responses.Config{
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			BaseURL:         c.BaseURL,
+			APIKeyProvider:  getAPIKeyProvider(ch),
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -588,8 +723,9 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		return ch, nil
 	case channel.TypeGemini:
 		transformer, err := gemini.NewOutboundTransformerWithConfig(gemini.Config{
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
+			BaseURL:         c.BaseURL,
+			APIKeyProvider:  getAPIKeyProvider(ch),
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -600,9 +736,10 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		return ch, nil
 	case channel.TypeGeminiVertex:
 		transformer, err := gemini.NewOutboundTransformerWithConfig(gemini.Config{
-			BaseURL:        c.BaseURL,
-			APIKeyProvider: getAPIKeyProvider(ch),
-			PlatformType:   gemini.PlatformVertex,
+			BaseURL:         c.BaseURL,
+			APIKeyProvider:  getAPIKeyProvider(ch),
+			PlatformType:    gemini.PlatformVertex,
+			AccountIdentity: accountIdentity,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
@@ -627,7 +764,7 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		transformer, err := antigravity.NewTransformer(
 			antigravity.Config{BaseURL: c.BaseURL, APIKey: c.Credentials.APIKey},
 			antigravity.WithHTTPClient(httpClient),
-			antigravity.WithOnTokenRefreshed(svc.refreshOAuthTokenFunc(c)),
+			antigravity.WithOnTokenRefreshed(svc.onTokenRefreshed(c)),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create antigravity outbound transformer: %w", err)
@@ -636,11 +773,26 @@ func (svc *ChannelService) buildChannelWithTransformer(c *ent.Channel) (*Channel
 		ch.Outbound = transformer
 		tokens := transformer.GetTokenProvider()
 		if tokens != nil {
-			ch.startTokenProvider = func() {
-				tokens.StartAutoRefresh(context.Background(), oauth.AutoRefreshOptions{})
-			}
-			ch.stopTokenProvider = tokens.StopAutoRefresh
+			setupAutoRefresh(ch, tokens, oauth.AutoRefreshOptions{})
 		}
+
+		return ch, nil
+	case channel.TypeOllama:
+		// Ollama is often used locally without API key, but may also be configured with one
+		var apiKeyProvider auth.APIKeyProvider
+		if len(ch.cachedEnabledAPIKeys) > 0 {
+			apiKeyProvider = getAPIKeyProvider(ch)
+		}
+
+		transformer, err := ollama.NewOutboundTransformerWithConfig(&ollama.Config{
+			BaseURL:        c.BaseURL,
+			APIKeyProvider: apiKeyProvider,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ollama outbound transformer: %w", err)
+		}
+
+		ch.Outbound = transformer
 
 		return ch, nil
 	default:
@@ -653,54 +805,44 @@ func isOAuthJSON(s string) bool {
 	return strings.HasPrefix(trimmed, "{") && strings.Contains(s, "access_token")
 }
 
-func (svc *ChannelService) refreshOAuthTokenFunc(ch *ent.Channel) func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
-	return func(ctx context.Context, refreshed *oauth.OAuthCredentials) error {
-		if refreshed == nil {
-			return nil
-		}
-
-		credJSON, err := refreshed.ToJSON()
-		if err != nil {
-			return err
-		}
-
-		updated := ch.Credentials
-
-		// NOTE：必须是使用 APIKey 字段，不能使用 API Keys 字段
-		updated.APIKey = credJSON
-		updated.OAuth = refreshed
-
-		dbCtx := privacy.DecisionContext(ctx, privacy.Allow)
-		_, err = svc.entFromContext(dbCtx).Channel.UpdateOneID(ch.ID).SetCredentials(updated).Save(dbCtx)
-
-		return err
+func extractProjectIDFromAntigravityCreds(apiKey string) (string, error) {
+	parts := strings.Split(apiKey, "|")
+	if len(parts) >= 2 {
+		return parts[1], nil
 	}
+	return "", errors.New("api key does not contain project ID (expected format: \"<refreshToken>|<projectID>\")")
 }
 
-// preloadModelPrices loads active model prices for a channel and caches them.
-func (svc *ChannelService) preloadModelPrices(ctx context.Context, ch *Channel) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
-	prices, err := svc.entFromContext(ctx).ChannelModelPrice.Query().
-		Where(
-			channelmodelprice.ChannelID(ch.ID),
-			channelmodelprice.DeletedAtEQ(0),
-		).
-		All(ctx)
-	if err != nil {
-		log.Warn(ctx, "failed to preload model prices", log.Int("channel_id", ch.ID), log.Cause(err))
-		return
+func (svc *ChannelService) refreshOAuthToken(ctx context.Context, ch *ent.Channel, refreshed *oauth.OAuthCredentials) error {
+	if refreshed == nil {
+		return nil
 	}
 
-	cache := make(map[string]*ent.ChannelModelPrice, len(prices))
-	for _, p := range prices {
-		cache[p.ModelID] = p
+	updated := ch.Credentials
+
+	if ch.Type == channel.TypeAntigravity {
+		projectID, err := extractProjectIDFromAntigravityCreds(ch.Credentials.APIKey)
+		if err != nil {
+			log.Warn(ctx, "failed to extract project ID from antigravity credentials",
+				log.Cause(err),
+				log.String("channel", ch.Name))
+			return fmt.Errorf("failed to extract project ID from antigravity credentials: %w", err)
+		}
+		updated.APIKey = fmt.Sprintf("%s|%s", refreshed.RefreshToken, projectID)
+	} else {
+		credJSON, err := refreshed.ToJSON()
+		if err != nil {
+			return fmt.Errorf("failed to serialize refreshed credentials: %w", err)
+		}
+		// NOTE：必须是使用 APIKey 字段，不能使用 API Keys 字段
+		updated.APIKey = credJSON
 	}
 
-	ch.cachedModelPrices = cache
-	if log.DebugEnabled(ctx) {
-		log.Debug(ctx, "preloaded model prices", log.Int("channel_id", ch.ID), log.Int("count", len(cache)))
-	}
+	updated.OAuth = refreshed
+
+	_, err := svc.entFromContext(ctx).Channel.UpdateOneID(ch.ID).SetCredentials(updated).Save(ctx)
+
+	return err
 }
 
 // GetModelEntries returns all models this channel can handle, RequestModel -> Entry

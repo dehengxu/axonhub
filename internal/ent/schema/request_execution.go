@@ -23,8 +23,9 @@ func (RequestExecution) Mixin() []ent.Mixin {
 
 func (RequestExecution) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("request_id").
-			StorageKey("request_executions_by_request_id"),
+		// Index for window function: find latest execution per request
+		index.Fields("request_id", "status", "created_at").
+			StorageKey("request_executions_by_request_id_status_created_at"),
 		index.Fields("channel_id").
 			StorageKey("request_executions_by_channel_id_created_at"),
 	}
@@ -40,7 +41,9 @@ func (RequestExecution) Fields() []ent.Field {
 			Immutable().
 			Comment("Data Storage ID that this request belongs to"),
 		// External ID for tracking requests in external systems
-		field.String("external_id").Optional(),
+		field.String("external_id").
+			Optional().
+			MaxLen(512),
 		field.String("model_id").Immutable(),
 		//  The format of the request, e.g: openai/chat_completions, claude/messages, openai/response.
 		field.String("format").Immutable().Default("openai/chat_completions"),
@@ -60,6 +63,8 @@ func (RequestExecution) Fields() []ent.Field {
 			entgql.Directives(forceResolver()),
 		),
 		field.String("error_message").Optional(),
+		field.Int("response_status_code").Optional().Nillable().
+			Comment("HTTP status code from the upstream provider"),
 		// The status of the request execution.
 		field.Enum("status").Values("pending", "processing", "completed", "failed", "canceled"),
 		// Whether the request is a streaming request
@@ -68,6 +73,8 @@ func (RequestExecution) Fields() []ent.Field {
 		field.Int64("metrics_latency_ms").Optional().Nillable(),
 		// First token latency in milliseconds (only for streaming requests)
 		field.Int64("metrics_first_token_latency_ms").Optional().Nillable(),
+		// Reasoning/thinking duration in milliseconds
+		field.Int64("metrics_reasoning_duration_ms").Optional().Nillable().Comment("Reasoning/thinking duration in milliseconds"),
 		// Request headers
 		field.JSON("request_headers", objects.JSONRawMessage{}).
 			Optional().

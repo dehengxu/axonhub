@@ -11,9 +11,6 @@ import (
 // Inbound represents a transformer accpet the request from client and respond to client with the transformed response.
 // e.g: OpenAPI transformer accepts the request from client with OpenAPI format and respond with OpenAI format.
 type Inbound interface {
-	// APIFormat returns the API format of the transformer.
-	APIFormat() llm.APIFormat
-
 	// TransformRequest transforms HTTP request to the unified request format.
 	TransformRequest(ctx context.Context, request *httpclient.Request) (*llm.Request, error)
 
@@ -59,13 +56,11 @@ type Outbound interface {
 	AggregateStreamChunks(ctx context.Context, chunks []*httpclient.StreamEvent) ([]byte, llm.ResponseMeta, error)
 }
 
-// Transformer represents a transformer that supports additional operations like Rerank.
-// This interface extends Outbound with methods for rerank and other advanced operations.
-type Transformer interface {
-	Outbound
+// VideoTaskOutbound is an optional extension interface for outbound transformers that support
+// video task query/delete operations (async task model).
+type VideoTaskOutbound interface {
+	BuildGetVideoTaskRequest(ctx context.Context, providerTaskID string) (*httpclient.Request, error)
+	ParseGetVideoTaskResponse(ctx context.Context, httpResp *httpclient.Response) (*llm.Response, error)
 
-	// Rerank performs document reranking based on query relevance.
-	// The httpClient parameter allows using a custom HTTP client with proxy/timeout configuration.
-	// If httpClient is nil, a default client will be used.
-	Rerank(ctx context.Context, req *llm.RerankRequest, httpClient *httpclient.HttpClient) (*llm.RerankResponse, error)
+	BuildDeleteVideoTaskRequest(ctx context.Context, providerTaskID string) (*httpclient.Request, error)
 }

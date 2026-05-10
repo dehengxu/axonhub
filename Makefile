@@ -1,7 +1,10 @@
 .PHONY: generate build backend frontend cleanup-db \
+	test-backend-all \
 	e2e-test e2e-backend-start e2e-backend-stop e2e-backend-status e2e-backend-restart e2e-backend-clean \
 	migration-test migration-test-all migration-test-all-dbs \
-	sync-faq sync-models filter-logs
+	sync-faq sync-models filter-logs \
+	lint lint-privacy \
+	generate-schema
 
 # Generate GraphQL and Ent code
 generate:
@@ -51,6 +54,19 @@ cleanup-db:
 	@sqlite3 axonhub.db "DELETE FROM users WHERE email LIKE 'pw-test-%' OR first_name LIKE 'pw-test%';"
 	@sqlite3 axonhub.db "DELETE FROM projects WHERE slug LIKE 'pw-test-%' OR name LIKE 'pw-test-%';"
 	@echo "Cleanup completed!"
+
+# --- Testing ---
+
+# Run all backend tests across all Go modules
+test-backend-all:
+	@echo "Running all backend tests..."
+	@echo ""
+	@echo "=== Testing root module ==="
+	go test ./...
+	@echo "=== Testing llm module ==="
+	cd llm && go test ./...
+	@echo ""
+	@echo "All backend tests completed!"
 
 # --- E2E Testing ---
 
@@ -122,3 +138,20 @@ sync-models:
 filter-logs:
 	@echo "Filtering load balance logs..."
 	@./scripts/utils/filter-load-balance-logs.sh
+
+# --- Linting ---
+
+# Generate JSON schema for configuration
+generate-schema:
+	@echo "Generating JSON schema for configuration..."
+	@cd cmd/schema && go run . > ../../config.schema.json
+	@echo "JSON schema generated at config.schema.json"
+
+# Run all lint checks
+lint: lint-privacy
+	@echo "All lint checks passed!"
+
+# Check for illegal privacy.DecisionContext(...Allow) usage
+lint-privacy:
+	@echo "Checking for illegal privacy.DecisionContext(...Allow) usage..."
+	@./scripts/lint/check-privacy-allow.sh

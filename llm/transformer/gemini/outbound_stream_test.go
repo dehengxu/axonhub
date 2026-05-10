@@ -14,6 +14,7 @@ import (
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/streams"
+	"github.com/looplj/axonhub/llm/transformer/shared"
 )
 
 func TestOutboundTransformer_TransformStreamChunk(t *testing.T) {
@@ -336,7 +337,7 @@ func TestOutboundTransformer_AggregateStreamChunks(t *testing.T) {
 				require.NoError(t, err)
 
 				// Convert to LLM format (non-streaming for aggregated result)
-				llmResp := convertGeminiToLLMResponse(&geminiResp, false)
+				llmResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 				require.Equal(t, "resp-agg-1", llmResp.ID)
 				require.Len(t, llmResp.Choices, 1)
@@ -389,7 +390,7 @@ func TestOutboundTransformer_AggregateStreamChunks(t *testing.T) {
 				require.NoError(t, err)
 
 				// Convert to LLM format (non-streaming for aggregated result)
-				llmResp := convertGeminiToLLMResponse(&geminiResp, false)
+				llmResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 				require.Len(t, llmResp.Choices, 1)
 				require.NotNil(t, llmResp.Choices[0].Message.ReasoningContent)
@@ -434,7 +435,7 @@ func TestOutboundTransformer_AggregateStreamChunks(t *testing.T) {
 				require.NoError(t, err)
 
 				// Convert to LLM format (non-streaming for aggregated result)
-				llmResp := convertGeminiToLLMResponse(&geminiResp, false)
+				llmResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 				require.Len(t, llmResp.Choices, 1)
 				require.Len(t, llmResp.Choices[0].Message.ToolCalls, 1)
@@ -473,7 +474,7 @@ func TestOutboundTransformer_AggregateStreamChunks(t *testing.T) {
 				require.NoError(t, err)
 
 				// Convert to LLM format (non-streaming for aggregated result)
-				llmResp := convertGeminiToLLMResponse(&geminiResp, false)
+				llmResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 				require.Len(t, llmResp.Choices, 1)
 				require.Equal(t, "Hello", *llmResp.Choices[0].Message.Content.Content)
@@ -510,7 +511,7 @@ func TestOutboundTransformer_AggregateStreamChunks(t *testing.T) {
 				require.NoError(t, err)
 
 				// Convert to LLM format (non-streaming for aggregated result)
-				llmResp := convertGeminiToLLMResponse(&geminiResp, false)
+				llmResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 				require.Len(t, llmResp.Choices, 1)
 				require.Equal(t, "Valid response", *llmResp.Choices[0].Message.Content.Content)
@@ -715,7 +716,7 @@ func TestOutboundTransformer_StreamTransformation_WithTestData(t *testing.T) {
 			require.NoError(t, err)
 
 			// Convert to LLM format (non-streaming for aggregated result)
-			aggregatedResp := convertGeminiToLLMResponse(&geminiResp, false)
+			aggregatedResp := convertGeminiToLLMResponse(&geminiResp, false, shared.TransportScope{})
 
 			// Run custom validation if provided
 			if tt.expectedAggregated != nil {

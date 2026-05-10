@@ -3,9 +3,9 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/streams"
@@ -63,6 +63,16 @@ func WithMiddlewares(decorators ...Middleware) Option {
 	}
 }
 
+// WithEmptyResponseDetection enables detection of empty streaming responses.
+// When enabled, the pipeline pre-reads up to 3 events from the LLM stream to check
+// if the response contains any meaningful content. If the stream ends without content,
+// an ErrEmptyResponse error is returned so the existing retry flow can handle it as a failed attempt.
+func WithEmptyResponseDetection() Option {
+	return func(p *pipeline) {
+		p.emptyResponseDetection = true
+	}
+}
+
 // Factory creates pipeline instances.
 type Factory struct {
 	Executor Executor
@@ -103,7 +113,8 @@ type pipeline struct {
 	middlewares           []Middleware
 	maxChannelRetries     int
 	maxSameChannelRetries int
-	retryDelay            time.Duration
+	retryDelay             time.Duration
+	emptyResponseDetection bool
 }
 
 type Result struct {
@@ -141,6 +152,19 @@ func (p *pipeline) applyInboundRawResponseMiddlewares(ctx context.Context, respo
 	}
 
 	return response, nil
+}
+
+func (p *pipeline) applyInboundRawStreamMiddlewares(ctx context.Context, stream streams.Stream[*httpclient.StreamEvent]) (streams.Stream[*httpclient.StreamEvent], error) {
+	var err error
+
+	for _, dec := range p.middlewares {
+		stream, err = dec.OnInboundRawStream(ctx, stream)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return stream, nil
 }
 
 func (p *pipeline) applyRawRequestMiddlewares(ctx context.Context, request *httpclient.Request) (*httpclient.Request, error) {
@@ -263,12 +287,12 @@ func (p *pipeline) Process(ctx context.Context, request *httpclient.Request) (*R
 					sameChannelRetries++
 					canRetry = true
 
-					log.Debug(ctx, "retrying same channel",
-						log.Int("same_channel_attempt", sameChannelRetries),
-						log.Int("max_same_channel_retries", p.getMaxSameChannelRetries()),
+					slog.DebugContext(ctx, "retrying same channel",
+						slog.Int("same_channel_attempt", sameChannelRetries),
+						slog.Int("max_same_channel_retries", p.getMaxSameChannelRetries()),
 					)
 				} else {
-					log.Warn(ctx, "failed to prepare same channel retry, will try channel switch", log.Cause(err))
+					slog.WarnContext(ctx, "failed to prepare same channel retry, will try channel switch", slog.Any("error", err))
 				}
 			}
 		}
@@ -282,12 +306,12 @@ func (p *pipeline) Process(ctx context.Context, request *httpclient.Request) (*R
 						sameChannelRetries = 0 // Reset same-channel attempts for new channel
 						canRetry = true
 
-						log.Debug(ctx, "switched to next channel",
-							log.Int("channel_switch_attempt", channelSwitches),
-							log.Int("max_channel_retries", p.maxChannelRetries),
+						slog.DebugContext(ctx, "switched to next channel",
+							slog.Int("channel_switch_attempt", channelSwitches),
+							slog.Int("max_channel_retries", p.maxChannelRetries),
 						)
 					} else {
-						log.Warn(ctx, "failed to switch to next channel", log.Cause(err))
+						slog.WarnContext(ctx, "failed to switch to next channel", slog.Any("error", err))
 					}
 				}
 			}
@@ -303,10 +327,10 @@ func (p *pipeline) Process(ctx context.Context, request *httpclient.Request) (*R
 			time.Sleep(p.retryDelay)
 		}
 
-		log.Warn(ctx, "request process failed, retrying...",
-			log.Cause(lastErr),
-			log.Int("channel_switches", channelSwitches),
-			log.Int("same_channel_retries", sameChannelRetries),
+		slog.WarnContext(ctx, "request process failed, retrying...",
+			slog.Any("error", lastErr),
+			slog.Int("channel_switches", channelSwitches),
+			slog.Int("same_channel_retries", sameChannelRetries),
 		)
 	}
 

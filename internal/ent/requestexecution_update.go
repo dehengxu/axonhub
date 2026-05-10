@@ -113,6 +113,33 @@ func (_u *RequestExecutionUpdate) ClearErrorMessage() *RequestExecutionUpdate {
 	return _u
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (_u *RequestExecutionUpdate) SetResponseStatusCode(v int) *RequestExecutionUpdate {
+	_u.mutation.ResetResponseStatusCode()
+	_u.mutation.SetResponseStatusCode(v)
+	return _u
+}
+
+// SetNillableResponseStatusCode sets the "response_status_code" field if the given value is not nil.
+func (_u *RequestExecutionUpdate) SetNillableResponseStatusCode(v *int) *RequestExecutionUpdate {
+	if v != nil {
+		_u.SetResponseStatusCode(*v)
+	}
+	return _u
+}
+
+// AddResponseStatusCode adds value to the "response_status_code" field.
+func (_u *RequestExecutionUpdate) AddResponseStatusCode(v int) *RequestExecutionUpdate {
+	_u.mutation.AddResponseStatusCode(v)
+	return _u
+}
+
+// ClearResponseStatusCode clears the value of the "response_status_code" field.
+func (_u *RequestExecutionUpdate) ClearResponseStatusCode() *RequestExecutionUpdate {
+	_u.mutation.ClearResponseStatusCode()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *RequestExecutionUpdate) SetStatus(v requestexecution.Status) *RequestExecutionUpdate {
 	_u.mutation.SetStatus(v)
@@ -181,6 +208,33 @@ func (_u *RequestExecutionUpdate) ClearMetricsFirstTokenLatencyMs() *RequestExec
 	return _u
 }
 
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdate) SetMetricsReasoningDurationMs(v int64) *RequestExecutionUpdate {
+	_u.mutation.ResetMetricsReasoningDurationMs()
+	_u.mutation.SetMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// SetNillableMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field if the given value is not nil.
+func (_u *RequestExecutionUpdate) SetNillableMetricsReasoningDurationMs(v *int64) *RequestExecutionUpdate {
+	if v != nil {
+		_u.SetMetricsReasoningDurationMs(*v)
+	}
+	return _u
+}
+
+// AddMetricsReasoningDurationMs adds value to the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdate) AddMetricsReasoningDurationMs(v int64) *RequestExecutionUpdate {
+	_u.mutation.AddMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdate) ClearMetricsReasoningDurationMs() *RequestExecutionUpdate {
+	_u.mutation.ClearMetricsReasoningDurationMs()
+	return _u
+}
+
 // SetRequestHeaders sets the "request_headers" field.
 func (_u *RequestExecutionUpdate) SetRequestHeaders(v objects.JSONRawMessage) *RequestExecutionUpdate {
 	_u.mutation.SetRequestHeaders(v)
@@ -242,6 +296,11 @@ func (_u *RequestExecutionUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RequestExecutionUpdate) check() error {
+	if v, ok := _u.mutation.ExternalID(); ok {
+		if err := requestexecution.ExternalIDValidator(v); err != nil {
+			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.external_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := requestexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.status": %w`, err)}
@@ -308,6 +367,15 @@ func (_u *RequestExecutionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(requestexecution.FieldErrorMessage, field.TypeString)
 	}
+	if value, ok := _u.mutation.ResponseStatusCode(); ok {
+		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedResponseStatusCode(); ok {
+		_spec.AddField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
+	}
+	if _u.mutation.ResponseStatusCodeCleared() {
+		_spec.ClearField(requestexecution.FieldResponseStatusCode, field.TypeInt)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(requestexecution.FieldStatus, field.TypeEnum, value)
 	}
@@ -328,6 +396,15 @@ func (_u *RequestExecutionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if _u.mutation.MetricsFirstTokenLatencyMsCleared() {
 		_spec.ClearField(requestexecution.FieldMetricsFirstTokenLatencyMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.MetricsReasoningDurationMs(); ok {
+		_spec.SetField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMetricsReasoningDurationMs(); ok {
+		_spec.AddField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.MetricsReasoningDurationMsCleared() {
+		_spec.ClearField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RequestHeaders(); ok {
 		_spec.SetField(requestexecution.FieldRequestHeaders, field.TypeJSON, value)
@@ -444,6 +521,33 @@ func (_u *RequestExecutionUpdateOne) ClearErrorMessage() *RequestExecutionUpdate
 	return _u
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (_u *RequestExecutionUpdateOne) SetResponseStatusCode(v int) *RequestExecutionUpdateOne {
+	_u.mutation.ResetResponseStatusCode()
+	_u.mutation.SetResponseStatusCode(v)
+	return _u
+}
+
+// SetNillableResponseStatusCode sets the "response_status_code" field if the given value is not nil.
+func (_u *RequestExecutionUpdateOne) SetNillableResponseStatusCode(v *int) *RequestExecutionUpdateOne {
+	if v != nil {
+		_u.SetResponseStatusCode(*v)
+	}
+	return _u
+}
+
+// AddResponseStatusCode adds value to the "response_status_code" field.
+func (_u *RequestExecutionUpdateOne) AddResponseStatusCode(v int) *RequestExecutionUpdateOne {
+	_u.mutation.AddResponseStatusCode(v)
+	return _u
+}
+
+// ClearResponseStatusCode clears the value of the "response_status_code" field.
+func (_u *RequestExecutionUpdateOne) ClearResponseStatusCode() *RequestExecutionUpdateOne {
+	_u.mutation.ClearResponseStatusCode()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *RequestExecutionUpdateOne) SetStatus(v requestexecution.Status) *RequestExecutionUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -509,6 +613,33 @@ func (_u *RequestExecutionUpdateOne) AddMetricsFirstTokenLatencyMs(v int64) *Req
 // ClearMetricsFirstTokenLatencyMs clears the value of the "metrics_first_token_latency_ms" field.
 func (_u *RequestExecutionUpdateOne) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpdateOne {
 	_u.mutation.ClearMetricsFirstTokenLatencyMs()
+	return _u
+}
+
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdateOne) SetMetricsReasoningDurationMs(v int64) *RequestExecutionUpdateOne {
+	_u.mutation.ResetMetricsReasoningDurationMs()
+	_u.mutation.SetMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// SetNillableMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field if the given value is not nil.
+func (_u *RequestExecutionUpdateOne) SetNillableMetricsReasoningDurationMs(v *int64) *RequestExecutionUpdateOne {
+	if v != nil {
+		_u.SetMetricsReasoningDurationMs(*v)
+	}
+	return _u
+}
+
+// AddMetricsReasoningDurationMs adds value to the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdateOne) AddMetricsReasoningDurationMs(v int64) *RequestExecutionUpdateOne {
+	_u.mutation.AddMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (_u *RequestExecutionUpdateOne) ClearMetricsReasoningDurationMs() *RequestExecutionUpdateOne {
+	_u.mutation.ClearMetricsReasoningDurationMs()
 	return _u
 }
 
@@ -586,6 +717,11 @@ func (_u *RequestExecutionUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RequestExecutionUpdateOne) check() error {
+	if v, ok := _u.mutation.ExternalID(); ok {
+		if err := requestexecution.ExternalIDValidator(v); err != nil {
+			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.external_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := requestexecution.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.status": %w`, err)}
@@ -669,6 +805,15 @@ func (_u *RequestExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Reques
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(requestexecution.FieldErrorMessage, field.TypeString)
 	}
+	if value, ok := _u.mutation.ResponseStatusCode(); ok {
+		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedResponseStatusCode(); ok {
+		_spec.AddField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
+	}
+	if _u.mutation.ResponseStatusCodeCleared() {
+		_spec.ClearField(requestexecution.FieldResponseStatusCode, field.TypeInt)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(requestexecution.FieldStatus, field.TypeEnum, value)
 	}
@@ -689,6 +834,15 @@ func (_u *RequestExecutionUpdateOne) sqlSave(ctx context.Context) (_node *Reques
 	}
 	if _u.mutation.MetricsFirstTokenLatencyMsCleared() {
 		_spec.ClearField(requestexecution.FieldMetricsFirstTokenLatencyMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.MetricsReasoningDurationMs(); ok {
+		_spec.SetField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMetricsReasoningDurationMs(); ok {
+		_spec.AddField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.MetricsReasoningDurationMsCleared() {
+		_spec.ClearField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RequestHeaders(); ok {
 		_spec.SetField(requestexecution.FieldRequestHeaders, field.TypeJSON, value)

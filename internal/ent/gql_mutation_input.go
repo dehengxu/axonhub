@@ -3,12 +3,15 @@
 package ent
 
 import (
+	"time"
+
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/datastorage"
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/promptprotectionrule"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/role"
 	"github.com/looplj/axonhub/internal/ent/usagelog"
@@ -85,7 +88,9 @@ type CreateChannelInput struct {
 	Name                    string
 	Credentials             objects.ChannelCredentials
 	SupportedModels         []string
+	ManualModels            []string
 	AutoSyncSupportedModels *bool
+	AutoSyncModelPattern    *string
 	Tags                    []string
 	DefaultTestModel        string
 	Policies                *objects.ChannelPolicies
@@ -105,8 +110,14 @@ func (i *CreateChannelInput) Mutate(m *ChannelMutation) {
 	if v := i.SupportedModels; v != nil {
 		m.SetSupportedModels(v)
 	}
+	if v := i.ManualModels; v != nil {
+		m.SetManualModels(v)
+	}
 	if v := i.AutoSyncSupportedModels; v != nil {
 		m.SetAutoSyncSupportedModels(*v)
+	}
+	if v := i.AutoSyncModelPattern; v != nil {
+		m.SetAutoSyncModelPattern(*v)
 	}
 	if v := i.Tags; v != nil {
 		m.SetTags(v)
@@ -134,31 +145,40 @@ func (c *ChannelCreate) SetInput(i CreateChannelInput) *ChannelCreate {
 
 // UpdateChannelInput represents a mutation input for updating channels.
 type UpdateChannelInput struct {
-	ClearBaseURL            bool
-	BaseURL                 *string
-	Name                    *string
-	Status                  *channel.Status
-	Credentials             *objects.ChannelCredentials
-	SupportedModels         []string
-	AppendSupportedModels   []string
-	AutoSyncSupportedModels *bool
-	ClearTags               bool
-	Tags                    []string
-	AppendTags              []string
-	DefaultTestModel        *string
-	ClearPolicies           bool
-	Policies                *objects.ChannelPolicies
-	ClearSettings           bool
-	Settings                *objects.ChannelSettings
-	OrderingWeight          *int
-	ClearErrorMessage       bool
-	ErrorMessage            *string
-	ClearRemark             bool
-	Remark                  *string
+	Type                      *channel.Type
+	ClearBaseURL              bool
+	BaseURL                   *string
+	Name                      *string
+	Status                    *channel.Status
+	Credentials               *objects.ChannelCredentials
+	SupportedModels           []string
+	AppendSupportedModels     []string
+	ClearManualModels         bool
+	ManualModels              []string
+	AppendManualModels        []string
+	AutoSyncSupportedModels   *bool
+	ClearAutoSyncModelPattern bool
+	AutoSyncModelPattern      *string
+	ClearTags                 bool
+	Tags                      []string
+	AppendTags                []string
+	DefaultTestModel          *string
+	ClearPolicies             bool
+	Policies                  *objects.ChannelPolicies
+	ClearSettings             bool
+	Settings                  *objects.ChannelSettings
+	OrderingWeight            *int
+	ClearErrorMessage         bool
+	ErrorMessage              *string
+	ClearRemark               bool
+	Remark                    *string
 }
 
 // Mutate applies the UpdateChannelInput on the ChannelMutation builder.
 func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
+	if v := i.Type; v != nil {
+		m.SetType(*v)
+	}
 	if i.ClearBaseURL {
 		m.ClearBaseURL()
 	}
@@ -180,8 +200,23 @@ func (i *UpdateChannelInput) Mutate(m *ChannelMutation) {
 	if i.AppendSupportedModels != nil {
 		m.AppendSupportedModels(i.SupportedModels)
 	}
+	if i.ClearManualModels {
+		m.ClearManualModels()
+	}
+	if v := i.ManualModels; v != nil {
+		m.SetManualModels(v)
+	}
+	if i.AppendManualModels != nil {
+		m.AppendManualModels(i.ManualModels)
+	}
 	if v := i.AutoSyncSupportedModels; v != nil {
 		m.SetAutoSyncSupportedModels(*v)
+	}
+	if i.ClearAutoSyncModelPattern {
+		m.ClearAutoSyncModelPattern()
+	}
+	if v := i.AutoSyncModelPattern; v != nil {
+		m.SetAutoSyncModelPattern(*v)
 	}
 	if i.ClearTags {
 		m.ClearTags()
@@ -426,6 +461,9 @@ func (c *ModelCreate) SetInput(i CreateModelInput) *ModelCreate {
 
 // UpdateModelInput represents a mutation input for updating models.
 type UpdateModelInput struct {
+	Developer   *string
+	ModelID     *string
+	Type        *model.Type
 	Name        *string
 	Icon        *string
 	Group       *string
@@ -438,6 +476,15 @@ type UpdateModelInput struct {
 
 // Mutate applies the UpdateModelInput on the ModelMutation builder.
 func (i *UpdateModelInput) Mutate(m *ModelMutation) {
+	if v := i.Developer; v != nil {
+		m.SetDeveloper(*v)
+	}
+	if v := i.ModelID; v != nil {
+		m.SetModelID(*v)
+	}
+	if v := i.Type; v != nil {
+		m.SetType(*v)
+	}
 	if v := i.Name; v != nil {
 		m.SetName(*v)
 	}
@@ -555,6 +602,7 @@ type CreatePromptInput struct {
 	Role        string
 	Content     string
 	Status      *prompt.Status
+	Order       *int
 	Settings    objects.PromptSettings
 	ProjectIDs  []int
 }
@@ -569,6 +617,9 @@ func (i *CreatePromptInput) Mutate(m *PromptMutation) {
 	m.SetContent(i.Content)
 	if v := i.Status; v != nil {
 		m.SetStatus(*v)
+	}
+	if v := i.Order; v != nil {
+		m.SetOrder(*v)
 	}
 	m.SetSettings(i.Settings)
 	if v := i.ProjectIDs; len(v) > 0 {
@@ -589,6 +640,7 @@ type UpdatePromptInput struct {
 	Role             *string
 	Content          *string
 	Status           *prompt.Status
+	Order            *int
 	Settings         *objects.PromptSettings
 	ClearProjects    bool
 	AddProjectIDs    []int
@@ -611,6 +663,9 @@ func (i *UpdatePromptInput) Mutate(m *PromptMutation) {
 	}
 	if v := i.Status; v != nil {
 		m.SetStatus(*v)
+	}
+	if v := i.Order; v != nil {
+		m.SetOrder(*v)
 	}
 	if v := i.Settings; v != nil {
 		m.SetSettings(*v)
@@ -638,6 +693,72 @@ func (c *PromptUpdateOne) SetInput(i UpdatePromptInput) *PromptUpdateOne {
 	return c
 }
 
+// CreatePromptProtectionRuleInput represents a mutation input for creating promptprotectionrules.
+type CreatePromptProtectionRuleInput struct {
+	Name        string
+	Description *string
+	Pattern     string
+	Settings    *objects.PromptProtectionSettings
+}
+
+// Mutate applies the CreatePromptProtectionRuleInput on the PromptProtectionRuleMutation builder.
+func (i *CreatePromptProtectionRuleInput) Mutate(m *PromptProtectionRuleMutation) {
+	m.SetName(i.Name)
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	m.SetPattern(i.Pattern)
+	if v := i.Settings; v != nil {
+		m.SetSettings(v)
+	}
+}
+
+// SetInput applies the change-set in the CreatePromptProtectionRuleInput on the PromptProtectionRuleCreate builder.
+func (c *PromptProtectionRuleCreate) SetInput(i CreatePromptProtectionRuleInput) *PromptProtectionRuleCreate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// UpdatePromptProtectionRuleInput represents a mutation input for updating promptprotectionrules.
+type UpdatePromptProtectionRuleInput struct {
+	Name        *string
+	Description *string
+	Pattern     *string
+	Status      *promptprotectionrule.Status
+	Settings    *objects.PromptProtectionSettings
+}
+
+// Mutate applies the UpdatePromptProtectionRuleInput on the PromptProtectionRuleMutation builder.
+func (i *UpdatePromptProtectionRuleInput) Mutate(m *PromptProtectionRuleMutation) {
+	if v := i.Name; v != nil {
+		m.SetName(*v)
+	}
+	if v := i.Description; v != nil {
+		m.SetDescription(*v)
+	}
+	if v := i.Pattern; v != nil {
+		m.SetPattern(*v)
+	}
+	if v := i.Status; v != nil {
+		m.SetStatus(*v)
+	}
+	if v := i.Settings; v != nil {
+		m.SetSettings(v)
+	}
+}
+
+// SetInput applies the change-set in the UpdatePromptProtectionRuleInput on the PromptProtectionRuleUpdate builder.
+func (c *PromptProtectionRuleUpdate) SetInput(i UpdatePromptProtectionRuleInput) *PromptProtectionRuleUpdate {
+	i.Mutate(c.Mutation())
+	return c
+}
+
+// SetInput applies the change-set in the UpdatePromptProtectionRuleInput on the PromptProtectionRuleUpdateOne builder.
+func (c *PromptProtectionRuleUpdateOne) SetInput(i UpdatePromptProtectionRuleInput) *PromptProtectionRuleUpdateOne {
+	i.Mutate(c.Mutation())
+	return c
+}
+
 // CreateRequestInput represents a mutation input for creating requests.
 type CreateRequestInput struct {
 	Source                     *request.Source
@@ -653,6 +774,11 @@ type CreateRequestInput struct {
 	ClientIP                   *string
 	MetricsLatencyMs           *int64
 	MetricsFirstTokenLatencyMs *int64
+	MetricsReasoningDurationMs *int64
+	ContentSaved               *bool
+	ContentStorageID           *int
+	ContentStorageKey          *string
+	ContentSavedAt             *time.Time
 	APIKeyID                   *int
 	ProjectID                  int
 	TraceID                    *int
@@ -697,6 +823,21 @@ func (i *CreateRequestInput) Mutate(m *RequestMutation) {
 	if v := i.MetricsFirstTokenLatencyMs; v != nil {
 		m.SetMetricsFirstTokenLatencyMs(*v)
 	}
+	if v := i.MetricsReasoningDurationMs; v != nil {
+		m.SetMetricsReasoningDurationMs(*v)
+	}
+	if v := i.ContentSaved; v != nil {
+		m.SetContentSaved(*v)
+	}
+	if v := i.ContentStorageID; v != nil {
+		m.SetContentStorageID(*v)
+	}
+	if v := i.ContentStorageKey; v != nil {
+		m.SetContentStorageKey(*v)
+	}
+	if v := i.ContentSavedAt; v != nil {
+		m.SetContentSavedAt(*v)
+	}
 	if v := i.APIKeyID; v != nil {
 		m.SetAPIKeyID(*v)
 	}
@@ -736,6 +877,15 @@ type UpdateRequestInput struct {
 	MetricsLatencyMs                *int64
 	ClearMetricsFirstTokenLatencyMs bool
 	MetricsFirstTokenLatencyMs      *int64
+	ClearMetricsReasoningDurationMs bool
+	MetricsReasoningDurationMs      *int64
+	ContentSaved                    *bool
+	ClearContentStorageID           bool
+	ContentStorageID                *int
+	ClearContentStorageKey          bool
+	ContentStorageKey               *string
+	ClearContentSavedAt             bool
+	ContentSavedAt                  *time.Time
 	ClearChannel                    bool
 	ChannelID                       *int
 }
@@ -789,6 +939,33 @@ func (i *UpdateRequestInput) Mutate(m *RequestMutation) {
 	}
 	if v := i.MetricsFirstTokenLatencyMs; v != nil {
 		m.SetMetricsFirstTokenLatencyMs(*v)
+	}
+	if i.ClearMetricsReasoningDurationMs {
+		m.ClearMetricsReasoningDurationMs()
+	}
+	if v := i.MetricsReasoningDurationMs; v != nil {
+		m.SetMetricsReasoningDurationMs(*v)
+	}
+	if v := i.ContentSaved; v != nil {
+		m.SetContentSaved(*v)
+	}
+	if i.ClearContentStorageID {
+		m.ClearContentStorageID()
+	}
+	if v := i.ContentStorageID; v != nil {
+		m.SetContentStorageID(*v)
+	}
+	if i.ClearContentStorageKey {
+		m.ClearContentStorageKey()
+	}
+	if v := i.ContentStorageKey; v != nil {
+		m.SetContentStorageKey(*v)
+	}
+	if i.ClearContentSavedAt {
+		m.ClearContentSavedAt()
+	}
+	if v := i.ContentSavedAt; v != nil {
+		m.SetContentSavedAt(*v)
 	}
 	if i.ClearChannel {
 		m.ClearChannel()

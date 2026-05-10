@@ -25,6 +25,7 @@ type BrandSettings {
 
 type StoragePolicy {
   storeChunks: Boolean!
+  livePreview: Boolean!
   storeRequestBody: Boolean!
   storeResponseBody: Boolean!
   cleanupOptions: [CleanupOption!]!
@@ -43,6 +44,7 @@ input UpdateBrandSettingsInput {
 
 input UpdateStoragePolicyInput {
   storeChunks: Boolean
+  livePreview: Boolean
   storeRequestBody: Boolean
   storeResponseBody: Boolean
   cleanupOptions: [CleanupOptionInput!]
@@ -74,6 +76,46 @@ type AutoDisableAPIKey {
   statuses: [AutoDisableAPIKeyStatus!]!
 }
 
+type WebhookTarget {
+  name: String!
+  enabled: Boolean!
+  url: String!
+  proxy: ProxyConfig
+  timeoutMs: Int!
+  headers: [HeaderEntry!]!
+  body: String!
+}
+
+input WebhookTargetInput {
+  name: String!
+  enabled: Boolean!
+  url: String!
+  proxy: ProxyConfigInput
+  timeoutMs: Int!
+  headers: [HeaderEntryInput!]
+  body: String!
+}
+
+type WebhookSubscription {
+  event: String!
+  targetNames: [String!]!
+}
+
+input WebhookSubscriptionInput {
+  event: String!
+  targetNames: [String!]!
+}
+
+type WebhookNotifierConfig {
+  targets: [WebhookTarget!]!
+  subscriptions: [WebhookSubscription!]!
+}
+
+input WebhookNotifierConfigInput {
+  targets: [WebhookTargetInput!]
+  subscriptions: [WebhookSubscriptionInput!]
+}
+
 type RetryPolicy {
   maxChannelRetries: Int!
   maxSingleChannelRetries: Int!
@@ -81,6 +123,7 @@ type RetryPolicy {
   loadBalancerStrategy: String!
   enabled: Boolean!
   autoDisableChannel: AutoDisableChannel!
+  emptyResponseDetection: Boolean!
 }
 
 input AutoDisableChannelStatusInput {
@@ -100,16 +143,19 @@ input UpdateRetryPolicyInput {
   loadBalancerStrategy: String
   enabled: Boolean
   autoDisableChannel: AutoDisableChannelInput
+  emptyResponseDetection: Boolean
 }
 
 type SystemModelSettings {
   fallbackToChannelsOnModelNotFound: Boolean!
   queryAllChannelModels: Boolean!
+  defaultModelAPIIncludeAll: Boolean!
 }
 
 input UpdateSystemModelSettingsInput {
   fallbackToChannelsOnModelNotFound: Boolean
   queryAllChannelModels: Boolean
+  defaultModelAPIIncludeAll: Boolean
 }
 
 input UpdateDefaultDataStorageInput {
@@ -152,13 +198,24 @@ enum ProbeFrequency {
   ONE_HOUR
 }
 
+enum AutoSyncFrequency {
+  ONE_HOUR
+  SIX_HOURS
+  ONE_DAY
+}
+
 type ChannelProbeSetting {
   enabled: Boolean!
   frequency: ProbeFrequency!
 }
 
+type ChannelModelAutoSyncSetting {
+  frequency: AutoSyncFrequency!
+}
+
 type SystemChannelSettings {
   probe: ChannelProbeSetting!
+  autoSync: ChannelModelAutoSyncSetting!
 }
 
 input UpdateChannelProbeSettingInput {
@@ -166,8 +223,13 @@ input UpdateChannelProbeSettingInput {
   frequency: ProbeFrequency!
 }
 
+input UpdateChannelModelAutoSyncSettingInput {
+  frequency: AutoSyncFrequency!
+}
+
 input UpdateSystemChannelSettingsInput {
   probe: UpdateChannelProbeSettingInput
+  autoSync: UpdateChannelModelAutoSyncSettingInput
 }
 
 type SystemGeneralSettings {
@@ -180,10 +242,47 @@ input UpdateSystemGeneralSettingsInput {
   timezone: String
 }
 
+type VideoStorageSettings {
+  enabled: Boolean!
+  dataStorageID: Int!
+  scanIntervalMinutes: Int!
+  scanLimit: Int!
+}
+
+input UpdateVideoStorageSettingsInput {
+  enabled: Boolean
+  dataStorageID: Int
+  scanIntervalMinutes: Int
+  scanLimit: Int
+}
+type UserAgentPassThroughSettings {
+  enabled: Boolean!
+}
+
+input UpdateUserAgentPassThroughSettingsInput {
+  enabled: Boolean!
+}
+
+
+type ProxyPreset {
+  name: String
+  url: String!
+  username: String
+  password: String
+}
+
+input SaveProxyPresetInput {
+  name: String
+  url: String!
+  username: String
+  password: String
+}
+
 extend type Mutation {
   updateBrandSettings(input: UpdateBrandSettingsInput!): Boolean!
   updateStoragePolicy(input: UpdateStoragePolicyInput!): Boolean!
   updateRetryPolicy(input: UpdateRetryPolicyInput!): Boolean!
+  updateWebhookNotifierConfig(input: WebhookNotifierConfigInput!): Boolean!
   updateSystemModelSettings(input: UpdateSystemModelSettingsInput!): Boolean!
   updateDefaultDataStorage(input: UpdateDefaultDataStorageInput!): Boolean!
   completeOnboarding(input: CompleteOnboardingInput!): Boolean!
@@ -191,7 +290,12 @@ extend type Mutation {
   completeAutoDisableChannelOnboarding(input: CompleteAutoDisableChannelOnboardingInput!): Boolean!
   updateSystemChannelSettings(input: UpdateSystemChannelSettingsInput!): Boolean!
   updateSystemGeneralSettings(input: UpdateSystemGeneralSettingsInput!): Boolean!
+  updateVideoStorageSettings(input: UpdateVideoStorageSettingsInput!): Boolean!
   checkProviderQuotas: Boolean!
+  triggerGcCleanup: Boolean!
+  saveProxyPreset(input: SaveProxyPresetInput!): Boolean!
+  deleteProxyPreset(url: String!): Boolean!
+  updateUserAgentPassThroughSettings(input: UpdateUserAgentPassThroughSettingsInput!): Boolean!
 }
 
 type SystemVersion {
@@ -210,11 +314,36 @@ type VersionCheck {
   releaseUrl: String!
 }
 
+enum DiagnosticsTarget {
+  CHANNEL_CACHE
+}
+
+input GetCacheDiagnosticsInput {
+  targets: [DiagnosticsTarget!]
+}
+
+input ClearCacheInput {
+  targets: [DiagnosticsTarget!]
+}
+
+type GetCacheDiagnosticsPayload {
+  fileName: String!
+  content: String!
+  targets: [DiagnosticsTarget!]!
+}
+
+type ClearCachePayload {
+  success: Boolean!
+  message: String!
+  targets: [DiagnosticsTarget!]!
+}
+
 extend type Query {
   systemStatus: SystemStatus!
   brandSettings: BrandSettings!
   storagePolicy: StoragePolicy!
   retryPolicy: RetryPolicy!
+  webhookNotifierConfig: WebhookNotifierConfig!
   systemModelSettings: SystemModelSettings!
   defaultDataStorageID: ID
   onboardingInfo: OnboardingInfo
@@ -222,4 +351,12 @@ extend type Query {
   checkForUpdate: VersionCheck!
   systemChannelSettings: SystemChannelSettings!
   systemGeneralSettings: SystemGeneralSettings!
+  videoStorageSettings: VideoStorageSettings!
+  proxyPresets: [ProxyPreset!]!
+  userAgentPassThroughSettings: UserAgentPassThroughSettings!
+  getCacheDiagnostics(input: GetCacheDiagnosticsInput): GetCacheDiagnosticsPayload!
+}
+
+extend type Mutation {
+  clearCache(input: ClearCacheInput!): ClearCachePayload!
 }

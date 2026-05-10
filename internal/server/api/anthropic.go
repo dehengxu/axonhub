@@ -19,12 +19,15 @@ type AnthropicHandlersParams struct {
 
 	ChannelService  *biz.ChannelService
 	ModelService    *biz.ModelService
+	DefaultSelector *orchestrator.DefaultSelector
 	RequestService  *biz.RequestService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
 	PromptService   *biz.PromptService
+	PromptProtectionRuleService *biz.PromptProtectionRuleService
 	QuotaService    *biz.QuotaService
 	HttpClient      *httpclient.HttpClient
+	LiveStreamRegistry *biz.LiveStreamRegistry
 }
 
 type AnthropicHandlers struct {
@@ -39,7 +42,7 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 		ChatCompletionHandlers: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
-				params.ModelService,
+				params.DefaultSelector,
 				params.RequestService,
 				params.HttpClient,
 				anthropic.NewInboundTransformer(),
@@ -47,6 +50,8 @@ func NewAnthropicHandlers(params AnthropicHandlersParams) *AnthropicHandlers {
 				params.UsageLogService,
 				params.PromptService,
 				params.QuotaService,
+				params.PromptProtectionRuleService,
+				params.LiveStreamRegistry,
 			),
 		},
 		ChannelService: params.ChannelService,

@@ -25,7 +25,9 @@ import {
   AiHubMix,
   Cerebras,
   Claude,
-  XiaomiMiMo
+  XiaomiMiMo,
+  Fireworks,
+  Ollama
 } from '@lobehub/icons';
 import { NanoGPTIcon } from '../components/nanogpt-icon';
 import { CHANNEL_CONFIGS } from './config_channels';
@@ -72,7 +74,7 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'moonshot',
     icon: Moonshot,
     color: 'bg-black-100 text-black-800 border-black-200',
-    channelTypes: ['moonshot_anthropic', 'moonshot'],
+    channelTypes: ['moonshot_anthropic', 'moonshot', 'moonshot_coding'],
   },
   zhipu: {
     provider: 'zhipu',
@@ -146,6 +148,12 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     color: 'bg-gray-100 text-gray-800 border-gray-200',
     channelTypes: ['github'],
   },
+  github_copilot: {
+    provider: 'github_copilot',
+    icon: Github,
+    color: 'bg-[#6e40c9] text-white border-[#6e40c9]',
+    channelTypes: ['github_copilot'],
+  },
   ppio: {
     provider: 'ppio',
     icon: PPIO,
@@ -180,7 +188,7 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'bailian',
     icon: Bailian,
     color: 'bg-green-100 text-green-800 border-green-200',
-    channelTypes: ['bailian'],
+    channelTypes: ['bailian', 'bailian_anthropic'],
   },
   openrouter: {
     provider: 'openrouter',
@@ -216,7 +224,19 @@ export const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     provider: 'nanogpt',
     icon: NanoGPTIcon,
     color: 'bg-gray-100 text-gray-800 border-gray-200',
-    channelTypes: ['nanogpt'],
+    channelTypes: ['nanogpt', 'nanogpt_responses'],
+  },
+  fireworks: {
+    provider: 'fireworks',
+    icon: Fireworks,
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    channelTypes: ['fireworks'],
+  },
+  ollama: {
+    provider: 'ollama',
+    icon: Ollama,
+    color: 'bg-slate-100 text-slate-800 border-slate-200',
+    channelTypes: ['ollama'],
   },
 };
 

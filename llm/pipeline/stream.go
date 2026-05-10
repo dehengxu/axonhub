@@ -2,14 +2,78 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
-	"github.com/looplj/axonhub/internal/log"
-	"github.com/looplj/axonhub/internal/pkg/xerrors"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/streams"
+	"github.com/looplj/axonhub/llm/transformer/shared"
 )
+
+// hasFinishReason checks if an llm.Response event contains a finish reason.
+func hasFinishReason(resp *llm.Response) bool {
+	if resp == nil {
+		return false
+	}
+
+	for _, choice := range resp.Choices {
+		if choice.FinishReason != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// checkEmptyResponse pre-reads up to 3 events from the LLM stream to detect empty responses.
+// If the stream contains content, it returns a new stream with the pre-read events prepended.
+// If the stream is empty (finish reason reached without content), it returns ErrEmptyResponse.
+func (p *pipeline) checkEmptyResponse(
+	ctx context.Context,
+	llmStream streams.Stream[*llm.Response],
+) (streams.Stream[*llm.Response], error) {
+	const maxPreReadEvents = 3
+
+	var buffered []*llm.Response
+
+	for range maxPreReadEvents {
+		if !llmStream.Next() {
+			break
+		}
+
+		event := llmStream.Current()
+		buffered = append(buffered, event)
+
+		if hasResponseContent(event) {
+			// Has content, not empty — prepend buffered events back
+			return streams.PrependStream(llmStream, buffered...), nil
+		}
+
+		if event == llm.DoneResponse || hasFinishReason(event) {
+			// Reached end without content — empty response
+			slog.WarnContext(ctx, "empty response detected",
+				slog.Int("events_read", len(buffered)),
+			)
+
+			llmStream.Close()
+
+			return nil, ErrEmptyResponse
+		}
+	}
+
+	if err := llmStream.Err(); err != nil {
+		return nil, err
+	}
+
+	// Didn't find content or finish in 3 events — treat as non-empty (safe default)
+	if len(buffered) > 0 {
+		return streams.PrependStream(llmStream, buffered...), nil
+	}
+
+	return llmStream, nil
+}
 
 // Process executes the streaming LLM pipeline
 // Steps: outbound transform -> HTTP stream -> outbound stream transform -> inbound stream transform.
@@ -23,7 +87,7 @@ func (p *pipeline) stream(
 		// Apply error response middlewares
 		p.applyRawErrorResponseMiddlewares(ctx, err)
 
-		if httpErr, ok := xerrors.As[*httpclient.Error](err); ok {
+		if httpErr, ok := errors.AsType[*httpclient.Error](err); ok {
 			return nil, p.Outbound.TransformError(ctx, httpErr)
 		}
 
@@ -36,18 +100,22 @@ func (p *pipeline) stream(
 		return nil, fmt.Errorf("failed to apply raw stream middlewares: %w", err)
 	}
 
-	if log.DebugEnabled(ctx) {
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		outboundStream = streams.Map(outboundStream,
 			func(event *httpclient.StreamEvent) *httpclient.StreamEvent {
-				log.Debug(ctx, "Outbound stream event", log.Any("event", event))
+				slog.DebugContext(ctx, "Outbound stream event", slog.Any("event", event))
 				return event
 			},
 		)
 	}
 
+	if request != nil && request.Metadata != nil {
+		ctx = shared.ContextWithTransportScope(ctx, shared.ScopeFromMetadata(request.Metadata))
+	}
+
 	llmStream, err := p.Outbound.TransformStream(ctx, outboundStream)
 	if err != nil {
-		log.Error(ctx, "Failed to transform streaming request", log.Cause(err))
+		slog.ErrorContext(ctx, "Failed to transform streaming request", slog.Any("error", err))
 		return nil, err
 	}
 
@@ -57,24 +125,37 @@ func (p *pipeline) stream(
 		return nil, fmt.Errorf("failed to apply llm stream middlewares: %w", err)
 	}
 
-	if log.DebugEnabled(ctx) {
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		llmStream = streams.Map(llmStream, func(event *llm.Response) *llm.Response {
-			log.Debug(ctx, "LLM stream event", log.Any("event", event))
+			slog.DebugContext(ctx, "LLM stream event", slog.Any("event", event))
 			return event
 		})
 	}
 
+	// Check for empty response if detection is enabled
+	if p.emptyResponseDetection {
+		llmStream, err = p.checkEmptyResponse(ctx, llmStream)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	inboundStream, err := p.Inbound.TransformStream(ctx, llmStream)
 	if err != nil {
-		log.Error(ctx, "Failed to transform streaming request", log.Cause(err))
+		slog.ErrorContext(ctx, "Failed to transform streaming request", slog.Any("error", err))
 		return nil, err
 	}
 
-	if log.DebugEnabled(ctx) {
+	inboundStream, err = p.applyInboundRawStreamMiddlewares(ctx, inboundStream)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply inbound raw stream middlewares: %w", err)
+	}
+
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		inboundStream = streams.Map(
 			inboundStream,
 			func(event *httpclient.StreamEvent) *httpclient.StreamEvent {
-				log.Debug(ctx, "Inbound stream event", log.Any("event", event))
+				slog.DebugContext(ctx, "Inbound stream event", slog.Any("event", event))
 				return event
 			},
 		)

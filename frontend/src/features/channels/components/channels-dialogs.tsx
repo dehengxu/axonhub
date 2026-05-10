@@ -2,12 +2,14 @@ import { useChannels } from '../context/channels-context';
 import { ChannelsActionDialog } from './channels-action-dialog';
 import { ChannelsArchiveDialog } from './channels-archive-dialog';
 import { ChannelsBulkApplyTemplateDialog } from './channels-bulk-apply-template-dialog';
+import { ChannelsBulkClearTemplateDialog } from './channels-bulk-clear-template-dialog';
 import { ChannelsBulkArchiveDialog } from './channels-bulk-archive-dialog';
 import { ChannelsBulkDeleteDialog } from './channels-bulk-delete-dialog';
 import { ChannelsBulkDisableDialog } from './channels-bulk-disable-dialog';
 import { ChannelsBulkEnableDialog } from './channels-bulk-enable-dialog';
 import { ChannelsBulkImportDialog } from './channels-bulk-import-dialog';
 import { ChannelsBulkOrderingDialog } from './channels-bulk-ordering-dialog';
+import { ChannelsBulkTestDialog } from './channels-bulk-test-dialog';
 import { ChannelsDeleteDialog } from './channels-delete-dialog';
 import { ChannelsDisabledAPIKeysDialog } from './channels-disabled-api-keys-dialog';
 import { ChannelsErrorResolvedDialog } from './channels-error-resolved-dialog';
@@ -17,6 +19,9 @@ import { ChannelsOverrideDialog } from './channels-override-dialog';
 import { ChannelsProxyDialog } from './channels-proxy-dialog';
 import { ChannelsStatusDialog } from './channels-status-dialog';
 import { ChannelsTestDialog } from './channels-test-dialog';
+import { ChannelsTestHistoryDrawer } from './channels-test-history-drawer';
+import { ChannelsTestAPIKeysDialog } from './channels-test-api-keys-dialog';
+import { ChannelsRateLimitDialog } from './channels-rate-limit-dialog';
 import { ChannelsTransformOptionsDialog } from './channels-transform-options-dialog';
 import { ChannelsSystemSettingsDialog } from './channels-system-settings-dialog';
 
@@ -34,6 +39,8 @@ export function ChannelsDialogs() {
 
       <ChannelsBulkEnableDialog />
 
+      <ChannelsBulkTestDialog />
+
       <ChannelsBulkDeleteDialog />
 
       <ChannelsBulkApplyTemplateDialog
@@ -41,6 +48,8 @@ export function ChannelsDialogs() {
         onOpenChange={(isOpen) => setOpen(isOpen ? 'bulkApplyTemplate' : null)}
         selectedChannels={selectedChannels}
       />
+
+      <ChannelsBulkClearTemplateDialog />
 
       <ChannelsBulkImportDialog isOpen={open === 'bulkImport'} onClose={() => setOpen(null)} />
 
@@ -217,6 +226,22 @@ export function ChannelsDialogs() {
             channel={currentRow}
           />
 
+          <ChannelsTestHistoryDrawer
+            key={`channel-test-history-${currentRow.id}`}
+            open={open === 'testHistory'}
+            onOpenChange={(isOpen) => {
+              if (isOpen) {
+                setOpen('testHistory');
+              } else {
+                setOpen(null);
+                setTimeout(() => {
+                  setCurrentRow(null);
+                }, 500);
+              }
+            }}
+            channel={currentRow}
+          />
+
           <ChannelsErrorResolvedDialog
             key={`channel-error-resolved-${currentRow.id}`}
             open={open === 'errorResolved'}
@@ -244,9 +269,36 @@ export function ChannelsDialogs() {
             currentRow={currentRow}
           />
 
+          <ChannelsRateLimitDialog
+            key={`channel-rate-limit-${currentRow.id}`}
+            open={open === 'rateLimit'}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                setOpen(null);
+                setTimeout(() => {
+                  setCurrentRow(null);
+                }, 500);
+              }
+            }}
+            currentRow={currentRow}
+          />
+
           <ChannelsDisabledAPIKeysDialog
             key={`channel-disabled-api-keys-${currentRow.id}`}
             open={open === 'disabledAPIKeys'}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                setOpen(null);
+                setTimeout(() => {
+                  setCurrentRow(null);
+                }, 500);
+              }
+            }}
+          />
+
+          <ChannelsTestAPIKeysDialog
+            key={`channel-test-api-keys-${currentRow.id}`}
+            open={open === 'testAPIKeys'}
             onOpenChange={(isOpen) => {
               if (!isOpen) {
                 setOpen(null);

@@ -196,6 +196,11 @@ linters:
 
   
   exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     # Exclude all linters from running on ent files.
     paths:
       - internal/ent
@@ -256,6 +261,10 @@ linters:
       - linters:
           - staticcheck
         text: "SA4009:"
+
+      - linters:
+          - staticcheck
+        text: "SA4006:"
 
       - linters:
           - staticcheck

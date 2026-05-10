@@ -74,6 +74,14 @@ func (_c *APIKeyCreate) SetUserID(v int) *APIKeyCreate {
 	return _c
 }
 
+// SetNillableUserID sets the "user_id" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableUserID(v *int) *APIKeyCreate {
+	if v != nil {
+		_c.SetUserID(*v)
+	}
+	return _c
+}
+
 // SetProjectID sets the "project_id" field.
 func (_c *APIKeyCreate) SetProjectID(v int) *APIKeyCreate {
 	_c.mutation.SetProjectID(v)
@@ -245,17 +253,8 @@ func (_c *APIKeyCreate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *APIKeyCreate) check() error {
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "APIKey.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "APIKey.updated_at"`)}
-	}
 	if _, ok := _c.mutation.DeletedAt(); !ok {
 		return &ValidationError{Name: "deleted_at", err: errors.New(`ent: missing required field "APIKey.deleted_at"`)}
-	}
-	if _, ok := _c.mutation.UserID(); !ok {
-		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "APIKey.user_id"`)}
 	}
 	if _, ok := _c.mutation.ProjectID(); !ok {
 		return &ValidationError{Name: "project_id", err: errors.New(`ent: missing required field "APIKey.project_id"`)}
@@ -281,9 +280,6 @@ func (_c *APIKeyCreate) check() error {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
 		}
-	}
-	if len(_c.mutation.UserIDs()) == 0 {
-		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "APIKey.user"`)}
 	}
 	if len(_c.mutation.ProjectIDs()) == 0 {
 		return &ValidationError{Name: "project", err: errors.New(`ent: missing required edge "APIKey.project"`)}

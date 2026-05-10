@@ -9,9 +9,9 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/looplj/axonhub/internal/ent"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/ent/role"
 	"github.com/looplj/axonhub/internal/ent/userrole"
+	"github.com/looplj/axonhub/internal/pkg/xerrors"
 )
 
 type RoleServiceParams struct {
@@ -50,7 +50,6 @@ func (s *RoleService) CreateRole(ctx context.Context, input ent.CreateRoleInput)
 		return nil, fmt.Errorf("permission denied: %w", err)
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	client := s.entFromContext(ctx)
 
 	var (
@@ -96,7 +95,7 @@ func (s *RoleService) CreateRole(ctx context.Context, input ent.CreateRoleInput)
 	}
 
 	if exists {
-		return nil, fmt.Errorf("role name '%s' already exists", input.Name)
+		return nil, xerrors.DuplicateNameError("role", input.Name)
 	}
 
 	role, err := client.Role.Create().
@@ -121,10 +120,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int, input ent.UpdateRo
 
 	// Validate new scopes if being updated
 	if input.Scopes != nil {
-		ctx2 := privacy.DecisionContext(ctx, privacy.Allow)
-		client2 := ent.FromContext(ctx2)
-
-		role, err := client2.Role.Get(ctx2, id)
+		role, err := s.entFromContext(ctx).Role.Get(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get role: %w", err)
 		}
@@ -139,7 +135,6 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int, input ent.UpdateRo
 		}
 	}
 
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	client := s.entFromContext(ctx)
 
 	// If name is being updated, check for duplicates
@@ -157,7 +152,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int, input ent.UpdateRo
 			}
 
 			if exists {
-				return nil, fmt.Errorf("role name '%s' already exists", *input.Name)
+				return nil, xerrors.DuplicateNameError("role", *input.Name)
 			}
 		}
 	}
@@ -182,7 +177,6 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int, input ent.UpdateRo
 // DeleteRole deletes a role and all associated user-role relationships.
 // It uses the UserRole entity to delete all relationships through the role_id.
 func (s *RoleService) DeleteRole(ctx context.Context, id int) error {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	client := s.entFromContext(ctx)
 
 	// First, check if the role exists
@@ -259,7 +253,6 @@ func (s *RoleService) BulkDeleteRoles(ctx context.Context, ids []int) error {
 
 // RoleNameExists checks if a role name already exists within a specific project.
 func (s *RoleService) RoleNameExists(ctx context.Context, level role.Level, name string, projectID *int) (bool, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
 	client := s.entFromContext(ctx)
 
 	if level == role.LevelSystem {

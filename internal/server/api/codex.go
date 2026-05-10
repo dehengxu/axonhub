@@ -127,11 +127,20 @@ func (h *CodexHandlers) StartOAuth(c *gin.Context) {
 }
 
 type ExchangeCodexOAuthRequest struct {
-	SessionID   string `json:"session_id" binding:"required"`
-	CallbackURL string `json:"callback_url" binding:"required"`
+	SessionID   string                  `json:"session_id" binding:"required"`
+	CallbackURL string                  `json:"callback_url" binding:"required"`
+	Proxy       *httpclient.ProxyConfig `json:"proxy,omitempty"`
 }
 
 type ExchangeCodexOAuthResponse struct {
+	Credentials string `json:"credentials"`
+}
+
+type DecodeCodexAuthJSONRequest struct {
+	AuthJSON string `json:"auth_json" binding:"required"`
+}
+
+type DecodeCodexAuthJSONResponse struct {
 	Credentials string `json:"credentials"`
 }
 
@@ -159,6 +168,30 @@ func parseCodexCallbackURL(callbackURL string) (string, string, error) {
 	}
 
 	return code, state, nil
+}
+
+// DecodeAuthJSON decodes Codex auth.json into normalized OAuth credentials JSON.
+// POST /admin/codex/auth/decode.
+func (h *CodexHandlers) DecodeAuthJSON(c *gin.Context) {
+	var req DecodeCodexAuthJSONRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		JSONError(c, http.StatusBadRequest, errors.New("invalid request format"))
+		return
+	}
+
+	creds, err := codex.DecodeAuthJSON(req.AuthJSON)
+	if err != nil {
+		JSONError(c, http.StatusBadRequest, fmt.Errorf("failed to decode auth json: %w", err))
+		return
+	}
+
+	output, err := creds.ToJSON()
+	if err != nil {
+		JSONError(c, http.StatusInternalServerError, fmt.Errorf("failed to encode credentials: %w", err))
+		return
+	}
+
+	c.JSON(http.StatusOK, DecodeCodexAuthJSONResponse{Credentials: output})
 }
 
 // Exchange exchanges callback URL for OAuth credentials JSON.
@@ -200,8 +233,14 @@ func (h *CodexHandlers) Exchange(c *gin.Context) {
 		return
 	}
 
+	// Create HTTP client with proxy if provided
+	httpClient := h.httpClient
+	if req.Proxy != nil && req.Proxy.Type == httpclient.ProxyTypeURL && req.Proxy.URL != "" {
+		httpClient = h.httpClient.WithProxy(req.Proxy)
+	}
+
 	tokenProvider := codex.NewTokenProvider(codex.TokenProviderParams{
-		HTTPClient: h.httpClient,
+		HTTPClient: httpClient,
 	})
 
 	creds, err := tokenProvider.Exchange(ctx, oauth.ExchangeParams{

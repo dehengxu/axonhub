@@ -168,6 +168,17 @@ func (r *mutationResolver) BulkEnableChannels(ctx context.Context, ids []*object
 	return true, nil
 }
 
+// BulkRecoverChannels is the resolver for the bulkRecoverChannels field.
+func (r *mutationResolver) BulkRecoverChannels(ctx context.Context, ids []*objects.GUID) (bool, error) {
+	channelIDs := objects.IntGuids(ids)
+
+	if err := r.channelService.BulkRecoverChannels(ctx, channelIDs); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // BulkDeleteChannels is the resolver for the bulkDeleteChannels field.
 func (r *mutationResolver) BulkDeleteChannels(ctx context.Context, ids []*objects.GUID) (bool, error) {
 	channelIDs := objects.IntGuids(ids)
@@ -196,7 +207,37 @@ func (r *mutationResolver) TestChannel(ctx context.Context, input TestChannelInp
 	return &TestChannelPayload{
 		Latency: result.Latency,
 		Success: result.Success,
+		Message: result.Message,
 		Error:   result.Error,
+	}, nil
+}
+
+// TestChannelAPIKeys is the resolver for the testChannelAPIKeys field.
+func (r *mutationResolver) TestChannelAPIKeys(ctx context.Context, channelID objects.GUID, modelID *string) (*TestChannelAPIKeysPayload, error) {
+	ctx = contexts.WithSource(ctx, request.SourceTest)
+
+	result, err := r.TestChannelOrchestrator.TestChannelAPIKeys(ctx, channelID, modelID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to test channel API keys: %w", err)
+	}
+
+	apiKeyResults := make([]*TestAPIKeyResult, len(result.Results))
+	for i, r := range result.Results {
+		apiKeyResults[i] = &TestAPIKeyResult{
+			KeyPrefix: r.KeyPrefix,
+			Success:   r.Success,
+			Latency:   r.Latency,
+			Error:     r.Error,
+			Disabled:  r.Disabled,
+		}
+	}
+
+	return &TestChannelAPIKeysPayload{
+		ChannelID:    result.ChannelID,
+		Total:        result.Total,
+		SuccessCount: result.SuccessCount,
+		FailedCount:  result.FailedCount,
+		Results:      apiKeyResults,
 	}, nil
 }
 
@@ -347,6 +388,15 @@ func (r *mutationResolver) UpdateUserStatus(ctx context.Context, id objects.GUID
 	return r.userService.UpdateUserStatus(ctx, id.ID, status)
 }
 
+// DeleteUser is the resolver for the deleteUser field.
+func (r *mutationResolver) DeleteUser(ctx context.Context, id objects.GUID) (bool, error) {
+	if err := r.userService.DeleteUser(ctx, id.ID); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // CreateRole is the resolver for the createRole field.
 func (r *mutationResolver) CreateRole(ctx context.Context, input ent.CreateRoleInput) (*ent.Role, error) {
 	return r.roleService.CreateRole(ctx, input)
@@ -392,6 +442,20 @@ func (r *mutationResolver) UpdateProject(ctx context.Context, id objects.GUID, i
 // UpdateProjectStatus is the resolver for the updateProjectStatus field.
 func (r *mutationResolver) UpdateProjectStatus(ctx context.Context, id objects.GUID, status project.Status) (*ent.Project, error) {
 	return r.projectService.UpdateProjectStatus(ctx, id.ID, status)
+}
+
+// UpdateProjectProfiles is the resolver for the updateProjectProfiles field.
+func (r *mutationResolver) UpdateProjectProfiles(ctx context.Context, id objects.GUID, input objects.ProjectProfiles) (*ent.Project, error) {
+	return r.projectService.UpdateProjectProfiles(ctx, id.ID, input)
+}
+
+// DeleteProject is the resolver for the deleteProject field.
+func (r *mutationResolver) DeleteProject(ctx context.Context, id objects.GUID) (bool, error) {
+	if err := r.projectService.DeleteProject(ctx, id.ID); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // AddUserToProject is the resolver for the addUserToProject field.
@@ -456,10 +520,16 @@ func (r *mutationResolver) DeleteChannelOverrideTemplate(ctx context.Context, id
 func (r *mutationResolver) ApplyChannelOverrideTemplate(ctx context.Context, input ApplyChannelOverrideTemplateInput) (*ApplyChannelOverrideTemplatePayload, error) {
 	channelIDs := objects.IntGuids(input.ChannelIDs)
 
+	mode := biz.ApplyTemplateModeMerge
+	if input.Mode != nil && *input.Mode == OverrideApplyModeReplace {
+		mode = biz.ApplyTemplateModeReplace
+	}
+
 	updatedChannels, err := r.channelOverrideTemplateService.ApplyTemplate(
 		ctx,
 		input.TemplateID.ID,
 		channelIDs,
+		mode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply template: %w", err)
@@ -472,6 +542,65 @@ func (r *mutationResolver) ApplyChannelOverrideTemplate(ctx context.Context, inp
 	}, nil
 }
 
+// ClearChannelOverrideTemplates is the resolver for the clearChannelOverrideTemplates field.
+func (r *mutationResolver) ClearChannelOverrideTemplates(ctx context.Context, input ClearChannelOverrideTemplatesInput) (*ClearChannelOverrideTemplatesPayload, error) {
+	channelIDs := objects.IntGuids(input.ChannelIDs)
+
+	updatedChannels, err := r.channelOverrideTemplateService.ClearTemplates(ctx, channelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clear templates: %w", err)
+	}
+
+	return &ClearChannelOverrideTemplatesPayload{
+		Success:  true,
+		Updated:  len(updatedChannels),
+		Channels: updatedChannels,
+	}, nil
+}
+
+// SyncChannelModels is the resolver for the syncChannelModels field.
+func (r *mutationResolver) SyncChannelModels(ctx context.Context, channelID objects.GUID, pattern *string) (*SyncChannelModelsPayload, error) {
+	ch, err := r.channelService.SyncChannelModels(ctx, channelID.ID, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SyncChannelModelsPayload{
+		ChannelID:       channelID,
+		SupportedModels: ch.SupportedModels,
+	}, nil
+}
+
+// AllChannelSummarys is the resolver for the allChannelSummarys field.
+func (r *queryResolver) AllChannelSummarys(ctx context.Context, includeArchived *bool) ([]*ent.Channel, error) {
+	statusFilter := []channel.Status{channel.StatusEnabled, channel.StatusDisabled}
+	if includeArchived != nil && *includeArchived {
+		statusFilter = append(statusFilter, channel.StatusArchived)
+	}
+
+	channels, err := r.client.Channel.Query().
+		Where(channel.StatusIn(statusFilter...)).
+		Order(ent.Desc(channel.FieldOrderingWeight)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query channels: %w", err)
+	}
+
+	projectID, ok := contexts.GetProjectID(ctx)
+	if !ok || projectID == 0 {
+		return channels, nil
+	}
+
+	proj, err := r.client.Project.Get(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	projectProfile := proj.GetActiveProfile()
+
+	return filterChannelsByProjectProfile(channels, projectProfile), nil
+}
+
 // AllChannelTags is the resolver for the allChannelTags field.
 func (r *queryResolver) AllChannelTags(ctx context.Context) ([]string, error) {
 	// Query all channels that are not archived
@@ -482,6 +611,16 @@ func (r *queryResolver) AllChannelTags(ctx context.Context) ([]string, error) {
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query channels: %w", err)
+	}
+
+	projectID, ok := contexts.GetProjectID(ctx)
+	if ok && projectID != 0 {
+		proj, err := r.client.Project.Get(ctx, projectID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get project: %w", err)
+		}
+
+		channels = filterChannelsByProjectProfile(channels, proj.GetActiveProfile())
 	}
 
 	tags := lo.Reduce(channels, func(acc []string, ch *ent.Channel, _ int) []string {

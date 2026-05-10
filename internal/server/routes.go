@@ -21,6 +21,7 @@ type Handlers struct {
 	Graphql        *gql.GraphqlHandler
 	OpenAPIGraphql *openapi.GraphqlHandler
 	OpenAI         *api.OpenAIHandlers
+	Doubao         *api.DoubaoHandlers
 	Anthropic      *api.AnthropicHandlers
 	Gemini         *api.GeminiHandlers
 	AiSDK          *api.AiSDKHandlers
@@ -31,6 +32,9 @@ type Handlers struct {
 	Codex          *api.CodexHandlers
 	ClaudeCode     *api.ClaudeCodeHandlers
 	Antigravity    *api.AntigravityHandlers
+	Copilot        *api.CopilotHandlers
+	RequestContent *api.RequestContentHandlers
+	RequestPreview *api.RequestPreviewHandlers
 }
 
 type Services struct {
@@ -94,6 +98,7 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 
 		adminGroup.POST("/codex/oauth/start", handlers.Codex.StartOAuth)
 		adminGroup.POST("/codex/oauth/exchange", handlers.Codex.Exchange)
+		adminGroup.POST("/codex/auth/decode", handlers.Codex.DecodeAuthJSON)
 
 		adminGroup.POST("/claudecode/oauth/start", handlers.ClaudeCode.StartOAuth)
 		adminGroup.POST("/claudecode/oauth/exchange", handlers.ClaudeCode.Exchange)
@@ -101,12 +106,26 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		adminGroup.POST("/antigravity/oauth/start", handlers.Antigravity.StartOAuth)
 		adminGroup.POST("/antigravity/oauth/exchange", handlers.Antigravity.Exchange)
 
+		adminGroup.POST("/copilot/oauth/start", handlers.Copilot.StartOAuth)
+		adminGroup.POST("/copilot/oauth/poll", handlers.Copilot.PollOAuth)
+
 		// Playground API with channel specification support
 		adminGroup.POST(
 			"/playground/chat",
 			middleware.WithTimeout(server.Config.LLMRequestTimeout),
 			middleware.WithSource(request.SourcePlayground),
 			handlers.Playground.ChatCompletion,
+		)
+
+		adminGroup.GET(
+			"/requests/:request_id/content",
+			middleware.WithTimeout(server.Config.RequestTimeout),
+			handlers.RequestContent.DownloadRequestContent,
+		)
+		adminGroup.GET(
+			"/requests/:request_id/preview",
+			middleware.WithTimeout(server.Config.RequestTimeout),
+			handlers.RequestPreview.PreviewRequest,
 		)
 	}
 
@@ -118,11 +137,13 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		openAPIGroup.GET("/v1/playground", func(c *gin.Context) {
 			handlers.OpenAPIGraphql.Playground.ServeHTTP(c.Writer, c.Request)
 		})
+
+		openAPIGroup.POST("/webhook/echo", handlers.System.WebhookEcho)
 	}
 
 	apiGroup := server.Group("/",
 		middleware.WithTimeout(server.Config.LLMRequestTimeout),
-		middleware.WithAPIKeyAuth(services.AuthService),
+		middleware.WithAPIKeyConfig(services.AuthService, nil),
 		middleware.WithSource(request.SourceAPI),
 		middleware.WithThread(server.Config.Trace, services.ThreadService),
 		middleware.WithTrace(server.Config.Trace, services.TraceService),
@@ -131,11 +152,16 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 	{
 		openaiGroup := apiGroup.Group("/v1")
 		openaiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
+		openaiGroup.POST("/responses/compact", handlers.OpenAI.CompactResponse)
 		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
+		openaiGroup.GET("/models/*model", handlers.OpenAI.RetrieveModel)
 		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
 		openaiGroup.POST("/images/generations", handlers.OpenAI.CreateImage)
 		openaiGroup.POST("/images/edits", handlers.OpenAI.CreateImageEdit)
+		openaiGroup.POST("/videos", handlers.OpenAI.CreateVideo)
+		openaiGroup.GET("/videos/:id", handlers.OpenAI.GetVideo)
+		openaiGroup.DELETE("/videos/:id", handlers.OpenAI.DeleteVideo)
 		// DO NOT SUPPORT IMAGE VARIATION
 		// openaiGroup.POST("/images/variations", handlers.OpenAI.CreateImageVariation)
 
@@ -156,6 +182,13 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		anthropicGroup := apiGroup.Group("/anthropic/v1")
 		anthropicGroup.POST("/messages", handlers.Anthropic.CreateMessage)
 		anthropicGroup.GET("/models", handlers.Anthropic.ListModels)
+	}
+
+	{
+		doubaoGroup := apiGroup.Group("/doubao/v3")
+		doubaoGroup.POST("/contents/generations/tasks", handlers.Doubao.CreateTask)
+		doubaoGroup.GET("/contents/generations/tasks/:id", handlers.Doubao.GetTask)
+		doubaoGroup.DELETE("/contents/generations/tasks/:id", handlers.Doubao.DeleteTask)
 	}
 
 	{

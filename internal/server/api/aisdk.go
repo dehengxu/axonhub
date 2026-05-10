@@ -15,14 +15,17 @@ import (
 type AiSdkHandlersParams struct {
 	fx.In
 
-	ChannelService  *biz.ChannelService
-	ModelService    *biz.ModelService
-	RequestService  *biz.RequestService
-	SystemService   *biz.SystemService
-	UsageLogService *biz.UsageLogService
-	PromptService   *biz.PromptService
-	QuotaService    *biz.QuotaService
-	HttpClient      *httpclient.HttpClient
+	ChannelService              *biz.ChannelService
+	ModelService                *biz.ModelService
+	DefaultSelector             *orchestrator.DefaultSelector
+	RequestService              *biz.RequestService
+	SystemService               *biz.SystemService
+	UsageLogService             *biz.UsageLogService
+	PromptService               *biz.PromptService
+	PromptProtectionRuleService *biz.PromptProtectionRuleService
+	QuotaService                *biz.QuotaService
+	HttpClient                  *httpclient.HttpClient
+	LiveStreamRegistry          *biz.LiveStreamRegistry
 }
 
 type AiSDKHandlers struct {
@@ -34,7 +37,7 @@ func NewAiSDKHandlers(params AiSdkHandlersParams) *AiSDKHandlers {
 		ChatCompletionHandler: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
-				params.ModelService,
+				params.DefaultSelector,
 				params.RequestService,
 				params.HttpClient,
 				aisdk.NewDataStreamTransformer(),
@@ -42,6 +45,8 @@ func NewAiSDKHandlers(params AiSdkHandlersParams) *AiSDKHandlers {
 				params.UsageLogService,
 				params.PromptService,
 				params.QuotaService,
+				params.PromptProtectionRuleService,
+				params.LiveStreamRegistry,
 			),
 			StreamWriter: WriteJSONStream,
 		},

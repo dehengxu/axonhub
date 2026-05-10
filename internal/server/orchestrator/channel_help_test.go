@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zhenzou/executors"
 
+	"github.com/looplj/axonhub/internal/authz"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
 	"github.com/looplj/axonhub/internal/ent/enttest"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/objects"
 	"github.com/looplj/axonhub/internal/pkg/xcache"
 	"github.com/looplj/axonhub/internal/server/biz"
@@ -48,13 +48,13 @@ func newTestLoadBalancedSelector(
 	client *ent.Client,
 	systemService *biz.SystemService,
 	requestService *biz.RequestService,
-	connectionTracker *DefaultConnectionTracker,
+	_ *DefaultConnectionTracker,
 ) CandidateSelector {
 	strategies := []LoadBalanceStrategy{
 		NewTraceAwareStrategy(requestService),
 		NewErrorAwareStrategy(channelService),
 		NewWeightRoundRobinStrategy(channelService),
-		NewConnectionAwareStrategy(channelService, connectionTracker),
+		NewLatencyAwareStrategy(channelService),
 	}
 	loadBalancer := NewLoadBalancer(systemService, nil, strategies...)
 
@@ -82,7 +82,7 @@ func newTestRequestServiceForChannels(client *ent.Client, systemService *biz.Sys
 	channelService := biz.NewChannelServiceForTest(client)
 	usageLogService := biz.NewUsageLogService(client, systemService, channelService)
 
-	return biz.NewRequestService(client, systemService, usageLogService, dataStorageService)
+	return biz.NewRequestService(client, systemService, usageLogService, dataStorageService, biz.NewLiveStreamRegistry())
 }
 
 // setupTest creates a test context and ent client for testing.
@@ -90,7 +90,7 @@ func setupTest(t *testing.T) (context.Context, *ent.Client) {
 	t.Helper()
 
 	ctx := context.Background()
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	client := enttest.NewEntClient(t, "sqlite3", "file:ent?mode=memory&_fk=0")
 	t.Cleanup(func() { client.Close() })
@@ -230,7 +230,7 @@ func setupTestServices(t *testing.T, client *ent.Client) (*biz.ChannelService, *
 
 	channelService := biz.NewChannelServiceForTest(client)
 	usageLogService := biz.NewUsageLogService(client, systemService, channelService)
-	requestService := biz.NewRequestService(client, systemService, usageLogService, dataStorageService)
+	requestService := biz.NewRequestService(client, systemService, usageLogService, dataStorageService, biz.NewLiveStreamRegistry())
 
 	channelService = biz.NewChannelServiceForTest(client)
 

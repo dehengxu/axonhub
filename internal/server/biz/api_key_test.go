@@ -10,11 +10,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/looplj/axonhub/internal/authz"
 	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/apikey"
 	"github.com/looplj/axonhub/internal/ent/enttest"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/user"
 	"github.com/looplj/axonhub/internal/objects"
@@ -24,14 +24,14 @@ import (
 )
 
 func TestGenerateAPIKey(t *testing.T) {
-	apiKey, err := GenerateAPIKey()
+	apiKey, err := GenerateAPIKey("ah")
 	require.NoError(t, err)
 	require.NotEmpty(t, apiKey)
 	require.True(t, len(apiKey) > 3)
 	require.Equal(t, "ah-", apiKey[:3])
 
 	// Test that multiple calls produce different keys
-	apiKey2, err := GenerateAPIKey()
+	apiKey2, err := GenerateAPIKey("ah")
 	require.NoError(t, err)
 	require.NotEqual(t, apiKey, apiKey2)
 }
@@ -42,13 +42,14 @@ func setupTestAPIKeyService(t *testing.T, cacheConfig xcache.Config) (*APIKeySer
 	client := enttest.NewEntClient(t, "sqlite3", "file:ent?mode=memory&_fk=1")
 
 	projectService := &ProjectService{
-		ProjectCache: xcache.NewFromConfig[ent.Project](cacheConfig),
+		ProjectCache: xcache.NewFromConfig[xcache.Entry[ent.Project]](cacheConfig),
 	}
 
 	apiKeyService := NewAPIKeyService(APIKeyServiceParams{
 		CacheConfig:    cacheConfig,
 		Ent:            client,
 		ProjectService: projectService,
+		KeyPrefix:      "ah",
 	})
 
 	return apiKeyService, client
@@ -64,7 +65,7 @@ func TestAPIKeyService_GetAPIKey(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	// Create a test user
 	hashedPassword, err := HashPassword("test-password")
@@ -91,7 +92,7 @@ func TestAPIKeyService_GetAPIKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate API key
-	apiKeyString, err := GenerateAPIKey()
+	apiKeyString, err := GenerateAPIKey("ah")
 	require.NoError(t, err)
 
 	// Create API key in database
@@ -180,7 +181,7 @@ func TestAPIKeyService_GetAPIKey_WithDifferentCaches(t *testing.T) {
 
 			ctx := context.Background()
 			ctx = ent.NewContext(ctx, client)
-			ctx = privacy.DecisionContext(ctx, privacy.Allow)
+			ctx = authz.WithTestBypass(ctx)
 
 			// Create test user
 			hashedPassword, err := HashPassword("test-password")
@@ -207,7 +208,7 @@ func TestAPIKeyService_GetAPIKey_WithDifferentCaches(t *testing.T) {
 			require.NoError(t, err)
 
 			// Generate and create API key
-			apiKeyString, err := GenerateAPIKey()
+			apiKeyString, err := GenerateAPIKey("ah")
 			require.NoError(t, err)
 
 			apiKey, err := client.APIKey.Create().
@@ -234,7 +235,7 @@ func TestAPIKeyService_GetAPIKey_WithDifferentCaches(t *testing.T) {
 
 			// Update API key to invalidate cache
 			_, err = apiKeyService.UpdateAPIKey(ctx, apiKey.ID, ent.UpdateAPIKeyInput{
-				Name: stringPtr("Updated API Key"),
+				Name: new("Updated API Key"),
 			})
 			require.NoError(t, err)
 
@@ -248,10 +249,6 @@ func TestAPIKeyService_GetAPIKey_WithDifferentCaches(t *testing.T) {
 	}
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
-
 func TestAPIKeyService_UpdateAPIKeyProfiles(t *testing.T) {
 	apiKeyService, client := setupTestAPIKeyService(t, xcache.Config{Mode: xcache.ModeMemory})
 	defer apiKeyService.Stop()
@@ -259,7 +256,7 @@ func TestAPIKeyService_UpdateAPIKeyProfiles(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	// Create test user
 	hashedPassword, err := HashPassword("test-password")
@@ -441,6 +438,42 @@ func TestAPIKeyService_UpdateAPIKeyProfiles(t *testing.T) {
 		require.Contains(t, err.Error(), "does not exist in the profiles list")
 	})
 
+	t.Run("Invalid channel tags match mode", func(t *testing.T) {
+		profiles := objects.APIKeyProfiles{
+			ActiveProfile: "production",
+			Profiles: []objects.APIKeyProfile{
+				{
+					Name:                 "production",
+					ChannelTags:          []string{"official"},
+					ChannelTagsMatchMode: objects.ChannelTagsMatchMode("invalid"),
+				},
+			},
+		}
+
+		_, err := apiKeyService.UpdateAPIKeyProfiles(ctx, apiKey.ID, profiles)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "channelTagsMatchMode is invalid")
+	})
+
+	t.Run("Channel tags match mode none is valid", func(t *testing.T) {
+		profiles := objects.APIKeyProfiles{
+			ActiveProfile: "production",
+			Profiles: []objects.APIKeyProfile{
+				{
+					Name:                 "production",
+					ChannelTags:          []string{"official"},
+					ChannelTagsMatchMode: objects.ChannelTagsMatchModeNone,
+				},
+			},
+		}
+
+		updatedAPIKey, err := apiKeyService.UpdateAPIKeyProfiles(ctx, apiKey.ID, profiles)
+		require.NoError(t, err)
+		require.NotNil(t, updatedAPIKey)
+		require.NotNil(t, updatedAPIKey.Profiles)
+		require.Equal(t, objects.ChannelTagsMatchModeNone, updatedAPIKey.Profiles.Profiles[0].ChannelTagsMatchMode)
+	})
+
 	t.Run("Multiple profiles with unique names", func(t *testing.T) {
 		profiles := objects.APIKeyProfiles{
 			ActiveProfile: "staging",
@@ -482,7 +515,7 @@ func TestAPIKeyService_BulkEnableAPIKeys(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	hashedPassword, err := HashPassword("test-password")
 	require.NoError(t, err)
@@ -601,7 +634,7 @@ func TestAPIKeyService_BulkDisableAPIKeys(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	hashedPassword, err := HashPassword("test-password")
 	require.NoError(t, err)
@@ -711,7 +744,7 @@ func TestAPIKeyService_BulkArchiveAPIKeys(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	hashedPassword, err := HashPassword("test-password")
 	require.NoError(t, err)
@@ -824,7 +857,7 @@ func TestAPIKeyService_CreateAPIKey_Type(t *testing.T) {
 
 	ctx := context.Background()
 	ctx = ent.NewContext(ctx, client)
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
+	ctx = authz.WithTestBypass(ctx)
 
 	hashedPassword, err := HashPassword("test-password")
 	require.NoError(t, err)
@@ -967,7 +1000,7 @@ func TestAPIKeyService_CreateAPIKey_Type(t *testing.T) {
 		serviceAccountType := apikey.TypeServiceAccount
 
 		userAPIKey, err := apiKeyService.CreateAPIKey(ctxWithUser, ent.CreateAPIKeyInput{
-			Name:      "User Key",
+			Name:      "User Key for format check",
 			ProjectID: testProject.ID,
 			Type:      &userType,
 		})
@@ -976,7 +1009,7 @@ func TestAPIKeyService_CreateAPIKey_Type(t *testing.T) {
 		require.Equal(t, "ah-", userAPIKey.Key[:3])
 
 		serviceAPIKey, err := apiKeyService.CreateAPIKey(ctxWithUser, ent.CreateAPIKeyInput{
-			Name:      "Service Key",
+			Name:      "Service Key for format check",
 			ProjectID: testProject.ID,
 			Type:      &serviceAccountType,
 		})
@@ -993,9 +1026,8 @@ func TestAPIKeyService_CreateLLMAPIKey(t *testing.T) {
 	defer client.Close()
 
 	// Setup context with privacy.Allow for data preparation
-	setupCtx := context.Background()
-	setupCtx = ent.NewContext(setupCtx, client)
-	setupCtx = privacy.DecisionContext(setupCtx, privacy.Allow)
+	setupCtx := ent.NewContext(context.Background(), client)
+	setupCtx = authz.WithTestBypass(setupCtx)
 
 	hashedPassword, err := HashPassword("test-password")
 	require.NoError(t, err)
@@ -1017,7 +1049,7 @@ func TestAPIKeyService_CreateLLMAPIKey(t *testing.T) {
 		Save(setupCtx)
 	require.NoError(t, err)
 
-	serviceKey, err := GenerateAPIKey()
+	serviceKey, err := GenerateAPIKey("ah")
 	require.NoError(t, err)
 
 	ownerAPIKey, err := client.APIKey.Create().

@@ -49,6 +49,7 @@ func (Channel) Fields() []ent.Field {
 				"deepseek",
 				"deepseek_anthropic",
 				"deepinfra",
+				"fireworks",
 				"doubao",
 				"doubao_anthropic",
 				"moonshot",
@@ -73,14 +74,18 @@ func (Channel) Fields() []ent.Field {
 				"burncloud",
 				"modelscope",
 				"bailian",
+				"bailian_anthropic",
+				"moonshot_coding",
 				"jina",
 				"github",
+				"github_copilot",
 				"claudecode",
 				"cerebras",
 				"antigravity",
 				"nanogpt",
+				"nanogpt_responses",
+				"ollama",
 			).
-			Immutable().
 			Annotations(
 				entgql.OrderField("TYPE"),
 			),
@@ -104,7 +109,10 @@ func (Channel) Fields() []ent.Field {
 				entgql.Skip(entgql.SkipMutationCreateInput, entgql.SkipMutationUpdateInput),
 			),
 		field.Strings("supported_models"),
+		field.Strings("manual_models").Optional().Default([]string{}),
 		field.Bool("auto_sync_supported_models").Default(false),
+		field.String("auto_sync_model_pattern").Optional().Default("").
+			Comment("Regex pattern to filter models during auto-sync. Empty string means no filtering."),
 		field.Strings("tags").Optional().Default([]string{}),
 		field.String("default_test_model"),
 		field.JSON("policies", objects.ChannelPolicies{}).

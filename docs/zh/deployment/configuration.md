@@ -29,7 +29,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 
 log:
   level: "info"
@@ -43,7 +43,7 @@ log:
 ```bash
 export AXONHUB_SERVER_PORT=8090
 export AXONHUB_DB_DIALECT="sqlite3"
-export AXONHUB_DB_DSN="file:axonhub.db?cache=shared&_fk=1"
+export AXONHUB_DB_DSN="file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 export AXONHUB_LOG_LEVEL="info"
 ```
 
@@ -69,6 +69,7 @@ server:
     claude_code_trace_enabled: false # 启用 Claude Code 追踪提取
     codex_trace_enabled: false # 启用 Codex 追踪提取
   debug: false                  # 启用调试模式
+  disable_ssl_verify: false     # 禁用上游请求的 SSL 证书校验（自签名证书）
 ```
 
 **环境变量：**
@@ -83,13 +84,14 @@ server:
 - `AXONHUB_SERVER_TRACE_CLAUDE_CODE_TRACE_ENABLED`
 - `AXONHUB_SERVER_TRACE_CODEX_TRACE_ENABLED`
 - `AXONHUB_SERVER_DEBUG`
+- `AXONHUB_SERVER_DISABLE_SSL_VERIFY`
 
 ### 数据库配置
 
 ```yaml
 db:
   dialect: "sqlite3"            # sqlite3, postgres, mysql, tidb
-  dsn: "file:axonhub.db?cache=shared&_fk=1"  # 连接字符串
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"  # 连接字符串
   debug: false                  # 启用数据库调试日志
 ```
 
@@ -210,6 +212,46 @@ gc:
 **环境变量：**
 - `AXONHUB_GC_CRON`
 
+### GitHub Copilot OAuth 配置
+
+```yaml
+copilot:
+  client_id: ""                   # 自定义 GitHub OAuth 客户端 ID（可选）
+```
+
+**描述：**
+配置用于 GitHub Copilot 设备流程认证的 OAuth 客户端 ID。默认情况下，AxonHub 使用 VS Code 的公共客户端 ID。对于生产部署或为了遵守 GitHub 的服务条款，您应该注册自己的 OAuth 应用程序并配置自定义客户端 ID。
+
+**环境变量：**
+- `GITHUB_COPILOT_CLIENT_ID`
+
+**默认值：** VS Code 公共客户端 ID（用于向后兼容）
+
+**何时自定义：**
+- **生产部署：** 注册您自己的 GitHub OAuth 应用程序以完全控制 OAuth 设置
+- **合规性：** 使用您自己的客户端 ID 确保遵守 GitHub 的服务条款
+- **速率限制：** 拥有自己的 OAuth 应用程序可以获得专用的速率限制
+
+**如何注册您自己的 OAuth 应用程序：**
+1. 前往 GitHub 设置 → 开发者设置 → OAuth 应用程序
+2. 点击"新建 OAuth 应用程序"
+3. 填写应用程序详细信息：
+   - 应用程序名称：`您的 AxonHub 实例`
+   - 主页 URL：`https://your-axonhub-domain.com`
+   - 授权回调 URL：`https://your-axonhub-domain.com/api/copilot/oauth/callback`
+4. 点击"注册应用程序"
+5. 复制客户端 ID 并设置为环境变量
+
+**示例：**
+```yaml
+copilot:
+  client_id: "Iv1.your-custom-client-id"
+```
+
+```bash
+export GITHUB_COPILOT_CLIENT_ID="Iv1.your-custom-client-id"
+```
+
 ## 配置示例
 
 ### 开发环境配置
@@ -222,7 +264,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
   debug: true
 
 log:

@@ -106,6 +106,9 @@ type Request struct {
 	// [Learn more](https://platform.openai.com/docs/guides/prompt-caching).
 	PromptCacheKey *string `json:"prompt_cache_key,omitzero"`
 
+	// The unique ID of the previous response for multi-turn Responses API requests.
+	PreviousResponseID *string `json:"previous_response_id,omitempty"`
+
 	// A stable identifier used to help detect users of your application that may be
 	// violating OpenAI's usage policies. The IDs should be a string that uniquely
 	// identifies each user. We recommend hashing their username or email address, in
@@ -215,6 +218,12 @@ type Request struct {
 	// Image is the image request, will be set if the request is image request.
 	Image *ImageRequest `json:"image,omitempty"`
 
+	// Video is the video request, will be set if the request is video request.
+	Video *VideoRequest `json:"video,omitempty"`
+
+	// Compact is the compact request, will be set if the request is compact request.
+	Compact *CompactRequest `json:"compact,omitempty"`
+
 	// RawRequest is the raw request from the client.
 	RawRequest *httpclient.Request `json:"raw_request,omitempty"`
 
@@ -252,6 +261,8 @@ type StreamOptions struct {
 }
 
 type Stop struct {
+	// Stop and MultipleStop are mutually exclusive representations of the same field.
+	// If both are populated, Stop takes precedence during marshaling.
 	Stop         *string
 	MultipleStop []string
 }
@@ -274,6 +285,7 @@ func (s *Stop) UnmarshalJSON(data []byte) error {
 	err := json.Unmarshal(data, &str)
 	if err == nil {
 		s.Stop = &str
+		s.MultipleStop = nil
 		return nil
 	}
 
@@ -281,6 +293,7 @@ func (s *Stop) UnmarshalJSON(data []byte) error {
 
 	err = json.Unmarshal(data, &strs)
 	if err == nil {
+		s.Stop = nil
 		s.MultipleStop = strs
 		return nil
 	}
@@ -290,6 +303,9 @@ func (s *Stop) UnmarshalJSON(data []byte) error {
 
 // Message represents a message in the conversation.
 type Message struct {
+	// ID is the upstream message/item identifier when the provider exposes one.
+	ID string `json:"id,omitempty"`
+
 	// user, assistant, system, tool, developer
 	Role string `json:"role,omitempty"`
 	// Content of the message.
@@ -319,6 +335,9 @@ type Message struct {
 	// - https://api-docs.deepseek.com/api/create-chat-completion#responses
 	ReasoningContent *string `json:"reasoning_content,omitempty"`
 
+	// Reasoning is an alternative field used by some providers (e.g., Synthetic)
+	Reasoning *string `json:"reasoning,omitempty"`
+
 	// Help field, will not be sent to the llm service, to adapt the
 	// 1. Anthropic think signature： https://platform.claude.com/docs/en/build-with-claude/extended-thinking
 	// 2. Gemini thought signature：  https://ai.google.dev/gemini-api/docs/thought-signatures#model-behavior
@@ -337,6 +356,12 @@ type Message struct {
 	// Annotations contains citation information for the message.
 	// This is used by providers like Perplexity to provide source URLs.
 	Annotations []Annotation `json:"annotations,omitempty"`
+
+	// Audio contains model-generated audio metadata for assistant messages.
+	Audio *OutputAudio `json:"audio,omitempty"`
+
+	// Copilot-only: X-Initiator quota tracking. Ignored by other providers.
+	Attribution string `json:"attribution,omitempty"`
 }
 
 // Annotation represents a citation or reference annotation in a message.
@@ -356,6 +381,8 @@ type URLCitation struct {
 }
 
 type MessageContent struct {
+	// Content and MultipleContent are mutually exclusive representations of the same payload.
+	// If both are populated, MultipleContent takes precedence during marshaling.
 	Content         *string              `json:"content,omitempty"`
 	MultipleContent []MessageContentPart `json:"multiple_content,omitempty"`
 }
@@ -378,6 +405,7 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	err := json.Unmarshal(data, &str)
 	if err == nil {
 		c.Content = &str
+		c.MultipleContent = nil
 		return nil
 	}
 
@@ -385,6 +413,7 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 
 	err = json.Unmarshal(data, &parts)
 	if err == nil {
+		c.Content = nil
 		c.MultipleContent = parts
 		return nil
 	}
@@ -392,10 +421,13 @@ func (c *MessageContent) UnmarshalJSON(data []byte) error {
 	return errors.New("invalid content type")
 }
 
-// MessageContentPart represents different types of content (text, image, etc.)
+// MessageContentPart represents different types of content (text, image, video, etc.)
 type MessageContentPart struct {
+	// ID is the upstream content/item identifier when the provider exposes one.
+	ID string `json:"id,omitempty"`
+
 	// Type is the type of the content part.
-	// e.g. "text", "image_url", "document", "input_audio"
+	// e.g. "text", "image_url", "video_url", "document", "input_audio", "compaction", "compaction_summary"
 	Type string `json:"type"`
 	// Text is the text content, required when type is "text"
 	Text *string `json:"text,omitempty"`
@@ -403,12 +435,19 @@ type MessageContentPart struct {
 	// ImageURL is the image URL content, required when type is "image_url"
 	ImageURL *ImageURL `json:"image_url,omitempty"`
 
+	// VideoURL is the video URL content, required when type is "video_url"
+	VideoURL *VideoURL `json:"video_url,omitempty"`
+
 	// Document is the document content, required when type is "document"
 	// Supports PDF and other document formats
 	Document *DocumentURL `json:"document,omitempty"`
 
-	// Audio is the audio content, required when type is "input_audio"
-	Audio *Audio `json:"audio,omitempty"`
+	// InputAudio is the input audio content, required when type is "input_audio"
+	InputAudio *InputAudio `json:"input_audio,omitempty"`
+
+	// Compact is the compact content, required when type is "compaction" or "compaction_summary"
+	// This is used for OpenAI Responses API compaction-related items.
+	Compact *CompactContent `json:"compact,omitempty"`
 
 	// CacheControl is used for provider-specific cache control (e.g., Anthropic).
 	// This field is not serialized in JSON.
@@ -431,6 +470,12 @@ type ImageURL struct {
 	Detail *string `json:"detail,omitempty"`
 }
 
+// VideoURL represents a video URL.
+type VideoURL struct {
+	// URL is the URL of the video.
+	URL string `json:"url"`
+}
+
 // DocumentURL represents a document URL (PDF, Word, etc.)
 type DocumentURL struct {
 	// URL is the URL of the document (data URL or regular URL).
@@ -441,7 +486,7 @@ type DocumentURL struct {
 	MIMEType string `json:"mime_type,omitempty"`
 }
 
-type Audio struct {
+type InputAudio struct {
 	// The format of the encoded audio data. Currently supports "wav" and "mp3".
 	//
 	// Any of "wav", "mp3".
@@ -449,6 +494,30 @@ type Audio struct {
 
 	// Base64 encoded audio data.
 	Data string `json:"data"`
+}
+
+// CompactContent represents compact content from OpenAI Responses API compaction.
+type CompactContent struct {
+	// ID is the unique ID of the compaction item.
+	ID string `json:"id,omitempty"`
+	// EncryptedContent is the encrypted content produced by compaction.
+	EncryptedContent string `json:"encrypted_content,omitempty"`
+	// CreatedBy is the identifier of the actor that created the item.
+	CreatedBy *string `json:"created_by,omitempty"`
+}
+
+type OutputAudio struct {
+	// Unique identifier for this audio response.
+	ID string `json:"id,omitempty"`
+
+	// Base64 encoded audio bytes generated by the model.
+	Data string `json:"data,omitempty"`
+
+	// The Unix timestamp when this audio response expires on the server.
+	ExpiresAt int64 `json:"expires_at,omitempty"`
+
+	// Transcript of the generated audio.
+	Transcript string `json:"transcript,omitempty"`
 }
 
 // ResponseFormat specifies the format of the response.
@@ -480,9 +549,11 @@ type Response struct {
 	// Model is the model used to generate the response.
 	Model string `json:"model"`
 
-	// An optional field that will only be present when you set stream_options: {"include_usage": true} in your request.
-	// When present, it contains a null value except for the last chunk which contains the token usage statistics
-	// for the entire request.
+	// The unique ID of the previous response for multi-turn Responses API responses.
+	PreviousResponseID *string `json:"previous_response_id,omitempty"`
+
+	// Usage is the unified token usage field for all request types (chat, embedding, rerank, image, video).
+	// For streaming chat requests, it will only be present in the last chunk when stream_options: {"include_usage": true} is set.
 	Usage *Usage `json:"usage,omitempty"`
 
 	// This fingerprint represents the backend configuration that the model runs with.
@@ -506,6 +577,12 @@ type Response struct {
 
 	// Image is the image response, will present if the request is image request.
 	Image *ImageResponse `json:"image,omitempty"`
+
+	// Video is the video response, will present if the request is video request.
+	Video *VideoResponse `json:"video,omitempty"`
+
+	// Compact is the compact response, will present if the request is compact request.
+	Compact *CompactResponse `json:"compact,omitempty"`
 
 	// RequestType is the outbound request type from the llm service.
 	// e.g. the request from the chat/completions endpoint is in the chat type.
@@ -634,6 +711,12 @@ type PromptTokensDetails struct {
 
 	// WriteCached1HourTokens is the number of tokens cached write for 1 hour ttl, for the anthropic.
 	WriteCached1HourTokens int64 `json:"write_cached_1hour_tokens,omitempty"`
+
+	// ImageTokens is the number of image tokens in the input (for image generation).
+	ImageTokens int64 `json:"image_tokens,omitempty"`
+
+	// TextTokens is the number of text tokens in the input (for image generation).
+	TextTokens int64 `json:"text_tokens,omitempty"`
 }
 
 // ResponseError represents an error response.

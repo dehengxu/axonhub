@@ -75,14 +75,12 @@ func (t *OutboundTransformer) buildImageGenerationRequest(ctx context.Context, l
 	// Prepare authentication
 	var auth *httpclient.AuthConfig
 
-	if t.config.APIKeyProvider != nil {
-		apiKey := t.config.APIKeyProvider.Get(ctx)
-		if apiKey != "" {
-			auth = &httpclient.AuthConfig{
-				Type:      "api_key",
-				APIKey:    apiKey,
-				HeaderKey: "x-goog-api-key",
-			}
+	apiKey := t.config.APIKeyProvider.Get(ctx)
+	if apiKey != "" {
+		auth = &httpclient.AuthConfig{
+			Type:      "api_key",
+			APIKey:    apiKey,
+			HeaderKey: "x-goog-api-key",
 		}
 	}
 
@@ -295,15 +293,6 @@ func transformImageGenerationResponse(httpResp *httpclient.Response) (*llm.Respo
 					B64JSON: part.InlineData.Data,
 				})
 			}
-		}
-	}
-
-	// Set usage info for image generation
-	if resp.Usage != nil {
-		imageResponse.Usage = &llm.ImageUsage{
-			InputTokens:  resp.Usage.PromptTokens,
-			OutputTokens: resp.Usage.CompletionTokens,
-			TotalTokens:  resp.Usage.TotalTokens,
 		}
 	}
 

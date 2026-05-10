@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"context"
+
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/server/biz"
 	"github.com/looplj/axonhub/llm"
@@ -16,6 +18,7 @@ type PersistenceState struct {
 	UsageLogService     *biz.UsageLogService
 	ChannelService      *biz.ChannelService
 	PromptProvider      PromptProvider
+	PromptProtecter     PromptProtecter
 	RetryPolicyProvider RetryPolicyProvider
 	CandidateSelector   CandidateSelector
 	LoadBalancer        *LoadBalancer
@@ -45,4 +48,30 @@ type PersistenceState struct {
 
 	// Perf is the performance record for the current request.
 	Perf *biz.PerformanceRecord
+
+	// StreamCompleted tracks whether the stream has response successfully completed.
+	// This is used to distinguish between a stream that was canceled mid-way
+	// versus a stream that completed successfully but the client disconnected
+	// immediately after receiving the last chunk.
+	StreamCompleted bool
+
+	// RawProviderResponse stores the raw provider response for non-stream response pass-through.
+	RawProviderResponse *httpclient.Response
+
+	// RawProviderRequest stores the actual outbound provider request for pass-through checks.
+	RawProviderRequest *httpclient.Request
+
+	// RawStreamCh receives raw provider stream events for stream response pass-through.
+	RawStreamCh chan *httpclient.StreamEvent
+
+	// RawStreamErrRef points to the current attempt's local error variable used by the
+	// captureRawProviderStream fan-out goroutine. Using a per-attempt pointer (instead of
+	// a single shared field) prevents data races when retries spawn a new goroutine before
+	// the previous one has exited.
+	RawStreamErrRef *error
+
+	// RawStreamCancel cancels the current attempt's fan-out goroutine started by
+	// captureRawProviderStream. Must be called in PrepareForRetry and NextChannel so the
+	// abandoned goroutine exits promptly and releases its upstream HTTP connection.
+	RawStreamCancel context.CancelFunc
 }

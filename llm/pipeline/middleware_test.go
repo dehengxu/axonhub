@@ -15,10 +15,6 @@ import (
 // testInbound implements transformer.Inbound interface for testing.
 type testInbound struct{}
 
-func (t *testInbound) APIFormat() llm.APIFormat {
-	return "test/inbound"
-}
-
 func (t *testInbound) TransformRequest(ctx context.Context, request *httpclient.Request) (*llm.Request, error) {
 	return &llm.Request{}, nil
 }
@@ -72,6 +68,7 @@ type trackingMiddleware struct {
 	callOrder                 *[]string
 	inboundRequestCalled      bool
 	inboundRawResponseCalled  bool
+	inboundRawStreamCalled    bool
 	outboundRequestCalled     bool
 	outboundRawResponseCalled bool
 	outboundLlmResponseCalled bool
@@ -114,6 +111,12 @@ func (m *trackingMiddleware) OnInboundRawResponse(ctx context.Context, response 
 	*m.callOrder = append(*m.callOrder, m.name+":OnInboundRawResponse")
 
 	return response, nil
+}
+
+func (m *trackingMiddleware) OnInboundRawStream(ctx context.Context, stream streams.Stream[*httpclient.StreamEvent]) (streams.Stream[*httpclient.StreamEvent], error) {
+	m.inboundRawStreamCalled = true
+	*m.callOrder = append(*m.callOrder, m.name+":OnInboundRawStream")
+	return stream, nil
 }
 
 func (m *trackingMiddleware) OnOutboundRawRequest(ctx context.Context, request *httpclient.Request) (*httpclient.Request, error) {
@@ -283,14 +286,17 @@ func TestMiddleware_Streaming_CallOrder(t *testing.T) {
 	require.True(t, middleware1.outboundRequestCalled)
 	require.True(t, middleware1.outboundRawStreamCalled)
 	require.True(t, middleware1.outboundLlmStreamCalled)
+	require.True(t, middleware1.inboundRawStreamCalled)
 
 	require.True(t, middleware2.outboundRequestCalled)
 	require.True(t, middleware2.outboundRawStreamCalled)
 	require.True(t, middleware2.outboundLlmStreamCalled)
+	require.True(t, middleware2.inboundRawStreamCalled)
 
 	require.True(t, middleware3.outboundRequestCalled)
 	require.True(t, middleware3.outboundRawStreamCalled)
 	require.True(t, middleware3.outboundLlmStreamCalled)
+	require.True(t, middleware3.inboundRawStreamCalled)
 
 	// Verify the call order follows the onion model:
 	// Request: M1 -> M2 -> M3 (forward)
@@ -307,6 +313,9 @@ func TestMiddleware_Streaming_CallOrder(t *testing.T) {
 		"M3:OnOutboundLlmStream",
 		"M2:OnOutboundLlmStream",
 		"M1:OnOutboundLlmStream",
+		"M1:OnInboundRawStream",
+		"M2:OnInboundRawStream",
+		"M3:OnInboundRawStream",
 	}
 
 	require.Equal(t, expectedOrder, callOrder, "Middleware call order should follow onion model for streaming")

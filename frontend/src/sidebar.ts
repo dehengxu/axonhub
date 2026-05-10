@@ -1,7 +1,7 @@
 import {
   IconLayoutDashboard,
   IconPackages,
-  IconUserCog,
+  IconSettings,
   IconUsers,
   IconRobot,
   IconShield,
@@ -84,6 +84,11 @@ export function useSidebarData(): SidebarData {
           icon: IconRobot,
         } as NavLink,
         {
+          title: t('sidebar.items.promptProtectionRules'),
+          url: '/prompt-protection-rules',
+          icon: IconShield,
+        } as NavLink,
+        {
           title: t('sidebar.items.dataStorages'),
           url: '/data-storages',
           icon: IconDatabase,
@@ -160,9 +165,10 @@ export function useSidebarData(): SidebarData {
       title: t('sidebar.groups.settings'),
       items: [
         {
-          title: t('sidebar.items.profile'),
-          url: '/settings',
-          icon: IconUserCog,
+          title: t('sidebar.items.system'),
+          url: '/system',
+          icon: IconSettings,
+          mobileOnly: true,
         } as NavLink,
         // {
         //   title: 'Account',

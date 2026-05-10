@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   ColumnFiltersState,
   RowData,
@@ -22,9 +22,9 @@ import type { DateTimeRangeValue } from '@/utils/date-range';
 import { Request, RequestConnection } from '../data/schema';
 import { DataTableToolbar } from './data-table-toolbar';
 import { useRequestsColumns } from './requests-columns';
+import { RequestBodyDrawer } from './request-body-drawer';
 
 const MotionTableRow = motion.create(TableRow);
-const MotionExpandedRow = motion.create(TableRow);
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -44,6 +44,7 @@ interface RequestsTableProps {
   channelFilter: string[];
   apiKeyFilter: string[];
   dateRange?: DateTimeRangeValue;
+  queryWhere?: Record<string, any>;
   onNextPage: () => void;
   onPreviousPage: () => void;
   onPageSizeChange: (pageSize: number) => void;
@@ -51,6 +52,7 @@ interface RequestsTableProps {
   onSourceFilterChange: (filters: string[]) => void;
   onChannelFilterChange: (filters: string[]) => void;
   onApiKeyFilterChange: (filters: string[]) => void;
+  onModelIDFilterChange: (filter: string) => void;
   onDateRangeChange: (range: DateTimeRangeValue | undefined) => void;
   onRefresh: () => void;
   showRefresh: boolean;
@@ -69,6 +71,7 @@ export function RequestsTable({
   channelFilter,
   apiKeyFilter,
   dateRange,
+  queryWhere,
   onNextPage,
   onPreviousPage,
   onPageSizeChange,
@@ -76,6 +79,7 @@ export function RequestsTable({
   onSourceFilterChange,
   onChannelFilterChange,
   onApiKeyFilterChange,
+  onModelIDFilterChange,
   onDateRangeChange,
   onRefresh,
   showRefresh,
@@ -83,7 +87,18 @@ export function RequestsTable({
   onAutoRefreshChange,
 }: RequestsTableProps) {
   const { t } = useTranslation();
-  const requestsColumns = useRequestsColumns();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerInitialRequestId, setDrawerInitialRequestId] = useState<string | null>(null);
+  const [drawerInitialIndex, setDrawerInitialIndex] = useState(0);
+
+  const handleBodyClick = useCallback((requestId: string, index: number) => {
+    setDrawerInitialRequestId(requestId);
+    setDrawerInitialIndex(index);
+    setDrawerOpen(true);
+  }, []);
+
+  const requestsColumns = useRequestsColumns({ onBodyClick: handleBodyClick });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
@@ -105,7 +120,7 @@ export function RequestsTable({
     localStorage.setItem('requests-table-column-visibility', JSON.stringify(columnVisibility));
   }, [columnVisibility]);
 
-  const displayedData = useAnimatedList(data, autoRefresh);
+  const displayedData = useAnimatedList(data, autoRefresh, pageSize);
 
   // Sync filters with the server state
   const handleColumnFiltersChange = (updater: any) => {
@@ -116,6 +131,7 @@ export function RequestsTable({
     const sourceFilterValue = newFilters.find((filter: any) => filter.id === 'source')?.value;
     const channelFilterValue = newFilters.find((filter: any) => filter.id === 'channel')?.value;
     const apiKeyFilterValue = newFilters.find((filter: any) => filter.id === 'apiKey')?.value;
+    const modelIDFilterValue = newFilters.find((filter: any) => filter.id === 'modelID')?.value;
 
     const statusFilterArray = Array.isArray(statusFilterValue) ? statusFilterValue : [];
     onStatusFilterChange(statusFilterArray);
@@ -128,6 +144,8 @@ export function RequestsTable({
 
     const apiKeyFilterArray = Array.isArray(apiKeyFilterValue) ? apiKeyFilterValue : [];
     onApiKeyFilterChange(apiKeyFilterArray);
+
+    onModelIDFilterChange(typeof modelIDFilterValue === 'string' ? modelIDFilterValue : '');
   };
 
   // Initialize filters in column filters if they exist
@@ -184,6 +202,8 @@ export function RequestsTable({
         showRefresh={showRefresh}
         apiKeyFilter={apiKeyFilter}
         onApiKeyFilterChange={onApiKeyFilterChange}
+        sourceFilter={sourceFilter}
+        onSourceFilterChange={onSourceFilterChange}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={onAutoRefreshChange}
       />
@@ -263,6 +283,16 @@ export function RequestsTable({
           onPageSizeChange={onPageSizeChange}
         />
       </div>
+
+      <RequestBodyDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        initialRequestId={drawerInitialRequestId}
+        initialIndex={drawerInitialIndex}
+        initialRequests={data}
+        pageInfo={pageInfo}
+        queryWhere={queryWhere}
+      />
     </div>
   );
 }

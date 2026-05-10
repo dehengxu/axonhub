@@ -10,10 +10,10 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 
-	"github.com/looplj/axonhub/internal/pkg/xtest"
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/auth"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/internal/pkg/xtest"
 	"github.com/looplj/axonhub/llm/transformer/shared"
 )
 
@@ -135,6 +135,48 @@ func TestOutboundTransformer_buildFullRequestURL(t *testing.T) {
 func TestOutboundTransformer_APIFormat(t *testing.T) {
 	transformer, _ := NewOutboundTransformer("https://api.openai.com", "test-api-key")
 	require.Equal(t, llm.APIFormatOpenAIResponse, transformer.APIFormat())
+}
+
+func TestOutboundTransformer_TransformRequest_AccountIdentityFootprint(t *testing.T) {
+	transformer, err := NewOutboundTransformerWithConfig(&Config{
+		BaseURL:         "https://api.openai.com",
+		APIKeyProvider:  auth.NewStaticKeyProvider("test-api-key"),
+		AccountIdentity: "channel-1",
+	})
+	require.NoError(t, err)
+
+	req := &llm.Request{
+		Model: "gpt-4o",
+		Messages: []llm.Message{
+			{Role: "user", Content: llm.MessageContent{Content: lo.ToPtr("hi")}},
+		},
+	}
+
+	hreq, err := transformer.TransformRequest(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, hreq.Metadata)
+
+	require.Equal(t, transformer.config.BaseURL, hreq.Metadata[shared.MetadataKeyBaseURL])
+	require.Equal(t, "channel-1", hreq.Metadata[shared.MetadataKeyAccountIdentity])
+}
+
+func TestOutboundTransformer_TransformRequest_OmitsFootprintWhenEmpty(t *testing.T) {
+	transformer, err := NewOutboundTransformerWithConfig(&Config{
+		BaseURL:        "https://api.openai.com",
+		APIKeyProvider: auth.NewStaticKeyProvider(""),
+	})
+	require.NoError(t, err)
+
+	req := &llm.Request{
+		Model: "gpt-4o",
+		Messages: []llm.Message{
+			{Role: "user", Content: llm.MessageContent{Content: lo.ToPtr("hi")}},
+		},
+	}
+
+	hreq, err := transformer.TransformRequest(context.Background(), req)
+	require.NoError(t, err)
+	require.True(t, hreq.Metadata == nil || (hreq.Metadata[shared.MetadataKeyBaseURL] == "" && hreq.Metadata[shared.MetadataKeyAccountIdentity] == ""))
 }
 
 func TestOutboundTransformer_TransformRequest(t *testing.T) {
@@ -335,6 +377,40 @@ func TestOutboundTransformer_TransformRequest(t *testing.T) {
 				require.Equal(t, "function", req.Tools[0].Type)
 				require.Equal(t, "get_weather", req.Tools[0].Name)
 				require.Equal(t, "Get weather information", req.Tools[0].Description)
+			},
+		},
+		{
+			name: "request with zero-arg function tool normalizes empty object schema",
+			chatReq: &llm.Request{
+				Model: "gpt-4o",
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Run the tool"),
+						},
+					},
+				},
+				Tools: []llm.Tool{
+					{
+						Type: "function",
+						Function: llm.Function{
+							Name:        "ping",
+							Description: "Ping tool",
+							Parameters:  []byte(`{"type":"object"}`),
+						},
+					},
+				},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result *httpclient.Request, chatReq *llm.Request) {
+				var req Request
+
+				err := json.Unmarshal(result.Body, &req)
+				require.NoError(t, err)
+				require.Len(t, req.Tools, 1)
+				require.Equal(t, "object", req.Tools[0].Parameters["type"])
+				require.Equal(t, map[string]any{}, req.Tools[0].Parameters["properties"])
 			},
 		},
 		{
@@ -602,6 +678,30 @@ func TestOutboundTransformer_TransformRequest(t *testing.T) {
 				require.Equal(t, []string{"file_search_call.results", "reasoning.encrypted_content"}, req.Include)
 			},
 		},
+		{
+			name: "request with previous_response_id",
+			chatReq: &llm.Request{
+				Model:              "gpt-5.4",
+				PreviousResponseID: lo.ToPtr("resp_prev_123"),
+				Messages: []llm.Message{
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Continue"),
+						},
+					},
+				},
+			},
+			expectError: false,
+			validate: func(t *testing.T, result *httpclient.Request, chatReq *llm.Request) {
+				var req Request
+
+				err := json.Unmarshal(result.Body, &req)
+				require.NoError(t, err)
+				require.NotNil(t, req.PreviousResponseID)
+				require.Equal(t, "resp_prev_123", *req.PreviousResponseID)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -621,6 +721,34 @@ func TestOutboundTransformer_TransformRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOutboundTransformer_TransformRequest_UsesSharedSessionIDAsPromptCacheKeyFallback(t *testing.T) {
+	transformer, err := NewOutboundTransformer("https://api.openai.com", "test-api-key")
+	require.NoError(t, err)
+
+	ctx := shared.WithSessionID(context.Background(), "shared-session-123")
+
+	req := &llm.Request{
+		Model: "gpt-5.4",
+		Messages: []llm.Message{
+			{
+				Role: "user",
+				Content: llm.MessageContent{
+					Content: lo.ToPtr("Hello"),
+				},
+			},
+		},
+	}
+
+	httpReq, err := transformer.TransformRequest(ctx, req)
+	require.NoError(t, err)
+
+	var payload Request
+	err = json.Unmarshal(httpReq.Body, &payload)
+	require.NoError(t, err)
+	require.NotNil(t, payload.PromptCacheKey)
+	require.Equal(t, "shared-session-123", *payload.PromptCacheKey)
 }
 
 func TestOutboundTransformer_TransformResponse(t *testing.T) {
@@ -764,7 +892,40 @@ func TestOutboundTransformer_TransformResponse(t *testing.T) {
 				require.Len(t, result.Choices, 1)
 				require.NotNil(t, result.Choices[0].Message)
 				require.NotNil(t, result.Choices[0].Message.ReasoningSignature)
-				require.Equal(t, shared.OpenAIEncryptedContentPrefix+"encrypted_data_here", *result.Choices[0].Message.ReasoningSignature)
+				require.Equal(t, "encrypted_data_here", *result.Choices[0].Message.ReasoningSignature)
+			},
+		},
+		{
+			name: "response with previous_response_id",
+			httpResp: &httpclient.Response{
+				StatusCode: http.StatusOK,
+				Body: []byte(`{
+					"id": "resp_456",
+					"object": "response",
+					"created_at": 1759161016,
+					"status": "completed",
+					"model": "gpt-5.4",
+					"previous_response_id": "resp_prev_123",
+					"output": [
+						{
+							"id": "msg_456",
+							"type": "message",
+							"status": "completed",
+							"content": [
+								{
+									"type": "output_text",
+									"text": "Continued response"
+								}
+							],
+							"role": "assistant"
+						}
+					]
+				}`),
+			},
+			expectError: false,
+			validate: func(t *testing.T, result *llm.Response) {
+				require.NotNil(t, result.PreviousResponseID)
+				require.Equal(t, "resp_prev_123", *result.PreviousResponseID)
 			},
 		},
 	}

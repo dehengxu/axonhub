@@ -82,6 +82,9 @@ type MessageRequest struct {
 	// Thinking is an optional thinking configuration.
 	Thinking *Thinking `json:"thinking,omitempty"`
 
+	// OutputConfig is an optional output configuration.
+	OutputConfig *OutputConfig `json:"output_config,omitempty"`
+
 	// Tools is an optional array of tools.
 	Tools []Tool `json:"tools,omitempty"`
 	// ToolChoice is an optional tool choice configuration.
@@ -89,6 +92,14 @@ type MessageRequest struct {
 
 	// Stream is an optional flag to enable streaming.
 	Stream *bool `json:"stream,omitempty"`
+
+	// CacheControl enables Anthropic's automatic prompt caching. When set at
+	// the top level of the request, Anthropic automatically applies the cache
+	// breakpoint to the last cacheable block and moves it forward as the
+	// conversation grows. See https://docs.claude.com/en/docs/build-with-claude/prompt-caching.
+	// When this field is set, AxonHub preserves it as-is and skips its own
+	// per-block cache_control breakpoint optimization pipeline.
+	CacheControl *CacheControl `json:"cache_control,omitempty"`
 }
 
 type AnthropicMetadata struct {
@@ -140,9 +151,37 @@ type SystemPromptPart struct {
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
 }
 
+// TransformerMetadataKeyThinkingType is the key for storing thinking type in TransformerMetadata.
+const TransformerMetadataKeyThinkingType = "thinking_type"
+
+// TransformerMetadataKeyOutputConfigEffort is the key for storing output config effort in TransformerMetadata.
+const TransformerMetadataKeyOutputConfigEffort = "output_config_effort"
+
+// TransformerMetadataKeyThinkingDisplay is the key for storing thinking display in TransformerMetadata.
+const TransformerMetadataKeyThinkingDisplay = "thinking_display"
+
+// TransformerMetadataKeyCacheControl is the key for storing the top-level
+// cache_control value (Anthropic's automatic prompt caching marker) carried by
+// an Anthropic-format inbound request. The value is a *CacheControl. The
+// Anthropic outbound transformer restores it onto the upstream request
+// untouched and skips its own breakpoint optimization pipeline so that
+// Anthropic's automatic caching behavior is preserved.
+const TransformerMetadataKeyCacheControl = "anthropic_cache_control"
+
 type Thinking struct {
-	Type         string `json:"type"          validate:"required,oneof=enabled disabled"`
-	BudgetTokens int64  `json:"budget_tokens" validate:"required_if=Type enabled"`
+	Type         string `json:"type"          validate:"required,oneof=enabled disabled adaptive"`
+	BudgetTokens int64  `json:"budget_tokens,omitempty" validate:"required_if=Type enabled"`
+	// Display is an optional display name for the thinking, enum: summarized, omitted.
+	Display string `json:"display,omitempty"`
+}
+
+// OutputConfig represents Anthropic output configuration.
+// See: https://platform.claude.com/docs/en/build-with-claude/effort
+type OutputConfig struct {
+	// Effort controls the overall effort level for the response.
+	// Any of "low", "medium", "high", "max".
+	// "max" is only supported by claude-opus-4-6.
+	Effort string `json:"effort,omitempty" validate:"omitempty,oneof=low medium high max"`
 }
 
 type ToolChoice struct {
@@ -164,6 +203,37 @@ type Tool struct {
 	Description  string          `json:"description,omitempty"`
 	InputSchema  json.RawMessage `json:"input_schema,omitempty"`
 	CacheControl *CacheControl   `json:"cache_control,omitempty"`
+
+	// Params for web_search_20250305 tool.
+
+	// MaxUses Maximum number of times the tool can be used in the API request.
+	MaxUses *int64 `json:"max_uses,omitempty"`
+	// When true, guarantees schema validation on tool names and inputs
+	Strict *bool `json:"strict,omitempty"`
+	// AllowedDomains If provided, only these domains will be included in results. Cannot be used
+	// alongside `blocked_domains`.
+	AllowedDomains []string `json:"allowed_domains,omitempty"`
+	// BlockedDomains If provided, these domains will never appear in results. Cannot be used
+	// alongside `allowed_domains`.
+	BlockedDomains []string `json:"blocked_domains,omitzero"`
+	// UserLocation Parameters for the user's location. Used to provide more relevant search
+	// results.
+	UserLocation WebSearchToolUserLocation `json:"user_location,omitzero"`
+}
+
+type WebSearchToolUserLocation struct {
+	// The city of the user.
+	City string `json:"city,omitempty"`
+	// The two letter
+	// [ISO country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) of the
+	// user.
+	Country string `json:"country,omitempty"`
+	// The region of the user.
+	Region string `json:"region,omitempty"`
+	// The [IANA timezone](https://nodatime.org/TimeZones) of the user.
+	Timezone string `json:"timezone,omitempty"`
+	// This field can be elided, and will marshal its zero value as "approximate".
+	Type string `json:"type"`
 }
 
 type CacheControl struct {
@@ -287,6 +357,26 @@ type MessageContentBlock struct {
 	IsError *bool           `json:"is_error,omitempty"`
 }
 
+func (b MessageContentBlock) MarshalJSON() ([]byte, error) {
+	type blockAlias MessageContentBlock
+
+	if b.Type == "thinking" {
+		type thinkingBlock struct {
+			blockAlias
+			Thinking  string `json:"thinking"`
+			Signature string `json:"signature"`
+		}
+
+		return json.Marshal(thinkingBlock{
+			blockAlias: blockAlias(b),
+			Thinking:   lo.FromPtr(b.Thinking),
+			Signature:  lo.FromPtr(b.Signature),
+		})
+	}
+
+	return json.Marshal(blockAlias(b))
+}
+
 // ImageSource represents image source for Anthropic.
 type ImageSource struct {
 	// Type is the type of image source.
@@ -352,6 +442,24 @@ type StreamDelta struct {
 
 	// For "message_delta"
 	StopSequence *string `json:"stop_sequence,omitempty"`
+}
+
+func (d StreamDelta) MarshalJSON() ([]byte, error) {
+	type deltaAlias StreamDelta
+
+	if lo.FromPtr(d.Type) == "thinking_delta" {
+		type thinkingDelta struct {
+			Type     *string `json:"type,omitempty"`
+			Thinking *string `json:"thinking,omitempty"`
+		}
+
+		return json.Marshal(thinkingDelta{
+			Type:     d.Type,
+			Thinking: d.Thinking,
+		})
+	}
+
+	return json.Marshal(deltaAlias(d))
 }
 
 // StreamMessage represents the message part of a stream event.

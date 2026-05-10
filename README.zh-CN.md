@@ -14,18 +14,16 @@
 [![Go 版本](https://img.shields.io/github/go-mod/go-version/looplj/axonhub?logo=go&logoColor=white)](https://golang.org/)
 [![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](https://docker.com)
 
-[English](README.md) | [中文](README.zh-CN.md)
+[English](README.md) | [中文](README.zh-CN.md) | [日本語](README.ja-JP.md)
 
 </div>
 
 ---
 
-## 💖 支持我
-
-| 服务商 | 计划 | 描述 | 链接 |
-|--------|------|------|------|
-| 智谱 AI | GLM CODING PLAN | 🚀 速来拼好模，智谱 GLM Coding 超值订阅，邀你一起薅羊毛！Claude Code、Cline 等 20+ 大编程工具无缝支持，"码力"全开，越拼越爽！立即开拼，享限时惊喜价！ | [English](https://z.ai/subscribe?ic=OKAF5UFZOM) / [中文](https://www.bigmodel.cn/glm-coding?ic=WIDLV0OOTJ) |
-| 火山引擎 | CODING PLAN | 方舟 Coding Plan 支持 Doubao、GLM、DeepSeek、Kimi 等模型，工具不限，现在订阅折上9折，低至8.9元，订阅越多越划算！立即订阅： | [链接](https://volcengine.com/L/1Q-HZr5Uvk8/) / 优惠码：LXKDZK3W |
+> 注意
+>
+> 1. 本项目为个人维护，作者不对使用风险作任何保证，请审慎评估。
+> 2. 本项目核心范围不包括 2api（订阅转 API）；如有此类需求，建议使用其他专注于 2api 的开源项目。
 
 ---
 
@@ -60,6 +58,10 @@
 ---
 
 ## 📚 文档 | Documentation
+
+### 文档索引 | Documentation Index
+
+- 📑 **[完整文档索引](docs/zh/index.md)** - 所有文档导航和快速查找
 
 ### DeepWiki
 详细的技术文档、API 参考、架构设计等内容，可以访问 
@@ -167,6 +169,7 @@
 | **ZAI**                | ✅ 已完成   | -                            | Image Generation |
 | **AWS Bedrock**        | 🔄 测试中  | Claude on AWS                | OpenAI, Anthropic, Gemini |
 | **Google Cloud**       | 🔄 测试中  | Claude on GCP                | OpenAI, Anthropic, Gemini |
+| **NanoGPT**            | ✅ 已完成  | 多种模型、图像生成             | OpenAI, Anthropic, Gemini, Image Generation |
 
 ---
 
@@ -184,7 +187,7 @@ cd axonhub_*
 ./axonhub
 
 # 打开 http://localhost:8090
-# 默认登录：admin@axonhub.com / admin
+# 首次运行：按照初始化向导设置系统（创建管理员账号，密码至少需要 6 位）
 ```
 
 就这样！现在配置你的第一个 AI 渠道，开始通过 AxonHub 调用模型。
@@ -440,7 +443,7 @@ AxonHub 提供灵活的模型管理系统，支持通过模型关联将抽象模
 
 ## 🛠️ 开发指南
 
-详细的开发说明、架构设计和贡献指南，请查看 [docs/zh/guides/development.md](docs/zh/guides/development.md)。
+详细的开发说明、架构设计和贡献指南，请查看 [docs/zh/development/development.md](docs/zh/development/development.md)。
 
 ---
 

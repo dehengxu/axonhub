@@ -82,7 +82,9 @@ func (Request) Fields() []ent.Field {
 		),
 		field.Int("channel_id").Optional(),
 		// External ID for tracking requests in external systems
-		field.String("external_id").Optional(),
+		field.String("external_id").
+			Optional().
+			MaxLen(512),
 		// The status of the request.
 		field.Enum("status").Values("pending", "processing", "completed", "failed", "canceled"),
 		// Whether the request is a streaming request
@@ -92,6 +94,29 @@ func (Request) Fields() []ent.Field {
 		field.Int64("metrics_latency_ms").Optional().Nillable(),
 		// First token latency in milliseconds (only for streaming requests)
 		field.Int64("metrics_first_token_latency_ms").Optional().Nillable(),
+		// Reasoning/thinking duration in milliseconds
+		field.Int64("metrics_reasoning_duration_ms").Optional().Nillable().Comment("Reasoning/thinking duration in milliseconds"),
+
+
+		// ContentSaved indicates whether the generated content (e.g. video, audio) has been downloaded and saved to external storage.
+		field.Bool("content_saved").
+			Default(false).
+			Comment("whether the generated content has been saved to external storage"),
+		// ContentStorageID is the data storage ID used to save the generated content file.
+		field.Int("content_storage_id").
+			Optional().
+			Nillable().
+			Comment("data storage id used to save the content file"),
+		// ContentStorageKey is the object key/path of the saved content in the data storage.
+		field.String("content_storage_key").
+			Optional().
+			Nillable().
+			Comment("storage key/path of the saved content file"),
+		// ContentSavedAt is the timestamp when the content file is saved.
+		field.Time("content_saved_at").
+			Optional().
+			Nillable().
+			Comment("when the content file was saved"),
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/looplj/axonhub/internal/ent/model"
 	"github.com/looplj/axonhub/internal/ent/project"
 	"github.com/looplj/axonhub/internal/ent/prompt"
+	"github.com/looplj/axonhub/internal/ent/promptprotectionrule"
 	"github.com/looplj/axonhub/internal/ent/providerquotastatus"
 	"github.com/looplj/axonhub/internal/ent/request"
 	"github.com/looplj/axonhub/internal/ent/requestexecution"
@@ -123,24 +124,32 @@ func init() {
 	channelDescDisabledAPIKeys := channelFields[5].Descriptor()
 	// channel.DefaultDisabledAPIKeys holds the default value on creation for the disabled_api_keys field.
 	channel.DefaultDisabledAPIKeys = channelDescDisabledAPIKeys.Default.([]objects.DisabledAPIKey)
+	// channelDescManualModels is the schema descriptor for manual_models field.
+	channelDescManualModels := channelFields[7].Descriptor()
+	// channel.DefaultManualModels holds the default value on creation for the manual_models field.
+	channel.DefaultManualModels = channelDescManualModels.Default.([]string)
 	// channelDescAutoSyncSupportedModels is the schema descriptor for auto_sync_supported_models field.
-	channelDescAutoSyncSupportedModels := channelFields[7].Descriptor()
+	channelDescAutoSyncSupportedModels := channelFields[8].Descriptor()
 	// channel.DefaultAutoSyncSupportedModels holds the default value on creation for the auto_sync_supported_models field.
 	channel.DefaultAutoSyncSupportedModels = channelDescAutoSyncSupportedModels.Default.(bool)
+	// channelDescAutoSyncModelPattern is the schema descriptor for auto_sync_model_pattern field.
+	channelDescAutoSyncModelPattern := channelFields[9].Descriptor()
+	// channel.DefaultAutoSyncModelPattern holds the default value on creation for the auto_sync_model_pattern field.
+	channel.DefaultAutoSyncModelPattern = channelDescAutoSyncModelPattern.Default.(string)
 	// channelDescTags is the schema descriptor for tags field.
-	channelDescTags := channelFields[8].Descriptor()
+	channelDescTags := channelFields[10].Descriptor()
 	// channel.DefaultTags holds the default value on creation for the tags field.
 	channel.DefaultTags = channelDescTags.Default.([]string)
 	// channelDescPolicies is the schema descriptor for policies field.
-	channelDescPolicies := channelFields[10].Descriptor()
+	channelDescPolicies := channelFields[12].Descriptor()
 	// channel.DefaultPolicies holds the default value on creation for the policies field.
 	channel.DefaultPolicies = channelDescPolicies.Default.(objects.ChannelPolicies)
 	// channelDescSettings is the schema descriptor for settings field.
-	channelDescSettings := channelFields[11].Descriptor()
+	channelDescSettings := channelFields[13].Descriptor()
 	// channel.DefaultSettings holds the default value on creation for the settings field.
 	channel.DefaultSettings = channelDescSettings.Default.(*objects.ChannelSettings)
 	// channelDescOrderingWeight is the schema descriptor for ordering_weight field.
-	channelDescOrderingWeight := channelFields[12].Descriptor()
+	channelDescOrderingWeight := channelFields[14].Descriptor()
 	// channel.DefaultOrderingWeight holds the default value on creation for the ordering_weight field.
 	channel.DefaultOrderingWeight = channelDescOrderingWeight.Default.(int)
 	channelmodelpriceMixin := schema.ChannelModelPrice{}.Mixin()
@@ -244,7 +253,7 @@ func init() {
 	// channeloverridetemplateDescOverrideParameters is the schema descriptor for override_parameters field.
 	channeloverridetemplateDescOverrideParameters := channeloverridetemplateFields[3].Descriptor()
 	// channeloverridetemplate.DefaultOverrideParameters holds the default value on creation for the override_parameters field.
-	channeloverridetemplate.DefaultOverrideParameters = channeloverridetemplateDescOverrideParameters.Default.(string)
+	channeloverridetemplate.DefaultOverrideParameters = channeloverridetemplateDescOverrideParameters.Default.(func() string)
 	// channeloverridetemplateDescOverrideHeaders is the schema descriptor for override_headers field.
 	channeloverridetemplateDescOverrideHeaders := channeloverridetemplateFields[4].Descriptor()
 	// channeloverridetemplate.DefaultOverrideHeaders holds the default value on creation for the override_headers field.
@@ -370,6 +379,10 @@ func init() {
 	projectDescDescription := projectFields[1].Descriptor()
 	// project.DefaultDescription holds the default value on creation for the description field.
 	project.DefaultDescription = projectDescDescription.Default.(string)
+	// projectDescProfiles is the schema descriptor for profiles field.
+	projectDescProfiles := projectFields[3].Descriptor()
+	// project.DefaultProfiles holds the default value on creation for the profiles field.
+	project.DefaultProfiles = projectDescProfiles.Default.(*objects.ProjectProfiles)
 	promptMixin := schema.Prompt{}.Mixin()
 	prompt.Policy = privacy.NewPolicies(schema.Prompt{})
 	prompt.Hooks[0] = func(next ent.Mutator) ent.Mutator {
@@ -409,6 +422,49 @@ func init() {
 	promptDescDescription := promptFields[2].Descriptor()
 	// prompt.DefaultDescription holds the default value on creation for the description field.
 	prompt.DefaultDescription = promptDescDescription.Default.(string)
+	// promptDescOrder is the schema descriptor for order field.
+	promptDescOrder := promptFields[6].Descriptor()
+	// prompt.DefaultOrder holds the default value on creation for the order field.
+	prompt.DefaultOrder = promptDescOrder.Default.(int)
+	promptprotectionruleMixin := schema.PromptProtectionRule{}.Mixin()
+	promptprotectionrule.Policy = privacy.NewPolicies(schema.PromptProtectionRule{})
+	promptprotectionrule.Hooks[0] = func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if err := promptprotectionrule.Policy.EvalMutation(ctx, m); err != nil {
+				return nil, err
+			}
+			return next.Mutate(ctx, m)
+		})
+	}
+	promptprotectionruleMixinHooks1 := promptprotectionruleMixin[1].Hooks()
+
+	promptprotectionrule.Hooks[1] = promptprotectionruleMixinHooks1[0]
+	promptprotectionruleMixinInters1 := promptprotectionruleMixin[1].Interceptors()
+	promptprotectionrule.Interceptors[0] = promptprotectionruleMixinInters1[0]
+	promptprotectionruleMixinFields0 := promptprotectionruleMixin[0].Fields()
+	_ = promptprotectionruleMixinFields0
+	promptprotectionruleMixinFields1 := promptprotectionruleMixin[1].Fields()
+	_ = promptprotectionruleMixinFields1
+	promptprotectionruleFields := schema.PromptProtectionRule{}.Fields()
+	_ = promptprotectionruleFields
+	// promptprotectionruleDescCreatedAt is the schema descriptor for created_at field.
+	promptprotectionruleDescCreatedAt := promptprotectionruleMixinFields0[0].Descriptor()
+	// promptprotectionrule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	promptprotectionrule.DefaultCreatedAt = promptprotectionruleDescCreatedAt.Default.(func() time.Time)
+	// promptprotectionruleDescUpdatedAt is the schema descriptor for updated_at field.
+	promptprotectionruleDescUpdatedAt := promptprotectionruleMixinFields0[1].Descriptor()
+	// promptprotectionrule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	promptprotectionrule.DefaultUpdatedAt = promptprotectionruleDescUpdatedAt.Default.(func() time.Time)
+	// promptprotectionrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	promptprotectionrule.UpdateDefaultUpdatedAt = promptprotectionruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// promptprotectionruleDescDeletedAt is the schema descriptor for deleted_at field.
+	promptprotectionruleDescDeletedAt := promptprotectionruleMixinFields1[0].Descriptor()
+	// promptprotectionrule.DefaultDeletedAt holds the default value on creation for the deleted_at field.
+	promptprotectionrule.DefaultDeletedAt = promptprotectionruleDescDeletedAt.Default.(int)
+	// promptprotectionruleDescDescription is the schema descriptor for description field.
+	promptprotectionruleDescDescription := promptprotectionruleFields[1].Descriptor()
+	// promptprotectionrule.DefaultDescription holds the default value on creation for the description field.
+	promptprotectionrule.DefaultDescription = promptprotectionruleDescDescription.Default.(string)
 	providerquotastatusMixin := schema.ProviderQuotaStatus{}.Mixin()
 	providerquotastatusMixinHooks1 := providerquotastatusMixin[1].Hooks()
 	providerquotastatus.Hooks[0] = providerquotastatusMixinHooks1[0]
@@ -470,6 +526,10 @@ func init() {
 	requestDescFormat := requestFields[6].Descriptor()
 	// request.DefaultFormat holds the default value on creation for the format field.
 	request.DefaultFormat = requestDescFormat.Default.(string)
+	// requestDescExternalID is the schema descriptor for external_id field.
+	requestDescExternalID := requestFields[12].Descriptor()
+	// request.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	request.ExternalIDValidator = requestDescExternalID.Validators[0].(func(string) error)
 	// requestDescStream is the schema descriptor for stream field.
 	requestDescStream := requestFields[14].Descriptor()
 	// request.DefaultStream holds the default value on creation for the stream field.
@@ -478,6 +538,10 @@ func init() {
 	requestDescClientIP := requestFields[15].Descriptor()
 	// request.DefaultClientIP holds the default value on creation for the client_ip field.
 	request.DefaultClientIP = requestDescClientIP.Default.(string)
+	// requestDescContentSaved is the schema descriptor for content_saved field.
+	requestDescContentSaved := requestFields[19].Descriptor()
+	// request.DefaultContentSaved holds the default value on creation for the content_saved field.
+	request.DefaultContentSaved = requestDescContentSaved.Default.(bool)
 	requestexecutionMixin := schema.RequestExecution{}.Mixin()
 	requestexecutionMixinFields0 := requestexecutionMixin[0].Fields()
 	_ = requestexecutionMixinFields0
@@ -497,12 +561,16 @@ func init() {
 	requestexecutionDescProjectID := requestexecutionFields[0].Descriptor()
 	// requestexecution.DefaultProjectID holds the default value on creation for the project_id field.
 	requestexecution.DefaultProjectID = requestexecutionDescProjectID.Default.(int)
+	// requestexecutionDescExternalID is the schema descriptor for external_id field.
+	requestexecutionDescExternalID := requestexecutionFields[4].Descriptor()
+	// requestexecution.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	requestexecution.ExternalIDValidator = requestexecutionDescExternalID.Validators[0].(func(string) error)
 	// requestexecutionDescFormat is the schema descriptor for format field.
 	requestexecutionDescFormat := requestexecutionFields[6].Descriptor()
 	// requestexecution.DefaultFormat holds the default value on creation for the format field.
 	requestexecution.DefaultFormat = requestexecutionDescFormat.Default.(string)
 	// requestexecutionDescStream is the schema descriptor for stream field.
-	requestexecutionDescStream := requestexecutionFields[12].Descriptor()
+	requestexecutionDescStream := requestexecutionFields[13].Descriptor()
 	// requestexecution.DefaultStream holds the default value on creation for the stream field.
 	requestexecution.DefaultStream = requestexecutionDescStream.Default.(bool)
 	roleMixin := schema.Role{}.Mixin()
@@ -813,6 +881,6 @@ func init() {
 }
 
 const (
-	Version = "v0.14.5"                                         // Version of ent codegen.
-	Sum     = "h1:Rj2WOYJtCkWyFo6a+5wB3EfBRP0rnx1fMk6gGA0UUe4=" // Sum of ent codegen.
+	Version = "v0.14.6"                                         // Version of ent codegen.
+	Sum     = "h1:/f2696BpwuWAEEG6PVGWflg6+Inrpq4pRWuNlWz/Skk=" // Sum of ent codegen.
 )

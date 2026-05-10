@@ -69,6 +69,8 @@ func (t *OutboundTransformer) TransformRequest(
 	switch llmReq.RequestType {
 	case llm.RequestTypeChat, "":
 		// continue
+	case llm.RequestTypeCompact:
+		return nil, fmt.Errorf("%w: compact is only supported by OpenAI Responses API", transformer.ErrInvalidRequest)
 	default:
 		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
 	}
@@ -106,10 +108,11 @@ func (t *OutboundTransformer) TransformRequest(
 	url := t.BaseURL + "/chat/completions"
 
 	return &httpclient.Request{
-		Method:  http.MethodPost,
-		URL:     url,
-		Headers: headers,
-		Body:    body,
-		Auth:    auth,
+		Method:    http.MethodPost,
+		URL:       url,
+		Headers:   headers,
+		Body:      body,
+		Auth:      auth,
+		APIFormat: string(llm.APIFormatOpenAIChatCompletion),
 	}, nil
 }

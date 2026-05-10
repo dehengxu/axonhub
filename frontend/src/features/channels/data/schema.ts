@@ -14,6 +14,7 @@ export const apiFormatSchema = z.enum([
   'aisdk/datastream',
   'jina/rerank',
   'jina/embeddings',
+  'ollama/chat',
 ]);
 
 export type ApiFormat = z.infer<typeof apiFormatSchema>;
@@ -57,12 +58,18 @@ export const channelTypeSchema = z.enum([
   'burncloud',
   'modelscope',
   'bailian',
+  'bailian_anthropic',
+  'moonshot_coding',
   'jina',
   'github',
+  'github_copilot',
   'claudecode',
   'antigravity',
   'cerebras',
   'nanogpt',
+  'nanogpt_responses',
+  'fireworks',
+  'ollama',
 ]);
 export type ChannelType = z.infer<typeof channelTypeSchema>;
 
@@ -94,12 +101,14 @@ export type HeaderEntry = z.infer<typeof headerEntrySchema>;
 
 // Override Operation
 export const overrideOperationSchema = z.object({
-  op: z.enum(['set', 'delete', 'rename', 'copy']),
+  op: z.enum(['set', 'delete', 'rename', 'copy', 'array_append', 'array_prepend', 'array_insert']),
   path: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   value: z.any().optional(),
   condition: z.string().optional(),
+  index: z.number().int().nullish(),
+  splat: z.boolean().nullish(),
 })
 export type OverrideOperation = z.infer<typeof overrideOperationSchema>
 
@@ -140,6 +149,14 @@ export const channelProbeDataSchema = z.object({
 });
 export type ChannelProbeData = z.infer<typeof channelProbeDataSchema>;
 
+// Channel Rate Limit
+export const channelRateLimitSchema = z.object({
+  rpm: z.number().int().positive().optional().nullable(),
+  tpm: z.number().int().positive().optional().nullable(),
+  maxConcurrent: z.number().int().positive().optional().nullable(),
+});
+export type ChannelRateLimit = z.infer<typeof channelRateLimitSchema>;
+
 // Channel Settings
 export const channelSettingsSchema = z.object({
   extraModelPrefix: z.string().optional(),
@@ -151,7 +168,11 @@ export const channelSettingsSchema = z.object({
   headerOverrideOperations: z.array(overrideOperationSchema).optional(),
   proxy: proxyConfigSchema.optional().nullable(),
   transformOptions: transformOptionsSchema.optional(),
+  passThroughUserAgent: z.boolean().optional().nullable(),
+  passThroughBody: z.boolean().optional(),
+  rateLimit: channelRateLimitSchema.optional().nullable(),
 });
+
 export type ChannelSettings = z.infer<typeof channelSettingsSchema>;
 
 // Channel Model Entry
@@ -212,6 +233,8 @@ export const channelSchema = z.object({
   disabledAPIKeys: z.array(disabledAPIKeySchema).optional().nullable(),
   supportedModels: z.array(z.string()),
   autoSyncSupportedModels: z.boolean().default(false),
+  autoSyncModelPattern: z.string().optional().default(''),
+  manualModels: z.array(z.string()).optional().default([]).nullable(),
   tags: z.array(z.string()).optional().default([]).nullable(),
   defaultTestModel: z.string(),
   settings: channelSettingsSchema.optional().nullable(),
@@ -221,6 +244,24 @@ export const channelSchema = z.object({
   allModelEntries: z.array(channelModelEntrySchema).optional(),
 });
 export type Channel = z.infer<typeof channelSchema>;
+
+export const testAPIKeyResultSchema = z.object({
+  keyPrefix: z.string(),
+  success: z.boolean(),
+  latency: z.number(),
+  error: z.string().optional().nullable(),
+  disabled: z.boolean(),
+});
+export type TestAPIKeyResult = z.infer<typeof testAPIKeyResultSchema>;
+
+export const testChannelAPIKeysPayloadSchema = z.object({
+  channelID: z.string(),
+  total: z.number(),
+  successCount: z.number(),
+  failedCount: z.number(),
+  results: z.array(testAPIKeyResultSchema),
+});
+export type TestChannelAPIKeysPayload = z.infer<typeof testChannelAPIKeysPayloadSchema>;
 
 // Pricing Schemas
 export const pricingModeSchema = z.enum(['flat_fee', 'usage_per_unit', 'usage_tiered']);
@@ -278,8 +319,57 @@ export const saveChannelModelPriceInputSchema = z.object({
   price: modelPriceSchema,
 });
 export type SaveChannelModelPriceInput = z.infer<typeof saveChannelModelPriceInputSchema>;
+// Helper function to validate OAuth credentials
+function validateOAuthCredentials(
+  type: string,
+  apiKey: string | undefined,
+  ctx: z.RefinementCtx
+) {
+  if (!apiKey) return;
+
+  // For GitHub Copilot, enforce JSON format
+  const isCopilot = type === 'github_copilot';
+  if (isCopilot && !apiKey.trim().startsWith('{')) {
+    ctx.addIssue({
+      code: 'custom' as const,
+      message: 'channels.dialogs.oauth.errors.copilotCredentialsInvalid',
+      path: ['credentials', 'apiKey'],
+    });
+    return;
+  }
+
+  // Only enforce JSON validation if it looks like JSON (starts with '{')
+  if (!apiKey.trim().startsWith('{')) return;
+
+  const issue = {
+    code: 'custom' as const,
+    message: 'channels.dialogs.oauth.errors.credentialsInvalid',
+    path: ['credentials', 'apiKey'],
+  };
+
+  let json: unknown;
+  try {
+    json = JSON.parse(apiKey);
+  } catch {
+    ctx.addIssue(issue);
+    return;
+  }
+
+  // GitHub Copilot only requires access_token, others may require refresh_token
+  const parsed = z
+    .object({
+      access_token: z.string().min(1),
+      refresh_token: isCopilot ? z.string().optional() : z.string().min(1),
+    })
+    .safeParse(json);
+
+  if (!parsed.success) {
+    ctx.addIssue(issue);
+  }
+}
 
 // Create Channel Input
+
 export const createChannelInputSchema = z
   .object({
     type: channelTypeSchema,
@@ -288,6 +378,8 @@ export const createChannelInputSchema = z
     policies: channelPoliciesSchema.optional(),
     supportedModels: z.array(z.string()).min(0, 'At least one supported model is required'),
     autoSyncSupportedModels: z.boolean().optional().default(false),
+    autoSyncModelPattern: z.string().optional().default(''),
+    manualModels: z.array(z.string()).optional().nullable(),
     tags: z.array(z.string()).optional().default([]),
     defaultTestModel: z.string().min(1, 'Please select a default test model'),
     remark: z.string().optional(),
@@ -308,9 +400,18 @@ export const createChannelInputSchema = z
     }),
   })
   .superRefine((data, ctx) => {
-    const isOAuthType = data.type === 'codex' || data.type === 'claudecode' || data.type === 'antigravity';
+    const isOAuthType = data.type === 'codex' || data.type === 'claudecode' || data.type === 'antigravity' || data.type === 'github_copilot';
     const hasApiKey = data.credentials.apiKey && data.credentials.apiKey.trim().length > 0;
     const hasApiKeys = data.credentials.apiKeys && data.credentials.apiKeys.some((k) => k.trim().length > 0);
+
+    // github_copilot requires credentials.apiKey (OAuth JSON with access_token)
+    if (data.type === 'github_copilot' && !hasApiKey) {
+      ctx.addIssue({
+        code: 'custom' as const,
+        message: 'channels.dialogs.oauth.errors.copilotCredentialsRequired',
+        path: ['credentials', 'apiKey'],
+      });
+    }
 
     // Validate that at least one credential type is provided
     if (!hasApiKey && !hasApiKeys && data.type !== 'anthropic_aws' && data.type !== 'anthropic_gcp') {
@@ -323,35 +424,8 @@ export const createChannelInputSchema = z
 
     // For OAuth types, validate the OAuth JSON format if apiKey is provided
     if (isOAuthType && hasApiKey) {
-      const apiKey = data.credentials.apiKey!;
-      if (apiKey.trim().startsWith('{')) {
-        const issue = {
-          code: 'custom' as const,
-          message: 'channels.dialogs.fields.supportedModels.codexOAuthCredentialsRequired',
-          path: ['credentials', 'apiKey'],
-        };
-
-        let json: unknown;
-        try {
-          json = JSON.parse(apiKey);
-        } catch {
-          ctx.addIssue(issue);
-          return;
-        }
-
-        const parsed = z
-          .object({
-            access_token: z.string().min(1),
-            refresh_token: z.string().min(1),
-          })
-          .safeParse(json);
-
-        if (!parsed.success) {
-          ctx.addIssue(issue);
-        }
-      }
+      validateOAuthCredentials(data.type, data.credentials.apiKey, ctx);
     }
-
     // 如果是 anthropic_gcp 类型，GCP 字段必填（精确到字段级报错）
     if (data.type === 'anthropic_gcp') {
       const gcp = data.credentials?.gcp;
@@ -389,6 +463,8 @@ export const updateChannelInputSchema = z
     policies: channelPoliciesSchema.optional(),
     supportedModels: z.array(z.string()).min(1, 'At least one supported model is required').optional(),
     autoSyncSupportedModels: z.boolean().optional(),
+    autoSyncModelPattern: z.string().optional(),
+    manualModels: z.array(z.string()).optional().nullable(),
     tags: z.array(z.string()).optional(),
     defaultTestModel: z.string().min(1, 'Please select a default test model').optional(),
     settings: channelSettingsSchema.optional(),
@@ -412,39 +488,47 @@ export const updateChannelInputSchema = z
     orderingWeight: z.number().optional(),
   })
   .superRefine((data, ctx) => {
-    const isOAuthType = data.type === 'codex' || data.type === 'claudecode' || data.type === 'antigravity';
+    const effectiveType = data.type;
+    const hasApiKey = data.credentials?.apiKey && data.credentials.apiKey.trim().length > 0;
 
-    if (isOAuthType) {
-      if (!data.credentials) return;
+    // For OAuth validation on updates: validate if type is OAuth, or if credentials.apiKey is provided
+    // (which indicates OAuth credentials are being set)
+    const isOAuthType = effectiveType === 'codex' || effectiveType === 'claudecode' || effectiveType === 'antigravity' || effectiveType === 'github_copilot';
 
-      const apiKey = data.credentials.apiKey;
-      // Only enforce JSON validation if it looks like JSON (starts with '{')
-      if (apiKey && apiKey.trim().startsWith('{')) {
-        const issue = {
-          code: 'custom' as const,
-          message: 'channels.dialogs.fields.supportedModels.codexOAuthCredentialsRequired',
-          path: ['credentials', 'apiKey'],
-        };
-
-        let json: unknown;
-        try {
-          json = JSON.parse(apiKey);
-        } catch {
-          ctx.addIssue(issue);
-          return;
-        }
-
-        const parsed = z
-          .object({
-            access_token: z.string().min(1),
-            refresh_token: z.string().min(1),
-          })
-          .safeParse(json);
-
-        if (!parsed.success) {
-          ctx.addIssue(issue);
-        }
+    // Derive type from parent context if not available
+    let derivedType = effectiveType;
+    if (!derivedType && hasApiKey) {
+      // Try to get type from parent context
+      const parent = ctx.parent;
+      if (parent && typeof parent === 'object' && 'type' in parent) {
+        derivedType = (parent as { type?: string }).type;
       }
+    }
+
+    // If we have an OAuth key but no type, check if it looks like Copilot credentials
+    const isCopilotKey = hasApiKey && data.credentials?.apiKey?.trim().startsWith('{');
+
+    if (isOAuthType || (derivedType === 'github_copilot') || isCopilotKey) {
+      if (isCopilotKey && !derivedType) {
+        try {
+          const parsed = JSON.parse(data.credentials.apiKey);
+          if (!parsed.access_token) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'channels.dialogs.oauth.errors.copilotCredentialsInvalid',
+              path: ['credentials', 'apiKey'],
+            });
+          }
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'channels.dialogs.oauth.errors.copilotCredentialsInvalid',
+            path: ['credentials', 'apiKey'],
+          });
+        }
+        return;
+      }
+      validateOAuthCredentials(derivedType, data.credentials?.apiKey, ctx);
     }
 
     // 如果是 anthropic_gcp 类型且提供了 credentials，GCP 字段必填（字段级报错）
@@ -473,6 +557,7 @@ export const updateChannelInputSchema = z
       }
     }
   });
+
 export type UpdateChannelInput = z.infer<typeof updateChannelInputSchema>;
 
 // Channel Connection (for pagination)
@@ -543,6 +628,28 @@ export const channelOrderingConnectionSchema = z.object({
 });
 export type ChannelOrderingConnection = z.infer<typeof channelOrderingConnectionSchema>;
 
+export const channelSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: channelTypeSchema,
+  status: channelStatusSchema,
+  baseURL: z.string(),
+  orderingWeight: z.number(),
+  tags: z.array(z.string()).optional().default([]).nullable(),
+  allModelEntries: z.array(channelModelEntrySchema).optional().default([]),
+});
+export type ChannelSummary = z.infer<typeof channelSummarySchema>;
+
+export const channelSummaryConnectionSchema = z.object({
+  edges: z.array(
+    z.object({
+      node: channelSummarySchema,
+    })
+  ),
+  totalCount: z.number(),
+});
+export type ChannelSummaryConnection = z.infer<typeof channelSummaryConnectionSchema>;
+
 export const bulkUpdateChannelOrderingInputSchema = z.object({
   channels: z
     .array(
@@ -570,4 +677,6 @@ export type {
   UpdateChannelOverrideTemplateInput,
   ApplyChannelOverrideTemplateInput,
   ApplyChannelOverrideTemplatePayload,
+  ClearChannelOverrideTemplatesInput,
+  ClearChannelOverrideTemplatesPayload,
 } from './templates';

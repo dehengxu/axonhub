@@ -168,6 +168,20 @@ func (_c *RequestExecutionCreate) SetNillableErrorMessage(v *string) *RequestExe
 	return _c
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (_c *RequestExecutionCreate) SetResponseStatusCode(v int) *RequestExecutionCreate {
+	_c.mutation.SetResponseStatusCode(v)
+	return _c
+}
+
+// SetNillableResponseStatusCode sets the "response_status_code" field if the given value is not nil.
+func (_c *RequestExecutionCreate) SetNillableResponseStatusCode(v *int) *RequestExecutionCreate {
+	if v != nil {
+		_c.SetResponseStatusCode(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *RequestExecutionCreate) SetStatus(v requestexecution.Status) *RequestExecutionCreate {
 	_c.mutation.SetStatus(v)
@@ -212,6 +226,20 @@ func (_c *RequestExecutionCreate) SetMetricsFirstTokenLatencyMs(v int64) *Reques
 func (_c *RequestExecutionCreate) SetNillableMetricsFirstTokenLatencyMs(v *int64) *RequestExecutionCreate {
 	if v != nil {
 		_c.SetMetricsFirstTokenLatencyMs(*v)
+	}
+	return _c
+}
+
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (_c *RequestExecutionCreate) SetMetricsReasoningDurationMs(v int64) *RequestExecutionCreate {
+	_c.mutation.SetMetricsReasoningDurationMs(v)
+	return _c
+}
+
+// SetNillableMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field if the given value is not nil.
+func (_c *RequestExecutionCreate) SetNillableMetricsReasoningDurationMs(v *int64) *RequestExecutionCreate {
+	if v != nil {
+		_c.SetMetricsReasoningDurationMs(*v)
 	}
 	return _c
 }
@@ -296,17 +324,16 @@ func (_c *RequestExecutionCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *RequestExecutionCreate) check() error {
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "RequestExecution.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "RequestExecution.updated_at"`)}
-	}
 	if _, ok := _c.mutation.ProjectID(); !ok {
 		return &ValidationError{Name: "project_id", err: errors.New(`ent: missing required field "RequestExecution.project_id"`)}
 	}
 	if _, ok := _c.mutation.RequestID(); !ok {
 		return &ValidationError{Name: "request_id", err: errors.New(`ent: missing required field "RequestExecution.request_id"`)}
+	}
+	if v, ok := _c.mutation.ExternalID(); ok {
+		if err := requestexecution.ExternalIDValidator(v); err != nil {
+			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "RequestExecution.external_id": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.ModelID(); !ok {
 		return &ValidationError{Name: "model_id", err: errors.New(`ent: missing required field "RequestExecution.model_id"`)}
@@ -398,6 +425,10 @@ func (_c *RequestExecutionCreate) createSpec() (*RequestExecution, *sqlgraph.Cre
 		_spec.SetField(requestexecution.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = value
 	}
+	if value, ok := _c.mutation.ResponseStatusCode(); ok {
+		_spec.SetField(requestexecution.FieldResponseStatusCode, field.TypeInt, value)
+		_node.ResponseStatusCode = &value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(requestexecution.FieldStatus, field.TypeEnum, value)
 		_node.Status = value
@@ -413,6 +444,10 @@ func (_c *RequestExecutionCreate) createSpec() (*RequestExecution, *sqlgraph.Cre
 	if value, ok := _c.mutation.MetricsFirstTokenLatencyMs(); ok {
 		_spec.SetField(requestexecution.FieldMetricsFirstTokenLatencyMs, field.TypeInt64, value)
 		_node.MetricsFirstTokenLatencyMs = &value
+	}
+	if value, ok := _c.mutation.MetricsReasoningDurationMs(); ok {
+		_spec.SetField(requestexecution.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+		_node.MetricsReasoningDurationMs = &value
 	}
 	if value, ok := _c.mutation.RequestHeaders(); ok {
 		_spec.SetField(requestexecution.FieldRequestHeaders, field.TypeJSON, value)
@@ -605,6 +640,30 @@ func (u *RequestExecutionUpsert) ClearErrorMessage() *RequestExecutionUpsert {
 	return u
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (u *RequestExecutionUpsert) SetResponseStatusCode(v int) *RequestExecutionUpsert {
+	u.Set(requestexecution.FieldResponseStatusCode, v)
+	return u
+}
+
+// UpdateResponseStatusCode sets the "response_status_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsert) UpdateResponseStatusCode() *RequestExecutionUpsert {
+	u.SetExcluded(requestexecution.FieldResponseStatusCode)
+	return u
+}
+
+// AddResponseStatusCode adds v to the "response_status_code" field.
+func (u *RequestExecutionUpsert) AddResponseStatusCode(v int) *RequestExecutionUpsert {
+	u.Add(requestexecution.FieldResponseStatusCode, v)
+	return u
+}
+
+// ClearResponseStatusCode clears the value of the "response_status_code" field.
+func (u *RequestExecutionUpsert) ClearResponseStatusCode() *RequestExecutionUpsert {
+	u.SetNull(requestexecution.FieldResponseStatusCode)
+	return u
+}
+
 // SetStatus sets the "status" field.
 func (u *RequestExecutionUpsert) SetStatus(v requestexecution.Status) *RequestExecutionUpsert {
 	u.Set(requestexecution.FieldStatus, v)
@@ -662,6 +721,30 @@ func (u *RequestExecutionUpsert) AddMetricsFirstTokenLatencyMs(v int64) *Request
 // ClearMetricsFirstTokenLatencyMs clears the value of the "metrics_first_token_latency_ms" field.
 func (u *RequestExecutionUpsert) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpsert {
 	u.SetNull(requestexecution.FieldMetricsFirstTokenLatencyMs)
+	return u
+}
+
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsert) SetMetricsReasoningDurationMs(v int64) *RequestExecutionUpsert {
+	u.Set(requestexecution.FieldMetricsReasoningDurationMs, v)
+	return u
+}
+
+// UpdateMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field to the value that was provided on create.
+func (u *RequestExecutionUpsert) UpdateMetricsReasoningDurationMs() *RequestExecutionUpsert {
+	u.SetExcluded(requestexecution.FieldMetricsReasoningDurationMs)
+	return u
+}
+
+// AddMetricsReasoningDurationMs adds v to the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsert) AddMetricsReasoningDurationMs(v int64) *RequestExecutionUpsert {
+	u.Add(requestexecution.FieldMetricsReasoningDurationMs, v)
+	return u
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsert) ClearMetricsReasoningDurationMs() *RequestExecutionUpsert {
+	u.SetNull(requestexecution.FieldMetricsReasoningDurationMs)
 	return u
 }
 
@@ -850,6 +933,34 @@ func (u *RequestExecutionUpsertOne) ClearErrorMessage() *RequestExecutionUpsertO
 	})
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (u *RequestExecutionUpsertOne) SetResponseStatusCode(v int) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetResponseStatusCode(v)
+	})
+}
+
+// AddResponseStatusCode adds v to the "response_status_code" field.
+func (u *RequestExecutionUpsertOne) AddResponseStatusCode(v int) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.AddResponseStatusCode(v)
+	})
+}
+
+// UpdateResponseStatusCode sets the "response_status_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsertOne) UpdateResponseStatusCode() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateResponseStatusCode()
+	})
+}
+
+// ClearResponseStatusCode clears the value of the "response_status_code" field.
+func (u *RequestExecutionUpsertOne) ClearResponseStatusCode() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearResponseStatusCode()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *RequestExecutionUpsertOne) SetStatus(v requestexecution.Status) *RequestExecutionUpsertOne {
 	return u.Update(func(s *RequestExecutionUpsert) {
@@ -917,6 +1028,34 @@ func (u *RequestExecutionUpsertOne) UpdateMetricsFirstTokenLatencyMs() *RequestE
 func (u *RequestExecutionUpsertOne) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpsertOne {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearMetricsFirstTokenLatencyMs()
+	})
+}
+
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertOne) SetMetricsReasoningDurationMs(v int64) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetMetricsReasoningDurationMs(v)
+	})
+}
+
+// AddMetricsReasoningDurationMs adds v to the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertOne) AddMetricsReasoningDurationMs(v int64) *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.AddMetricsReasoningDurationMs(v)
+	})
+}
+
+// UpdateMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field to the value that was provided on create.
+func (u *RequestExecutionUpsertOne) UpdateMetricsReasoningDurationMs() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateMetricsReasoningDurationMs()
+	})
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertOne) ClearMetricsReasoningDurationMs() *RequestExecutionUpsertOne {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearMetricsReasoningDurationMs()
 	})
 }
 
@@ -1274,6 +1413,34 @@ func (u *RequestExecutionUpsertBulk) ClearErrorMessage() *RequestExecutionUpsert
 	})
 }
 
+// SetResponseStatusCode sets the "response_status_code" field.
+func (u *RequestExecutionUpsertBulk) SetResponseStatusCode(v int) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetResponseStatusCode(v)
+	})
+}
+
+// AddResponseStatusCode adds v to the "response_status_code" field.
+func (u *RequestExecutionUpsertBulk) AddResponseStatusCode(v int) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.AddResponseStatusCode(v)
+	})
+}
+
+// UpdateResponseStatusCode sets the "response_status_code" field to the value that was provided on create.
+func (u *RequestExecutionUpsertBulk) UpdateResponseStatusCode() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateResponseStatusCode()
+	})
+}
+
+// ClearResponseStatusCode clears the value of the "response_status_code" field.
+func (u *RequestExecutionUpsertBulk) ClearResponseStatusCode() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearResponseStatusCode()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *RequestExecutionUpsertBulk) SetStatus(v requestexecution.Status) *RequestExecutionUpsertBulk {
 	return u.Update(func(s *RequestExecutionUpsert) {
@@ -1341,6 +1508,34 @@ func (u *RequestExecutionUpsertBulk) UpdateMetricsFirstTokenLatencyMs() *Request
 func (u *RequestExecutionUpsertBulk) ClearMetricsFirstTokenLatencyMs() *RequestExecutionUpsertBulk {
 	return u.Update(func(s *RequestExecutionUpsert) {
 		s.ClearMetricsFirstTokenLatencyMs()
+	})
+}
+
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertBulk) SetMetricsReasoningDurationMs(v int64) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.SetMetricsReasoningDurationMs(v)
+	})
+}
+
+// AddMetricsReasoningDurationMs adds v to the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertBulk) AddMetricsReasoningDurationMs(v int64) *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.AddMetricsReasoningDurationMs(v)
+	})
+}
+
+// UpdateMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field to the value that was provided on create.
+func (u *RequestExecutionUpsertBulk) UpdateMetricsReasoningDurationMs() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.UpdateMetricsReasoningDurationMs()
+	})
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (u *RequestExecutionUpsertBulk) ClearMetricsReasoningDurationMs() *RequestExecutionUpsertBulk {
+	return u.Update(func(s *RequestExecutionUpsert) {
+		s.ClearMetricsReasoningDurationMs()
 	})
 }
 

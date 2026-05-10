@@ -29,7 +29,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 
 log:
   level: "info"
@@ -43,7 +43,7 @@ All configuration options can be set via environment variables:
 ```bash
 export AXONHUB_SERVER_PORT=8090
 export AXONHUB_DB_DIALECT="sqlite3"
-export AXONHUB_DB_DSN="file:axonhub.db?cache=shared&_fk=1"
+export AXONHUB_DB_DSN="file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 export AXONHUB_LOG_LEVEL="info"
 ```
 
@@ -69,6 +69,7 @@ server:
     claude_code_trace_enabled: false # Enable Claude Code trace extraction
     codex_trace_enabled: false # Enable Codex trace extraction
   debug: false                  # Enable debug mode
+  disable_ssl_verify: false     # Disable SSL certificate verification for upstream requests (self-signed certificates)
 ```
 
 **Environment Variables:**
@@ -83,13 +84,14 @@ server:
 - `AXONHUB_SERVER_TRACE_CLAUDE_CODE_TRACE_ENABLED`
 - `AXONHUB_SERVER_TRACE_CODEX_TRACE_ENABLED`
 - `AXONHUB_SERVER_DEBUG`
+- `AXONHUB_SERVER_DISABLE_SSL_VERIFY`
 
 ### Database Configuration
 
 ```yaml
 db:
   dialect: "sqlite3"            # sqlite3, postgres, mysql, tidb
-  dsn: "file:axonhub.db?cache=shared&_fk=1"  # Connection string
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"  # Connection string
   debug: false                  # Enable database debug logging
 ```
 
@@ -244,6 +246,46 @@ provider_quota:
 export AXONHUB_PROVIDER_QUOTA_CHECK_INTERVAL="30m"
 ```
 
+### GitHub Copilot OAuth Configuration
+
+```yaml
+copilot:
+  client_id: ""                   # Custom GitHub OAuth client ID (optional)
+```
+
+**Description:**
+Configures the OAuth client ID used for GitHub Copilot device flow authentication. By default, AxonHub uses the VS Code public client ID. For production deployments or to comply with GitHub's Terms of Service, you should register your own OAuth application and configure your custom client ID.
+
+**Environment Variables:**
+- `GITHUB_COPILOT_CLIENT_ID`
+
+**Default:** VS Code public client ID (used for backward compatibility)
+
+**When to Customize:**
+- **Production deployments:** Register your own GitHub OAuth app to have full control over the OAuth settings
+- **Compliance:** Using your own client ID ensures compliance with GitHub's Terms of Service
+- **Rate limiting:** Having your own OAuth app gives you dedicated rate limits
+
+**How to Register Your Own OAuth App:**
+1. Go to GitHub Settings → Developer Settings → OAuth Apps
+2. Click "New OAuth App"
+3. Fill in the application details:
+   - Application name: `Your AxonHub Instance`
+   - Homepage URL: `https://your-axonhub-domain.com`
+   - Authorization callback URL: `https://your-axonhub-domain.com/api/copilot/oauth/callback`
+4. Click "Register application"
+5. Copy the Client ID and set it as the environment variable
+
+**Examples:**
+```yaml
+copilot:
+  client_id: "Iv1.your-custom-client-id"
+```
+
+```bash
+export GITHUB_COPILOT_CLIENT_ID="Iv1.your-custom-client-id"
+```
+
 ## Configuration Examples
 
 ### Development Configuration
@@ -303,7 +345,7 @@ log:
 ### SQLite
 
 ```
-file:axonhub.db?cache=shared&_fk=1
+file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)
 ```
 
 ### PostgreSQL

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zhenzou/executors"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/ent/channel"
-	"github.com/looplj/axonhub/internal/ent/privacy"
 	"github.com/looplj/axonhub/internal/ent/schema/schematype"
 	"github.com/looplj/axonhub/internal/log"
 	"github.com/looplj/axonhub/internal/objects"
@@ -72,10 +72,12 @@ type Channel struct {
 type ChannelServiceParams struct {
 	fx.In
 
-	CacheConfig   xcache.Config
-	Executor      executors.ScheduledExecutor
-	Ent           *ent.Client
-	SystemService *SystemService
+	CacheConfig     xcache.Config
+	Executor        executors.ScheduledExecutor
+	Ent             *ent.Client
+	SystemService   *SystemService
+	WebhookNotifier *WebhookNotifier
+	HttpClient      *httpclient.HttpClient
 }
 
 func NewChannelService(params ChannelServiceParams) *ChannelService {
@@ -85,17 +87,14 @@ func NewChannelService(params ChannelServiceParams) *ChannelService {
 		},
 		Executors:          params.Executor,
 		SystemService:      params.SystemService,
+		WebhookNotifier:    params.WebhookNotifier,
+		httpClient:         params.HttpClient,
 		channelPerfMetrics: make(map[int]*channelMetrics),
 		channelErrorCounts: make(map[int]map[int]int),
 		apiKeyErrorCounts:  make(map[int]map[string]map[int]int),
 		perfCh:             make(chan *PerformanceRecord, 1024),
 	}
-
-	// Load channel performance metrics after channels are loaded
-	if err := svc.LoadChannelPerformances(context.Background()); err != nil {
-		log.Error(context.Background(), "failed to load channel performances", log.Cause(err))
-		// Continue loading channels even if metrics loading fails
-	}
+	svc.initChannelPerformances(context.Background())
 
 	watcherMode := params.CacheConfig.Mode
 	if watcherMode == "" {
@@ -123,19 +122,14 @@ func NewChannelService(params ChannelServiceParams) *ChannelService {
 		Name:            "axonhub:enabled_channels",
 		InitialValue:    []*Channel{},
 		RefreshInterval: time.Minute,
-		RefreshFunc:     svc.refreshEnabledChannels,
+		RefreshFunc:     svc.onCacheRefreshed,
 		OnSwap:          svc.onEnabledChannelsSwap,
 		Watcher:         svc.channelNotifier,
 	})
 	xerrors.NoErr(svc.enabledChannelsCache.Load(context.Background(), true))
 
 	// Schedule model sync every hour
-	xerrors.NoErr2(
-		svc.Executors.ScheduleFuncAtCronRate(
-			svc.syncChannelModels,
-			executors.CRONRule{Expr: "11 * * * *"},
-		),
-	)
+	xerrors.NoErr2(svc.Executors.ScheduleFuncAtCronRate(svc.runSyncChannelModelsPeriodically, executors.CRONRule{Expr: "11 * * * *"}))
 
 	// Start performance metrics background flush
 	go svc.startPerformanceProcess()
@@ -150,8 +144,11 @@ func (svc *ChannelService) Stop() {
 type ChannelService struct {
 	*AbstractService
 
-	Executors     executors.ScheduledExecutor
-	SystemService *SystemService
+	Executors       executors.ScheduledExecutor
+	SystemService   *SystemService
+	WebhookNotifier *WebhookNotifier
+
+	httpClient *httpclient.HttpClient
 
 	enabledChannelsCache *live.Cache[[]*Channel]
 	channelNotifier      watcher.Notifier[live.CacheEvent[struct{}]]
@@ -175,13 +172,19 @@ type ChannelService struct {
 	apiKeyErrorCounts     map[int]map[string]map[int]int
 	apiKeyErrorCountsLock sync.Mutex
 
+	modelSyncMu sync.Mutex
+
+	lastModelSyncExecutionTime time.Time
+
+	// cacheVersion is incremented each time the enabled channels cache data is swapped.
+	// Used by external caches (e.g., association cache) to detect cache refreshes.
+	cacheVersion atomic.Int64
+
 	// perfCh is the channel for performance records for async processing.
 	perfCh chan *PerformanceRecord
 }
 
-func (svc *ChannelService) refreshEnabledChannels(ctx context.Context, current []*Channel, lastUpdate time.Time) ([]*Channel, time.Time, bool, error) {
-	ctx = privacy.DecisionContext(ctx, privacy.Allow)
-
+func (svc *ChannelService) reloadEnabledChannels(ctx context.Context, current []*Channel, lastUpdate time.Time) ([]*Channel, time.Time, bool, error) {
 	// Query latest updated channel including soft-deleted ones to detect deletions
 	latestUpdatedChannel, err := svc.entFromContext(ctx).Channel.Query().
 		Order(ent.Desc(channel.FieldUpdatedAt)).
@@ -248,6 +251,8 @@ func (svc *ChannelService) refreshEnabledChannels(ctx context.Context, current [
 }
 
 func (svc *ChannelService) onEnabledChannelsSwap(old, new []*Channel) {
+	svc.cacheVersion.Add(1)
+
 	for _, ch := range new {
 		if ch != nil && ch.startTokenProvider != nil {
 			ch.startTokenProvider()
@@ -259,6 +264,13 @@ func (svc *ChannelService) onEnabledChannelsSwap(old, new []*Channel) {
 			ch.stopTokenProvider()
 		}
 	}
+}
+
+// GetCacheVersion returns the current cache version counter.
+// This is incremented on every enabled channels cache swap and can be used
+// by external caches to detect when the underlying channel data has changed.
+func (svc *ChannelService) GetCacheVersion() int64 {
+	return svc.cacheVersion.Load()
 }
 
 // GetEnabledChannels returns all enabled channels.
@@ -428,8 +440,10 @@ func (svc *ChannelService) createChannel(ctx context.Context, input ent.CreateCh
 		SetName(input.Name).
 		SetCredentials(input.Credentials).
 		SetSupportedModels(input.SupportedModels).
+		SetManualModels(input.ManualModels).
 		SetDefaultTestModel(input.DefaultTestModel).
 		SetNillableAutoSyncSupportedModels(input.AutoSyncSupportedModels).
+		SetNillableAutoSyncModelPattern(input.AutoSyncModelPattern).
 		SetSettings(input.Settings)
 
 	if input.Tags != nil {
@@ -443,11 +457,6 @@ func (svc *ChannelService) createChannel(ctx context.Context, input ent.CreateCh
 	channel, err := createBuilder.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create channel: %w", err)
-	}
-
-	// Initialize ChannelPerformance record for the new channel
-	if err := svc.InitializeChannelPerformance(ctx, channel.ID); err != nil {
-		return nil, fmt.Errorf("failed to initialize channel performance record: %w", err)
 	}
 
 	return channel, nil
@@ -464,7 +473,7 @@ func (svc *ChannelService) CreateChannel(ctx context.Context, input ent.CreateCh
 	}
 
 	if existing != nil {
-		return nil, fmt.Errorf("channel with name '%s' already exists", input.Name)
+		return nil, xerrors.DuplicateNameError("channel", input.Name)
 	}
 
 	channel, err := svc.createChannel(ctx, input)
@@ -494,11 +503,12 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 		}
 
 		if existing != nil {
-			return nil, fmt.Errorf("channel with name '%s' already exists", *input.Name)
+			return nil, xerrors.DuplicateNameError("channel", *input.Name)
 		}
 	}
 
 	mut := svc.entFromContext(ctx).Channel.UpdateOneID(id).
+		SetNillableType(input.Type).
 		SetNillableBaseURL(input.BaseURL).
 		SetNillableName(input.Name).
 		SetNillableDefaultTestModel(input.DefaultTestModel).
@@ -507,6 +517,10 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 
 	if input.SupportedModels != nil {
 		mut.SetSupportedModels(input.SupportedModels)
+	}
+
+	if input.ManualModels != nil {
+		mut.SetManualModels(input.ManualModels)
 	}
 
 	if input.Tags != nil {
@@ -544,6 +558,12 @@ func (svc *ChannelService) UpdateChannel(ctx context.Context, id int, input *ent
 
 	if input.ClearRemark {
 		mut.ClearRemark()
+	}
+
+	if input.ClearAutoSyncModelPattern {
+		mut.ClearAutoSyncModelPattern()
+	} else if input.AutoSyncModelPattern != nil {
+		mut.SetAutoSyncModelPattern(*input.AutoSyncModelPattern)
 	}
 
 	if input.ClearErrorMessage {

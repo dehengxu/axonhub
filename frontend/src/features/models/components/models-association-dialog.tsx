@@ -17,13 +17,161 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TagsAutocompleteInput } from '@/components/ui/tags-autocomplete-input';
 import { AutoComplete } from '@/components/auto-complete';
 import { AutoCompleteSelect } from '@/components/auto-complete-select';
-import { useAllChannelsForOrdering, useAllChannelTags } from '@/features/channels/data/channels';
+import { FilterBuilder, type FilterBuilderCondition, type FilterBuilderField, type FilterBuilderGroupListValue } from '@/components/filter-builder';
+import { useAllChannelSummarys, useAllChannelTags } from '@/features/channels/data/channels';
 import { useModels } from '../context/models-context';
 import { useQueryModelChannelConnections, ModelAssociationInput, ModelChannelConnection } from '../data/models';
 import { useUpdateModel } from '../data/models';
 import { ModelAssociation } from '../data/schema';
 import { toast } from 'sonner';
 import { ChannelModelsList } from './channel-models-list';
+
+const whenFilterFields: FilterBuilderField[] = [
+  {
+    value: 'prompt_tokens',
+    label: 'Prompt tokens',
+    type: 'number',
+    placeholder: 'Enter token threshold',
+    operators: [
+      { value: 'lt', label: '< Less than' },
+      { value: 'lte', label: '<= Less than or equal' },
+      { value: 'gt', label: '> Greater than' },
+      { value: 'gte', label: '>= Greater than or equal' },
+    ],
+  },
+  {
+    value: 'stream',
+    label: 'Stream',
+    type: 'boolean',
+    operators: [
+      { value: 'eq', label: '= Equals' },
+      { value: 'ne', label: '!= Not equal' },
+    ],
+  },
+];
+
+function isValidConditionOperator(field: string, operator: string): boolean {
+  const fieldConfig = whenFilterFields.find((f) => f.value === field);
+  if (!fieldConfig) return false;
+  return fieldConfig.operators.some((op) => op.value === operator);
+}
+
+const DEFAULT_WHEN_CONDITION: FilterBuilderGroupListValue = {
+  groups: [],
+};
+const MAX_WHEN_CONDITION_DEPTH = 1;
+const DEFAULT_WHEN_GROUP: FilterBuilderCondition = {
+  type: 'group',
+  logic: 'and',
+  conditions: [],
+};
+
+function hasConditionNodeData(condition?: FilterBuilderCondition): boolean {
+  if (!condition) {
+    return false;
+  }
+
+  if (condition.type === 'group') {
+    return (condition.conditions || []).some((item) => hasConditionNodeData(item));
+  }
+
+  return Boolean(condition.field && condition.operator && condition.value !== '');
+}
+
+function hasGroupListData(value?: FilterBuilderGroupListValue) {
+  return (value?.groups || []).some((group) => hasConditionNodeData(group));
+}
+
+function validateWhenConditionNode(
+  condition: FilterBuilderCondition,
+  ctx: z.RefinementCtx,
+  path: (string | number)[],
+  depth = 1,
+  maxDepth = MAX_WHEN_CONDITION_DEPTH
+) {
+  if (condition.type === 'group') {
+    const conditions = condition.conditions || [];
+    if (conditions.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one condition is required',
+        path,
+      });
+    }
+
+    if (depth > maxDepth) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Condition nesting cannot exceed ${maxDepth} level${maxDepth > 1 ? 's' : ''}`,
+        path,
+      });
+    }
+
+    conditions.forEach((nestedCondition, index) =>
+      validateWhenConditionNode(nestedCondition, ctx, [...path, 'conditions', index], depth + 1, maxDepth)
+    );
+    return;
+  }
+
+  if (!condition.field) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Field is required',
+      path: [...path, 'field'],
+    });
+  }
+  if (!condition.operator) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Operator is required',
+      path: [...path, 'operator'],
+    });
+  }
+  if (condition.value === '') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Value is required',
+      path: [...path, 'value'],
+    });
+  }
+  if (condition.field === 'prompt_tokens' && typeof condition.value !== 'number') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Value must be a number',
+      path: [...path, 'value'],
+    });
+  }
+  if (condition.field === 'stream' && typeof condition.value !== 'boolean') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Value must be a boolean',
+      path: [...path, 'value'],
+    });
+  }
+}
+
+function validateWhenGroupList(value: FilterBuilderGroupListValue, ctx: z.RefinementCtx, path: (string | number)[]) {
+  const groups = value.groups || [];
+
+  if (groups.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one condition group is required',
+      path,
+    });
+    return;
+  }
+
+  if (groups.length > 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Only one condition group is allowed',
+      path,
+    });
+  }
+
+  groups.slice(0, 1).forEach((group, index) => validateWhenConditionNode(group, ctx, [...path, 'groups', index], 1, MAX_WHEN_CONDITION_DEPTH));
+}
 
 const associationFormSchema = z.object({
   associations: z
@@ -32,6 +180,8 @@ const associationFormSchema = z.object({
         type: z.enum(['channel_model', 'channel_regex', 'model', 'regex', 'channel_tags_model', 'channel_tags_regex']),
         priority: z.number().min(0, 'Priority must be at least 0').max(10, 'Priority cannot exceed 10'),
         disabled: z.boolean().default(false),
+        whenEnabled: z.boolean().default(false),
+        whenCondition: z.custom<FilterBuilderGroupListValue>().default(DEFAULT_WHEN_CONDITION),
         channelId: z.number().optional(),
         channelTags: z.array(z.string()).optional(),
         modelId: z.string().optional(),
@@ -80,6 +230,9 @@ const associationFormSchema = z.object({
             });
           }
         }
+        if (assoc.whenEnabled) {
+          validateWhenGroupList(assoc.whenCondition || DEFAULT_WHEN_CONDITION, ctx, [index, 'whenCondition']);
+        }
       });
     }),
 });
@@ -90,7 +243,7 @@ export function ModelsAssociationDialog() {
   const { t } = useTranslation();
   const { open, setOpen, currentRow } = useModels();
   const updateModel = useUpdateModel();
-  const { data: channelsData } = useAllChannelsForOrdering({ enabled: open === 'association' });
+  const { data: channelsData } = useAllChannelSummarys(undefined, { enabled: open === 'association' });
   const { data: availableModels, mutateAsync: fetchModels } = useQueryModels();
   const { data: allTags = [] } = useAllChannelTags();
   const { mutateAsync: queryConnections } = useQueryModelChannelConnections();
@@ -201,18 +354,19 @@ export function ModelsAssociationDialog() {
               (assoc.excludeChannelTags && assoc.excludeChannelTags.length > 0);
             const exclude = hasExclude
               ? [
-                  {
-                    channelNamePattern: assoc.excludeChannelNamePattern || null,
-                    channelIds: assoc.excludeChannelIds || null,
-                    channelTags: assoc.excludeChannelTags || null,
-                  },
-                ]
+                {
+                  channelNamePattern: assoc.excludeChannelNamePattern || null,
+                  channelIds: assoc.excludeChannelIds || null,
+                  channelTags: assoc.excludeChannelTags || null,
+                },
+              ]
               : undefined;
 
             if (assoc.type === 'channel_model') {
               return {
                 type: 'channel_model' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 channelModel: {
                   channelId: assoc.channelId!,
                   modelId: assoc.modelId!,
@@ -222,6 +376,7 @@ export function ModelsAssociationDialog() {
               return {
                 type: 'channel_regex' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 channelRegex: {
                   channelId: assoc.channelId!,
                   pattern: assoc.pattern!,
@@ -231,6 +386,7 @@ export function ModelsAssociationDialog() {
               return {
                 type: 'regex' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 regex: {
                   pattern: assoc.pattern!,
                   exclude,
@@ -240,6 +396,7 @@ export function ModelsAssociationDialog() {
               return {
                 type: 'model' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 modelId: {
                   modelId: assoc.modelId!,
                   exclude,
@@ -249,6 +406,7 @@ export function ModelsAssociationDialog() {
               return {
                 type: 'channel_tags_model' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 channelTagsModel: {
                   channelTags: assoc.channelTags!,
                   modelId: assoc.modelId!,
@@ -258,6 +416,7 @@ export function ModelsAssociationDialog() {
               return {
                 type: 'channel_tags_regex' as const,
                 disabled: assoc.disabled ?? false,
+                when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
                 channelTagsRegex: {
                   channelTags: assoc.channelTags!,
                   pattern: assoc.pattern!,
@@ -289,10 +448,15 @@ export function ModelsAssociationDialog() {
       form.reset({
         associations: associations.map((assoc) => {
           const exclude = assoc.regex?.exclude?.[0] || assoc.modelId?.exclude?.[0];
+          const promptTokensCondition = readPromptTokensCondition(assoc.when);
           return {
             type: assoc.type,
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            whenEnabled: promptTokensCondition.enabled,
+            whenCondition: promptTokensCondition.enabled && (promptTokensCondition.condition.groups?.length || 0) === 0
+              ? { groups: [DEFAULT_WHEN_GROUP] }
+              : promptTokensCondition.condition,
             channelId: assoc.channelModel?.channelId || assoc.channelRegex?.channelId,
             channelTags: assoc.channelTagsModel?.channelTags || assoc.channelTagsRegex?.channelTags || [],
             modelId: assoc.channelModel?.modelId || assoc.modelId?.modelId || assoc.channelTagsModel?.modelId,
@@ -317,6 +481,7 @@ export function ModelsAssociationDialog() {
             type: 'channel_model',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: {
               channelId: assoc.channelId || 0,
               modelId: assoc.modelId || '',
@@ -332,6 +497,7 @@ export function ModelsAssociationDialog() {
             type: 'channel_regex',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: null,
             channelRegex: {
               channelId: assoc.channelId || 0,
@@ -347,6 +513,7 @@ export function ModelsAssociationDialog() {
             type: 'channel_tags_model',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: null,
             channelRegex: null,
             regex: null,
@@ -362,6 +529,7 @@ export function ModelsAssociationDialog() {
             type: 'channel_tags_regex',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: null,
             channelRegex: null,
             regex: null,
@@ -379,17 +547,18 @@ export function ModelsAssociationDialog() {
             (assoc.excludeChannelTags && assoc.excludeChannelTags.length > 0);
           const exclude = hasExclude
             ? [
-                {
-                  channelNamePattern: assoc.excludeChannelNamePattern || null,
-                  channelIds: assoc.excludeChannelIds || null,
-                  channelTags: assoc.excludeChannelTags || null,
-                },
-              ]
+              {
+                channelNamePattern: assoc.excludeChannelNamePattern || null,
+                channelIds: assoc.excludeChannelIds || null,
+                channelTags: assoc.excludeChannelTags || null,
+              },
+            ]
             : null;
           return {
             type: 'regex',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: null,
             channelRegex: null,
             regex: {
@@ -407,17 +576,18 @@ export function ModelsAssociationDialog() {
             (assoc.excludeChannelTags && assoc.excludeChannelTags.length > 0);
           const exclude = hasExclude
             ? [
-                {
-                  channelNamePattern: assoc.excludeChannelNamePattern || null,
-                  channelIds: assoc.excludeChannelIds || null,
-                  channelTags: assoc.excludeChannelTags || null,
-                },
-              ]
+              {
+                channelNamePattern: assoc.excludeChannelNamePattern || null,
+                channelIds: assoc.excludeChannelIds || null,
+                channelTags: assoc.excludeChannelTags || null,
+              },
+            ]
             : null;
           return {
             type: 'model',
             priority: assoc.priority ?? 0,
             disabled: assoc.disabled ?? false,
+            when: buildAssociationWhen(assoc.whenEnabled, assoc.whenCondition),
             channelModel: null,
             channelRegex: null,
             regex: null,
@@ -464,6 +634,8 @@ export function ModelsAssociationDialog() {
       type: 'channel_model',
       priority: lastPriority,
       disabled: false,
+      whenEnabled: false,
+      whenCondition: DEFAULT_WHEN_CONDITION,
       channelId: undefined,
       channelTags: [],
       modelId: '',
@@ -483,15 +655,15 @@ export function ModelsAssociationDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent ref={dialogContentRef} className='flex h-[85vh] max-h-[800px] flex-col sm:max-w-6xl'>
+      <DialogContent ref={dialogContentRef} className='flex h-[90vh] max-h-[800px] flex-col w-full max-w-full sm:max-w-6xl'>
         <DialogHeader className='shrink-0 text-left'>
-          <DialogTitle>{t('models.dialogs.association.title')}</DialogTitle>
-          <DialogDescription>{t('models.dialogs.association.description', { name: currentRow?.name })}</DialogDescription>
+          <DialogTitle className='text-lg sm:text-xl'>{t('models.dialogs.association.title')}</DialogTitle>
+          <DialogDescription className='text-sm sm:text-base'>{t('models.dialogs.association.description', { name: currentRow?.name })}</DialogDescription>
         </DialogHeader>
 
-        <div className='flex min-h-0 flex-1 gap-6'>
+        <div className='flex min-h-0 flex-1 flex-col gap-6 sm:flex-row'>
           {/* Left Side - Association Rules */}
-          <div className='flex min-h-0 flex-[2] flex-col'>
+          <div className='flex min-h-0 flex-1 flex-col sm:flex-[2]'>
             {/* Scrollable Rules Section */}
             <div className='flex-1 overflow-y-auto py-4'>
               <Form {...form}>
@@ -501,10 +673,10 @@ export function ModelsAssociationDialog() {
                   )}
 
                   {fields.length > 0 && (
-                    <div className='grid grid-cols-[2.25rem_3rem_14rem_1fr_2.25rem] items-center gap-2 border-b px-[13px] pb-2'>
+                    <div className='grid grid-cols-[2.25rem_3rem_1fr_2.25rem] sm:grid-cols-[2.25rem_3rem_14rem_1fr_2.25rem] items-center gap-2 border-b px-3 sm:px-[13px] pb-2'>
                       <div />
                       <div className='text-muted-foreground text-center text-xs font-medium'>{t('models.dialogs.association.priority')}</div>
-                      <div className='text-muted-foreground text-center text-xs font-medium'>{t('models.dialogs.association.type')}</div>
+                      <div className='text-muted-foreground text-center text-xs font-medium sm:block hidden'>{t('models.dialogs.association.type')}</div>
                       <div className='text-muted-foreground text-center text-xs font-medium'>{t('models.dialogs.association.rule')}</div>
                       <div />
                     </div>
@@ -543,7 +715,7 @@ export function ModelsAssociationDialog() {
           </div>
 
           {/* Right Side - Preview */}
-          <div className='flex min-h-0 flex-1 flex-col border-l pl-6'>
+          <div className='flex min-h-0 flex-1 flex-col border-t sm:border-t-0 sm:border-l pt-4 sm:pt-0 sm:pl-6'>
             <div className='shrink-0 space-y-2 pb-4'>
               <h3 className='text-sm font-semibold'>{t('models.dialogs.association.preview')}</h3>
               <p className='text-muted-foreground text-xs'>{t('models.dialogs.association.previewDescription')}</p>
@@ -551,7 +723,7 @@ export function ModelsAssociationDialog() {
                 placeholder={t('models.dialogs.association.filterByChannel')}
                 value={channelFilter}
                 onChange={(e) => setChannelFilter(e.target.value)}
-                className='h-8'
+                className='h-9 sm:h-8'
               />
             </div>
             <div className='flex-1 overflow-y-auto'>
@@ -567,17 +739,130 @@ export function ModelsAssociationDialog() {
           </div>
         </div>
 
-        <DialogFooter className='shrink-0 border-t pt-4'>
-          <Button type='button' variant='outline' onClick={handleClose}>
+        <DialogFooter className='shrink-0 border-t pt-4 flex flex-col sm:flex-row gap-2 sm:gap-0 sm:justify-end'>
+          <Button type='button' variant='outline' onClick={handleClose} className='w-full sm:w-auto'>
             {t('common.buttons.cancel')}
           </Button>
-          <Button type='submit' form='association-form' disabled={updateModel.isPending || !form.formState.isValid}>
+          <Button type='submit' form='association-form' disabled={updateModel.isPending || !form.formState.isValid} className='w-full sm:w-auto'>
             {t('common.buttons.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function readPromptTokensCondition(
+  when: ModelAssociation['when']
+): { enabled: boolean; condition: FilterBuilderGroupListValue } {
+  if (!when) {
+    return { enabled: false, condition: DEFAULT_WHEN_CONDITION };
+  }
+
+  const condition = when.condition;
+  if (!when.enabled || !condition) {
+    return { enabled: Boolean(when.enabled), condition: DEFAULT_WHEN_CONDITION };
+  }
+
+  return {
+    enabled: Boolean(when.enabled),
+    condition: {
+      groups: normalizeWhenCondition(condition, 0, MAX_WHEN_CONDITION_DEPTH)?.conditions || [],
+    },
+  };
+}
+
+function normalizeWhenCondition(
+  condition?: FilterBuilderCondition | null,
+  depth = 0,
+  maxDepth = MAX_WHEN_CONDITION_DEPTH
+): FilterBuilderCondition | null {
+  if (!condition) {
+    return null;
+  }
+
+  if (condition.type === 'group') {
+    const normalizedConditions = (condition.conditions || [])
+      .map((nestedCondition) => normalizeWhenCondition(nestedCondition, depth + 1, maxDepth))
+      .filter((item): item is FilterBuilderCondition => item !== null);
+
+    if (depth >= maxDepth) {
+      return {
+        type: 'group',
+        logic: condition.logic === 'or' ? 'or' : 'and',
+        conditions: normalizedConditions.flatMap((item) => (item.type === 'group' ? item.conditions || [] : [item])),
+      };
+    }
+
+    return {
+      type: 'group',
+      logic: condition.logic === 'or' ? 'or' : 'and',
+      conditions: normalizedConditions,
+    };
+  }
+
+  if (!isValidConditionOperator(condition.field, condition.operator)) {
+    return null;
+  }
+
+  return {
+    type: 'condition',
+    field: condition.field,
+    operator: condition.operator,
+    value: condition.field === 'prompt_tokens' ? Number(condition.value) : condition.value,
+  };
+}
+
+function sanitizeWhenCondition(condition?: FilterBuilderCondition): FilterBuilderCondition | null {
+  if (!condition) {
+    return null;
+  }
+
+  if (condition.type === 'group') {
+    const conditions = (condition.conditions || [])
+      .map((nestedCondition) => sanitizeWhenCondition(nestedCondition))
+      .filter((item): item is FilterBuilderCondition => item !== null);
+
+    if (conditions.length === 0) {
+      return null;
+    }
+
+    return {
+      type: 'group',
+      logic: condition.logic === 'or' ? 'or' : 'and',
+      conditions: conditions.flatMap((item) => (item.type === 'group' ? item.conditions || [] : [item])),
+    };
+  }
+
+  if (!condition.field || !condition.operator || condition.value === '') {
+    return null;
+  }
+
+  return {
+    type: 'condition',
+    field: condition.field,
+    operator: condition.operator,
+    value: condition.value,
+  };
+}
+
+function buildAssociationWhen(enabled?: boolean, value?: FilterBuilderGroupListValue): ModelAssociationInput['when'] | null {
+  const groups = (value?.groups || [])
+    .map((group) => sanitizeWhenCondition(group))
+    .filter((item): item is FilterBuilderCondition => item !== null);
+
+  if (!enabled || groups.length === 0) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    condition: {
+      type: 'group',
+      logic: 'and',
+      conditions: groups,
+    },
+  };
 }
 
 interface AssociationRowProps {
@@ -602,7 +887,10 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
   const excludeChannelNamePattern = form.watch(`associations.${index}.excludeChannelNamePattern`);
   const excludeChannelTags = form.watch(`associations.${index}.excludeChannelTags`);
   const disabled = form.watch(`associations.${index}.disabled`);
+  const whenEnabled = form.watch(`associations.${index}.whenEnabled`);
+  const whenCondition = form.watch(`associations.${index}.whenCondition`);
   const [modelSearch, setModelSearch] = useState(modelId?.toString() || '');
+  const [whenExpanded, setWhenExpanded] = useState(Boolean(whenEnabled || hasGroupListData(whenCondition)));
   const [excludeExpanded, setExcludeExpanded] = useState(false);
 
   useEffect(() => {
@@ -619,6 +907,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
     excludeChannelNamePattern ||
     (excludeChannelIds && excludeChannelIds.length > 0) ||
     (excludeChannelTags && excludeChannelTags.length > 0);
+  const hasWhenData = Boolean(whenEnabled || hasGroupListData(whenCondition));
 
   // Auto-expand if has exclude data
   useEffect(() => {
@@ -626,6 +915,13 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
       setExcludeExpanded(true);
     }
   }, [hasExcludeData]);
+
+  // Auto-expand if has when data
+  useEffect(() => {
+    if (hasWhenData) {
+      setWhenExpanded(true);
+    }
+  }, [hasWhenData]);
 
   // Filter model options based on selected channel's model entries
   const modelOptions = useMemo(() => {
@@ -656,14 +952,14 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
   }, [channelId, channelOptions, allModelOptions, showModel, type]);
 
   return (
-    <div className={`flex flex-col gap-2 rounded-lg border p-3 ${disabled ? 'opacity-50' : ''}`}>
-      <div className='grid grid-cols-[2.25rem_3rem_14rem_1fr_2.25rem] items-center gap-2'>
+    <div className={`flex flex-col gap-3 rounded-lg border p-3 ${disabled ? 'opacity-50' : ''}`}>
+      <div className='grid grid-cols-[2.5rem_4rem_1fr_2.5rem] sm:grid-cols-[2.25rem_3rem_14rem_1fr_2.25rem] items-center gap-2'>
         {/* Enable/Disable Switch */}
         <div className='flex items-center justify-center'>
           <Switch
             checked={!disabled}
             onCheckedChange={(checked) => form.setValue(`associations.${index}.disabled`, !checked)}
-            className='scale-75'
+            className='scale-100 sm:scale-75'
           />
         </div>
 
@@ -681,7 +977,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                   {...field}
                   value={field.value ?? 0}
                   onChange={(e) => field.onChange(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
-                  className='h-9 text-center [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:hidden [&::-webkit-inner-spin-button]:appearance-none'
+                  className='h-10 sm:h-9 text-center [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:hidden [&::-webkit-inner-spin-button]:appearance-none'
                   placeholder='0'
                 />
               </FormControl>
@@ -694,10 +990,10 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
           control={form.control}
           name={`associations.${index}.type`}
           render={({ field }) => (
-            <FormItem className='min-w-0 gap-0'>
+            <FormItem className='min-w-0 gap-0 sm:block hidden'>
               <FormControl>
                 <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger className='h-9 w-full text-xs'>
+                  <SelectTrigger className='h-10 sm:h-9 w-full text-xs'>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -745,7 +1041,6 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
             name={`associations.${index}.modelId`}
             render={({ field }) => (
               <FormItem className='min-w-0 gap-0'>
-                {/* <FormLabel className='text-xs'>{t('models.dialogs.association.selectModel')}</FormLabel> */}
                 <FormControl>
                   <AutoComplete
                     selectedValue={field.value?.toString() || ''}
@@ -764,7 +1059,6 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                     portalContainer={portalContainer}
                   />
                 </FormControl>
-                {/* <FormMessage /> */}
               </FormItem>
             )}
           />
@@ -777,30 +1071,57 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
             name={`associations.${index}.pattern`}
             render={({ field }) => (
               <FormItem className='min-w-0 gap-0'>
-                {/* <FormLabel className='text-xs'>{t('models.dialogs.association.pattern')}</FormLabel> */}
                 <FormControl>
                   <Input
                     {...field}
                     value={field.value?.toString() || ''}
                     placeholder={t('models.dialogs.association.patternPlaceholder')}
-                    className='h-9'
+                    className='h-10 sm:h-9'
                   />
                 </FormControl>
-                {/* <FormMessage /> */}
               </FormItem>
             )}
           />
         )}
 
         {/* Delete Button */}
-        <Button type='button' variant='ghost' size='sm' onClick={onRemove} className='text-destructive hover:text-destructive h-9 w-9 p-0'>
-          <IconTrash className='h-4 w-4' />
+        <Button type='button' variant='ghost' size='sm' onClick={onRemove} className='text-destructive hover:text-destructive h-10 sm:h-9 w-10 sm:w-9 p-0'>
+          <IconTrash className='h-5 w-5 sm:h-4 sm:w-4' />
         </Button>
+      </div>
+
+      {/* Type Select for mobile */}
+      <div className='sm:hidden'>
+        <FormField
+          control={form.control}
+          name={`associations.${index}.type`}
+          render={({ field }) => (
+            <FormItem className='min-w-0 gap-1'>
+              <FormLabel className='text-xs'>{t('models.dialogs.association.type')}</FormLabel>
+              <FormControl>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className='h-10 w-full text-xs'>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='channel_model'>{t('models.dialogs.association.types.channelModel')}</SelectItem>
+                    <SelectItem value='channel_regex'>{t('models.dialogs.association.types.channelRegex')}</SelectItem>
+                    <SelectItem value='channel_tags_model'>{t('models.dialogs.association.types.channelTagsModel')}</SelectItem>
+                    <SelectItem value='channel_tags_regex'>{t('models.dialogs.association.types.channelTagsRegex')}</SelectItem>
+                    <SelectItem value='model'>{t('models.dialogs.association.types.model')}</SelectItem>
+                    <SelectItem value='regex'>{t('models.dialogs.association.types.regex')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </div>
 
       {/* Model and Pattern on Second Row for channel_model and channel_regex */}
       {showModelPatternOnSecondRow && (
-        <div className='ml-[6.25rem] grid gap-2'>
+        <div className='ml-0 sm:ml-[6.25rem] grid gap-2'>
           {showModel && (
             <FormField
               control={form.control}
@@ -840,7 +1161,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                       {...field}
                       value={field.value?.toString() || ''}
                       placeholder={t('models.dialogs.association.patternPlaceholder')}
-                      className='h-9'
+                      className='h-10 sm:h-9'
                     />
                   </FormControl>
                 </FormItem>
@@ -852,7 +1173,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
 
       {/* Channel Tags Input - Second Row */}
       {showChannelTags && (
-        <div className='ml-[6.25rem] grid gap-2'>
+        <div className='ml-0 sm:ml-[6.25rem] grid gap-2'>
           <FormField
             control={form.control}
             name={`associations.${index}.channelTags`}
@@ -865,7 +1186,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                     onChange={field.onChange}
                     placeholder={t('models.dialogs.association.selectChannelTags')}
                     suggestions={allTags}
-                    className='h-auto min-h-9 py-1'
+                    className='h-auto min-h-10 sm:min-h-9 py-1'
                   />
                 </FormControl>
                 {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
@@ -875,27 +1196,115 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
         </div>
       )}
 
+      <div className='ml-0 sm:ml-[6.25rem] border-t pt-2'>
+        <Button
+          type='button'
+          variant='ghost'
+          size='sm'
+          onClick={() => setWhenExpanded(!whenExpanded)}
+          className='text-muted-foreground hover:text-foreground mb-2 h-10 sm:h-7 px-3 sm:px-2 text-xs'
+        >
+          {whenExpanded ? <IconChevronUp className='mr-1 h-4 w-4 sm:h-3 sm:w-3' /> : <IconChevronDown className='mr-1 h-4 w-4 sm:h-3 sm:w-3' />}
+          {t('models.dialogs.association.conditions.section')}
+          {hasWhenData && !whenExpanded && (
+            <Badge variant='secondary' className='ml-2 h-5 sm:h-4 px-2 sm:px-1 text-xs sm:text-[10px]'>
+              1
+            </Badge>
+          )}
+        </Button>
+        {whenExpanded && (
+          <div className='grid gap-3'>
+            <FormField
+              control={form.control}
+              name={`associations.${index}.whenEnabled`}
+              render={({ field }) => (
+                <div className='flex items-center gap-3'>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (checked && (form.getValues(`associations.${index}.whenCondition`)?.groups?.length || 0) === 0) {
+                        form.setValue(
+                          `associations.${index}.whenCondition`,
+                          { groups: [DEFAULT_WHEN_GROUP] },
+                          { shouldDirty: true, shouldValidate: true }
+                        );
+                      }
+                    }}
+                    className='scale-100 sm:scale-75'
+                  />
+                  <FormLabel className='text-xs'>{t('models.dialogs.association.conditions.enabled')}</FormLabel>
+                </div>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`associations.${index}.whenCondition`}
+              render={({ field, fieldState }) => (
+                <FormItem className='space-y-1'>
+                  <FormControl>
+                    <FilterBuilder
+                      logicLabel={t('models.dialogs.association.conditions.logicLabel')}
+                      logicOptions={[
+                        { value: 'and', label: t('models.dialogs.association.conditions.and') },
+                        { value: 'or', label: t('models.dialogs.association.conditions.or') },
+                      ]}
+                      value={field.value || DEFAULT_WHEN_CONDITION}
+                      onChange={field.onChange}
+                      disabled={!whenEnabled}
+                      allowNestedGroups={false}
+                      maxDepth={MAX_WHEN_CONDITION_DEPTH}
+                      singleGroup
+                      fields={whenFilterFields.map((item) => ({
+                        ...item,
+                        label: t(`models.dialogs.association.conditions.fields.${item.value}`),
+                        placeholder: t('models.dialogs.association.conditions.valuePlaceholder'),
+                        operators: item.operators?.map((operator) => ({
+                          value: operator.value,
+                          label: t(`models.dialogs.association.conditions.operators.${operator.value}`),
+                        })),
+                      }))}
+                      fieldLabel={t('models.dialogs.association.conditions.fieldLabel')}
+                      operatorLabel={t('models.dialogs.association.conditions.operatorLabel')}
+                      valueLabel={t('models.dialogs.association.conditions.valueLabel')}
+                      addLabel={t('models.dialogs.association.conditions.add')}
+                      addGroupLabel={t('prompts.conditions.addGroup')}
+                      maxConditionsPerGroup={5}
+                      groupJoinLabel={t('models.dialogs.association.conditions.and')}
+                    />
+                  </FormControl>
+                  {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+                </FormItem>
+              )}
+            />
+            {hasGroupListData(whenCondition) && (
+              <p className='text-muted-foreground text-xs'>{t('models.dialogs.association.conditions.conditionsHint')}</p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Exclude Section */}
       {showExclude && (
-        <div className='ml-[6.25rem] border-t pt-2'>
+        <div className='ml-0 sm:ml-[6.25rem] border-t pt-2'>
           <Button
             type='button'
             variant='ghost'
             size='sm'
             onClick={() => setExcludeExpanded(!excludeExpanded)}
-            className='text-muted-foreground hover:text-foreground mb-2 h-7 px-2 text-xs'
+            className='text-muted-foreground hover:text-foreground mb-2 h-10 sm:h-7 px-3 sm:px-2 text-xs'
           >
-            {excludeExpanded ? <IconChevronUp className='mr-1 h-3 w-3' /> : <IconChevronDown className='mr-1 h-3 w-3' />}
+            {excludeExpanded ? <IconChevronUp className='mr-1 h-4 w-4 sm:h-3 sm:w-3' /> : <IconChevronDown className='mr-1 h-4 w-4 sm:h-3 sm:w-3' />}
             {t('models.dialogs.association.excludeSection')}
             {hasExcludeData && !excludeExpanded && (
-              <Badge variant='secondary' className='ml-2 h-4 px-1 text-[10px]'>
+              <Badge variant='secondary' className='ml-2 h-5 sm:h-4 px-2 sm:px-1 text-xs sm:text-[10px]'>
                 {(excludeChannelNamePattern ? 1 : 0) + (excludeChannelIds?.length || 0) + (excludeChannelTags?.length || 0)}
               </Badge>
             )}
           </Button>
           {excludeExpanded && (
-            <div className='space-y-2'>
-              <div className='grid grid-cols-2 gap-2'>
+            <div className='space-y-3'>
+              <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
                 <FormField
                   control={form.control}
                   name={`associations.${index}.excludeChannelNamePattern`}
@@ -907,7 +1316,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                           {...field}
                           value={field.value?.toString() || ''}
                           placeholder={t('models.dialogs.association.excludeChannelNamePattern')}
-                          className='h-9'
+                          className='h-10 sm:h-9'
                         />
                       </FormControl>
                       <FormMessage />
@@ -926,7 +1335,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                           onChange={field.onChange}
                           placeholder={t('models.dialogs.association.excludeChannelTags')}
                           suggestions={allTags}
-                          className='h-auto min-h-9 py-1'
+                          className='h-auto min-h-10 sm:min-h-9 py-1'
                         />
                       </FormControl>
                       <FormMessage />
@@ -957,7 +1366,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
                         }}
                         placeholder={t('models.dialogs.association.excludeChannelIds')}
                         suggestions={channelOptions.map((opt) => opt.label)}
-                        className='h-auto min-h-9 py-1'
+                        className='h-auto min-h-10 sm:min-h-9 py-1'
                       />
                     </FormControl>
                     <FormMessage />
@@ -990,7 +1399,7 @@ function AssociationRow({ index, form, channelOptions, allModelOptions, allTags,
             hint = t('models.dialogs.association.ruleHints.channelTagsRegex', { pattern, tags: channelTags.join(', ') });
           }
           if (hint) {
-            return <div className='text-muted-foreground ml-[6.25rem] text-xs'>{hint}</div>;
+            return <div className='text-muted-foreground ml-0 sm:ml-[6.25rem] text-xs'>{hint}</div>;
           }
           return null;
         })()}

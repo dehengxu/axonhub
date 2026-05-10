@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useDebounce } from '@/hooks/use-debounce';
 import { usePaginationSearch } from '@/hooks/use-pagination-search';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { type DateTimeRangeValue } from '@/utils/date-range';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Header } from '@/components/layout/header';
 import { Main } from '@/components/layout/main';
 import { createColumns } from './components/apikeys-columns';
@@ -27,18 +28,25 @@ function ApiKeysContent() {
   const [activeTab, setActiveTab] = useState<ApiKeyTabKey>('all');
 
   // Filter states - following the same pattern as roles and users
-  const [nameFilter, setNameFilter] = useState<string>('');
+  const [searchFilter, setSearchFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [userFilter, setUserFilter] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<DateTimeRangeValue | undefined>();
 
-  const debouncedNameFilter = useDebounce(nameFilter, 300);
+  const debouncedSearchFilter = useDebounce(searchFilter, 300);
 
   // Build where clause for API filtering
   const whereClause = (() => {
-    const where: Record<string, string | string[]> = {};
-    if (debouncedNameFilter) {
-      where.nameContainsFold = debouncedNameFilter;
+    const where: Record<string, unknown> = {};
+    
+    // Use OR condition for searching both name and key
+    if (debouncedSearchFilter) {
+      where.or = [
+        { nameContainsFold: debouncedSearchFilter },
+        { keyContainsFold: debouncedSearchFilter },
+      ];
     }
+    
     if (activeTab !== 'all') {
       where.typeIn = [activeTab];
     }
@@ -51,6 +59,19 @@ function ApiKeysContent() {
     if (userFilter.length > 0 && userFilter[0]) {
       where.userID = userFilter[0]; // API expects single userID
     }
+    
+    // Add AND condition to combine OR search with other filters
+    if (where.or && (where.typeIn || where.statusIn || where.userID)) {
+      const orCondition = where.or;
+      delete where.or;
+      return {
+        and: [
+          { or: orCondition },
+          where,
+        ],
+      };
+    }
+    
     return Object.keys(where).length > 0 ? where : undefined;
   })();
 
@@ -60,11 +81,16 @@ function ApiKeysContent() {
     orderBy: { field: 'CREATED_AT', direction: 'DESC' },
   });
 
+  const tableData = React.useMemo(
+    () => (data?.edges?.map((edge) => edge.node) ?? []),
+    [data?.edges]
+  );
+
   // Reset cursor when filters change
   React.useEffect(() => {
     resetCursor();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedNameFilter, activeTab, statusFilter, userFilter]);
+  }, [debouncedSearchFilter, activeTab, statusFilter, userFilter, dateRange]);
 
   const handleNextPage = () => {
     if (data?.pageInfo?.hasNextPage && data?.pageInfo?.endCursor) {
@@ -83,16 +109,17 @@ function ApiKeysContent() {
   };
 
   const handleResetFilters = () => {
-    setNameFilter('');
+    setSearchFilter('');
     setStatusFilter([]);
     setUserFilter([]);
+    setDateRange(undefined);
     resetCursor();
   };
 
   const columns = React.useMemo(() => createColumns(t, apiKeyPermissions.canWrite), [t, apiKeyPermissions.canWrite]);
 
   return (
-    <div className='flex flex-1 flex-col overflow-hidden'>
+    <div className='flex flex-1 flex-col'>
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ApiKeyTabKey)} className='w-full'>
         <TabsList className='shadow-soft border-border bg-background grid w-full grid-cols-3 rounded-2xl border'>
           <TabsTrigger value='all' data-value='all'>
@@ -106,23 +133,25 @@ function ApiKeysContent() {
           </TabsTrigger>
         </TabsList>
       </Tabs>
-      <div className='mt-6 flex-1 overflow-y-auto'>
+      <div className='mt-6 flex-1'>
         <ApiKeysTable
-          data={data?.edges?.map((edge) => edge.node) || []}
+          data={tableData}
           loading={isLoading}
           columns={columns}
           pageInfo={data?.pageInfo}
           pageSize={pageSize}
           totalCount={data?.totalCount}
-          nameFilter={nameFilter}
+          searchFilter={searchFilter}
           statusFilter={statusFilter}
           userFilter={userFilter}
+          dateRange={dateRange}
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
           onPageSizeChange={handlePageSizeChange}
-          onNameFilterChange={setNameFilter}
+          onSearchFilterChange={setSearchFilter}
           onStatusFilterChange={setStatusFilter}
           onUserFilterChange={setUserFilter}
+          onDateRangeChange={setDateRange}
           onResetFilters={handleResetFilters}
           canWrite={apiKeyPermissions.canWrite}
         />
@@ -146,7 +175,7 @@ export default function ApiKeysManagement() {
         </div>
       </Header>
 
-      <Main fixed>
+      <Main>
         <ApiKeysContent />
       </Main>
       <ApiKeysDialogs />

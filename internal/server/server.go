@@ -19,6 +19,8 @@ import (
 	"github.com/looplj/axonhub/internal/server/gql"
 	"github.com/looplj/axonhub/internal/server/gql/openapi"
 	"github.com/looplj/axonhub/internal/server/middleware"
+	"github.com/looplj/axonhub/internal/server/orchestrator"
+	"github.com/looplj/axonhub/internal/server/video_storage"
 	"github.com/looplj/axonhub/internal/tracing"
 )
 
@@ -89,12 +91,22 @@ func Run(opts ...fx.Option) {
 			fx.Provide(constructors...),
 			dependencies.Module,
 			biz.Module,
+			orchestrator.Module,
 			backup.Module,
+			video_storage.Module,
 			api.Module,
 			fx.Invoke(func(cfg log.Config) {
 				log.SetGlobalConfig(cfg)
 				tracing.SetupLogger(log.GetGlobalLogger())
 				slog.SetDefault(log.GetGlobalLogger().AsSlog())
+			}),
+			fx.Invoke(func(usageLogSvc *biz.UsageLogService) {
+				usageLogSvc.OnUsageLogCreated = gql.InvalidateAllTimeTokenStatsCache
+			}),
+			fx.Invoke(func(cfg Config) {
+				if cfg.Dashboard.AllTimeTokenStatsSoftTTL > 0 && cfg.Dashboard.AllTimeTokenStatsHardTTL > 0 {
+					gql.SetTokenStatsCacheTTL(cfg.Dashboard.AllTimeTokenStatsSoftTTL, cfg.Dashboard.AllTimeTokenStatsHardTTL)
+				}
 			}),
 			fx.Invoke(func(lc fx.Lifecycle, worker *gc.Worker) {
 				lc.Append(fx.Hook{

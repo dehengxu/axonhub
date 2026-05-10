@@ -11,6 +11,7 @@ import (
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/transformer"
 	"github.com/looplj/axonhub/llm/transformer/openai"
+	"github.com/samber/lo"
 )
 
 // Config holds all configuration for the DeepSeek outbound transformer.
@@ -81,6 +82,8 @@ func (t *OutboundTransformer) TransformRequest(
 	switch llmReq.RequestType {
 	case llm.RequestTypeChat, "":
 		// continue
+	case llm.RequestTypeCompact:
+		return nil, fmt.Errorf("%w: compact is only supported by OpenAI Responses API", transformer.ErrInvalidRequest)
 	default:
 		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
 	}
@@ -101,10 +104,22 @@ func (t *OutboundTransformer) TransformRequest(
 		Request: *oaiReq,
 	}
 
-	// Convert ReasoningEffort to Thinking if present
-	if llmReq.ReasoningEffort != "" && llmReq.ReasoningEffort != "none" {
-		dsReq.Thinking = &Thinking{
-			Type: "enabled",
+	// DeepSeek defaults thinking to enabled unless explicitly disabled.
+	thinkingDisabled := llmReq.ReasoningEffort == "none"
+	dsReq.Thinking = &Thinking{
+		Type: "enabled",
+	}
+	if thinkingDisabled {
+		dsReq.Thinking.Type = "disabled"
+	}
+
+	// Unless thinking is explicitly disabled, DeepSeek assistant messages
+	// should carry the reasoning_content field; fill in an empty string if missing.
+	if !thinkingDisabled {
+		for i := range dsReq.Messages {
+			if dsReq.Messages[i].Role == "assistant" && dsReq.Messages[i].ReasoningContent == nil {
+				dsReq.Messages[i].ReasoningContent = lo.ToPtr("")
+			}
 		}
 	}
 
@@ -128,10 +143,11 @@ func (t *OutboundTransformer) TransformRequest(
 	url := t.BaseURL + "/chat/completions"
 
 	return &httpclient.Request{
-		Method:  http.MethodPost,
-		URL:     url,
-		Headers: headers,
-		Body:    body,
-		Auth:    auth,
+		Method:    http.MethodPost,
+		URL:       url,
+		Headers:   headers,
+		Body:      body,
+		Auth:      auth,
+		APIFormat: string(llm.APIFormatOpenAIChatCompletion),
 	}, nil
 }

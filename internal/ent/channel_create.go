@@ -129,6 +129,12 @@ func (_c *ChannelCreate) SetSupportedModels(v []string) *ChannelCreate {
 	return _c
 }
 
+// SetManualModels sets the "manual_models" field.
+func (_c *ChannelCreate) SetManualModels(v []string) *ChannelCreate {
+	_c.mutation.SetManualModels(v)
+	return _c
+}
+
 // SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
 func (_c *ChannelCreate) SetAutoSyncSupportedModels(v bool) *ChannelCreate {
 	_c.mutation.SetAutoSyncSupportedModels(v)
@@ -139,6 +145,20 @@ func (_c *ChannelCreate) SetAutoSyncSupportedModels(v bool) *ChannelCreate {
 func (_c *ChannelCreate) SetNillableAutoSyncSupportedModels(v *bool) *ChannelCreate {
 	if v != nil {
 		_c.SetAutoSyncSupportedModels(*v)
+	}
+	return _c
+}
+
+// SetAutoSyncModelPattern sets the "auto_sync_model_pattern" field.
+func (_c *ChannelCreate) SetAutoSyncModelPattern(v string) *ChannelCreate {
+	_c.mutation.SetAutoSyncModelPattern(v)
+	return _c
+}
+
+// SetNillableAutoSyncModelPattern sets the "auto_sync_model_pattern" field if the given value is not nil.
+func (_c *ChannelCreate) SetNillableAutoSyncModelPattern(v *string) *ChannelCreate {
+	if v != nil {
+		_c.SetAutoSyncModelPattern(*v)
 	}
 	return _c
 }
@@ -374,9 +394,17 @@ func (_c *ChannelCreate) defaults() error {
 		v := channel.DefaultDisabledAPIKeys
 		_c.mutation.SetDisabledAPIKeys(v)
 	}
+	if _, ok := _c.mutation.ManualModels(); !ok {
+		v := channel.DefaultManualModels
+		_c.mutation.SetManualModels(v)
+	}
 	if _, ok := _c.mutation.AutoSyncSupportedModels(); !ok {
 		v := channel.DefaultAutoSyncSupportedModels
 		_c.mutation.SetAutoSyncSupportedModels(v)
+	}
+	if _, ok := _c.mutation.AutoSyncModelPattern(); !ok {
+		v := channel.DefaultAutoSyncModelPattern
+		_c.mutation.SetAutoSyncModelPattern(v)
 	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := channel.DefaultTags
@@ -399,12 +427,6 @@ func (_c *ChannelCreate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ChannelCreate) check() error {
-	if _, ok := _c.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Channel.created_at"`)}
-	}
-	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Channel.updated_at"`)}
-	}
 	if _, ok := _c.mutation.DeletedAt(); !ok {
 		return &ValidationError{Name: "deleted_at", err: errors.New(`ent: missing required field "Channel.deleted_at"`)}
 	}
@@ -509,9 +531,17 @@ func (_c *ChannelCreate) createSpec() (*Channel, *sqlgraph.CreateSpec) {
 		_spec.SetField(channel.FieldSupportedModels, field.TypeJSON, value)
 		_node.SupportedModels = value
 	}
+	if value, ok := _c.mutation.ManualModels(); ok {
+		_spec.SetField(channel.FieldManualModels, field.TypeJSON, value)
+		_node.ManualModels = value
+	}
 	if value, ok := _c.mutation.AutoSyncSupportedModels(); ok {
 		_spec.SetField(channel.FieldAutoSyncSupportedModels, field.TypeBool, value)
 		_node.AutoSyncSupportedModels = value
+	}
+	if value, ok := _c.mutation.AutoSyncModelPattern(); ok {
+		_spec.SetField(channel.FieldAutoSyncModelPattern, field.TypeString, value)
+		_node.AutoSyncModelPattern = value
 	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(channel.FieldTags, field.TypeJSON, value)
@@ -719,6 +749,18 @@ func (u *ChannelUpsert) AddDeletedAt(v int) *ChannelUpsert {
 	return u
 }
 
+// SetType sets the "type" field.
+func (u *ChannelUpsert) SetType(v channel.Type) *ChannelUpsert {
+	u.Set(channel.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdateType() *ChannelUpsert {
+	u.SetExcluded(channel.FieldType)
+	return u
+}
+
 // SetBaseURL sets the "base_url" field.
 func (u *ChannelUpsert) SetBaseURL(v string) *ChannelUpsert {
 	u.Set(channel.FieldBaseURL, v)
@@ -803,6 +845,24 @@ func (u *ChannelUpsert) UpdateSupportedModels() *ChannelUpsert {
 	return u
 }
 
+// SetManualModels sets the "manual_models" field.
+func (u *ChannelUpsert) SetManualModels(v []string) *ChannelUpsert {
+	u.Set(channel.FieldManualModels, v)
+	return u
+}
+
+// UpdateManualModels sets the "manual_models" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdateManualModels() *ChannelUpsert {
+	u.SetExcluded(channel.FieldManualModels)
+	return u
+}
+
+// ClearManualModels clears the value of the "manual_models" field.
+func (u *ChannelUpsert) ClearManualModels() *ChannelUpsert {
+	u.SetNull(channel.FieldManualModels)
+	return u
+}
+
 // SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
 func (u *ChannelUpsert) SetAutoSyncSupportedModels(v bool) *ChannelUpsert {
 	u.Set(channel.FieldAutoSyncSupportedModels, v)
@@ -812,6 +872,24 @@ func (u *ChannelUpsert) SetAutoSyncSupportedModels(v bool) *ChannelUpsert {
 // UpdateAutoSyncSupportedModels sets the "auto_sync_supported_models" field to the value that was provided on create.
 func (u *ChannelUpsert) UpdateAutoSyncSupportedModels() *ChannelUpsert {
 	u.SetExcluded(channel.FieldAutoSyncSupportedModels)
+	return u
+}
+
+// SetAutoSyncModelPattern sets the "auto_sync_model_pattern" field.
+func (u *ChannelUpsert) SetAutoSyncModelPattern(v string) *ChannelUpsert {
+	u.Set(channel.FieldAutoSyncModelPattern, v)
+	return u
+}
+
+// UpdateAutoSyncModelPattern sets the "auto_sync_model_pattern" field to the value that was provided on create.
+func (u *ChannelUpsert) UpdateAutoSyncModelPattern() *ChannelUpsert {
+	u.SetExcluded(channel.FieldAutoSyncModelPattern)
+	return u
+}
+
+// ClearAutoSyncModelPattern clears the value of the "auto_sync_model_pattern" field.
+func (u *ChannelUpsert) ClearAutoSyncModelPattern() *ChannelUpsert {
+	u.SetNull(channel.FieldAutoSyncModelPattern)
 	return u
 }
 
@@ -949,9 +1027,6 @@ func (u *ChannelUpsertOne) UpdateNewValues() *ChannelUpsertOne {
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(channel.FieldCreatedAt)
 		}
-		if _, exists := u.create.mutation.GetType(); exists {
-			s.SetIgnore(channel.FieldType)
-		}
 	}))
 	return u
 }
@@ -1015,6 +1090,20 @@ func (u *ChannelUpsertOne) AddDeletedAt(v int) *ChannelUpsertOne {
 func (u *ChannelUpsertOne) UpdateDeletedAt() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDeletedAt()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ChannelUpsertOne) SetType(v channel.Type) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdateType() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateType()
 	})
 }
 
@@ -1116,6 +1205,27 @@ func (u *ChannelUpsertOne) UpdateSupportedModels() *ChannelUpsertOne {
 	})
 }
 
+// SetManualModels sets the "manual_models" field.
+func (u *ChannelUpsertOne) SetManualModels(v []string) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetManualModels(v)
+	})
+}
+
+// UpdateManualModels sets the "manual_models" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdateManualModels() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateManualModels()
+	})
+}
+
+// ClearManualModels clears the value of the "manual_models" field.
+func (u *ChannelUpsertOne) ClearManualModels() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearManualModels()
+	})
+}
+
 // SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
 func (u *ChannelUpsertOne) SetAutoSyncSupportedModels(v bool) *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
@@ -1127,6 +1237,27 @@ func (u *ChannelUpsertOne) SetAutoSyncSupportedModels(v bool) *ChannelUpsertOne 
 func (u *ChannelUpsertOne) UpdateAutoSyncSupportedModels() *ChannelUpsertOne {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateAutoSyncSupportedModels()
+	})
+}
+
+// SetAutoSyncModelPattern sets the "auto_sync_model_pattern" field.
+func (u *ChannelUpsertOne) SetAutoSyncModelPattern(v string) *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetAutoSyncModelPattern(v)
+	})
+}
+
+// UpdateAutoSyncModelPattern sets the "auto_sync_model_pattern" field to the value that was provided on create.
+func (u *ChannelUpsertOne) UpdateAutoSyncModelPattern() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateAutoSyncModelPattern()
+	})
+}
+
+// ClearAutoSyncModelPattern clears the value of the "auto_sync_model_pattern" field.
+func (u *ChannelUpsertOne) ClearAutoSyncModelPattern() *ChannelUpsertOne {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearAutoSyncModelPattern()
 	})
 }
 
@@ -1449,9 +1580,6 @@ func (u *ChannelUpsertBulk) UpdateNewValues() *ChannelUpsertBulk {
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(channel.FieldCreatedAt)
 			}
-			if _, exists := b.mutation.GetType(); exists {
-				s.SetIgnore(channel.FieldType)
-			}
 		}
 	}))
 	return u
@@ -1516,6 +1644,20 @@ func (u *ChannelUpsertBulk) AddDeletedAt(v int) *ChannelUpsertBulk {
 func (u *ChannelUpsertBulk) UpdateDeletedAt() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateDeletedAt()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ChannelUpsertBulk) SetType(v channel.Type) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdateType() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateType()
 	})
 }
 
@@ -1617,6 +1759,27 @@ func (u *ChannelUpsertBulk) UpdateSupportedModels() *ChannelUpsertBulk {
 	})
 }
 
+// SetManualModels sets the "manual_models" field.
+func (u *ChannelUpsertBulk) SetManualModels(v []string) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetManualModels(v)
+	})
+}
+
+// UpdateManualModels sets the "manual_models" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdateManualModels() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateManualModels()
+	})
+}
+
+// ClearManualModels clears the value of the "manual_models" field.
+func (u *ChannelUpsertBulk) ClearManualModels() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearManualModels()
+	})
+}
+
 // SetAutoSyncSupportedModels sets the "auto_sync_supported_models" field.
 func (u *ChannelUpsertBulk) SetAutoSyncSupportedModels(v bool) *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
@@ -1628,6 +1791,27 @@ func (u *ChannelUpsertBulk) SetAutoSyncSupportedModels(v bool) *ChannelUpsertBul
 func (u *ChannelUpsertBulk) UpdateAutoSyncSupportedModels() *ChannelUpsertBulk {
 	return u.Update(func(s *ChannelUpsert) {
 		s.UpdateAutoSyncSupportedModels()
+	})
+}
+
+// SetAutoSyncModelPattern sets the "auto_sync_model_pattern" field.
+func (u *ChannelUpsertBulk) SetAutoSyncModelPattern(v string) *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.SetAutoSyncModelPattern(v)
+	})
+}
+
+// UpdateAutoSyncModelPattern sets the "auto_sync_model_pattern" field to the value that was provided on create.
+func (u *ChannelUpsertBulk) UpdateAutoSyncModelPattern() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.UpdateAutoSyncModelPattern()
+	})
+}
+
+// ClearAutoSyncModelPattern clears the value of the "auto_sync_model_pattern" field.
+func (u *ChannelUpsertBulk) ClearAutoSyncModelPattern() *ChannelUpsertBulk {
+	return u.Update(func(s *ChannelUpsert) {
+		s.ClearAutoSyncModelPattern()
 	})
 }
 

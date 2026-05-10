@@ -24,6 +24,8 @@ export const ME_QUERY = `
   }
 `;
 
+export const ME_QUERY_OPERATION_NAME = 'Me';
+
 export const USERS_QUERY = `
   query Users($first: Int, $after: Cursor, $orderBy: UserOrder, $where: UserWhereInput) {
     users(first: $first, after: $after, orderBy: $orderBy, where: $where) {
@@ -156,6 +158,12 @@ export const UPDATE_USER_STATUS_MUTATION = `
         }
       }
     }
+  }
+`;
+
+export const DELETE_USER_MUTATION = `
+  mutation DeleteUser($id: ID!) {
+    deleteUser(id: $id)
   }
 `;
 

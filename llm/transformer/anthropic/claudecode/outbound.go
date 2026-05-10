@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
 	"github.com/looplj/axonhub/llm/transformer/anthropic"
+	"github.com/samber/lo"
 )
 
 const (
@@ -23,27 +25,31 @@ const (
 // claudeCodeHeaders contains all headers to set for Claude Code requests.
 // Each entry is a [name, value] pair.
 var claudeCodeHeaders = [][]string{
-	{"Anthropic-Beta", "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14"},
-	{"Anthropic-Version", "2023-06-01"},
-	{"Anthropic-Dangerous-Direct-Browser-Access", "true"},
-	{"X-App", "cli"},
+	{"Anthropic-Beta", ClaudeCodeBetaHeader},
+	{"Anthropic-Version", ClaudeCodeVersionHeader},
+	{"Anthropic-Dangerous-Direct-Browser-Access", ClaudeCodeBrowserAccessHeader},
+	{"X-App", ClaudeCodeAppHeader},
 	{"X-Stainless-Helper-Method", "stream"},
 	{"X-Stainless-Retry-Count", "0"},
 	{"X-Stainless-Runtime-Version", "v24.3.0"},
-	{"X-Stainless-Package-Version", "0.55.1"},
+	{"X-Stainless-Package-Version", "0.81.0"},
 	{"X-Stainless-Runtime", "node"},
 	{"X-Stainless-Lang", "js"},
 	{"X-Stainless-Arch", "arm64"},
 	{"X-Stainless-Os", "MacOS"},
 	{"X-Stainless-Timeout", "60"},
-	{"Connection", "keep-alive"},
-	{"Accept-Encoding", "gzip, deflate, br, zstd"},
 }
+
+// PassthroughHeaders lists headers that should be forwarded from inbound
+// requests to the upstream Anthropic API. Inbound values override defaults.
+var PassthroughHeaders = lo.Map(claudeCodeHeaders, func(entry []string, _ int) string { return entry[0] })
 
 // Params contains parameters for creating a ClaudeCodeTransformer.
 type Params struct {
-	TokenProvider oauth.TokenGetter // OAuth token provider (required)
-	BaseURL       string            // Base URL for the Anthropic API (optional)
+	TokenProvider   oauth.TokenGetter // OAuth token provider (required)
+	BaseURL         string            // Base URL for the Anthropic API (optional)
+	IsOfficial      bool              // Whether the channel uses official OAuth credentials
+	AccountIdentity string
 }
 
 // NewOutboundTransformer creates a new ClaudeCodeTransformer with OAuth authentication.
@@ -59,16 +65,19 @@ func NewOutboundTransformer(params Params) (*ClaudeCodeTransformer, error) {
 
 	// Create base transformer with minimal config
 	outbound, err := anthropic.NewOutboundTransformerWithConfig(&anthropic.Config{
-		Type:    anthropic.PlatformClaudeCode,
-		BaseURL: baseURL,
+		Type:            anthropic.PlatformClaudeCode,
+		BaseURL:         baseURL,
+		AccountIdentity: params.AccountIdentity,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create outbound transformer: %w", err)
 	}
 
 	return &ClaudeCodeTransformer{
-		Outbound: outbound,
-		tokens:   params.TokenProvider,
+		Outbound:        outbound,
+		tokens:          params.TokenProvider,
+		isOfficial:      params.IsOfficial,
+		accountIdentity: params.AccountIdentity,
 	}, nil
 }
 
@@ -76,7 +85,9 @@ func NewOutboundTransformer(params Params) (*ClaudeCodeTransformer, error) {
 // It wraps an OutboundTransformer and adds Claude Code specific headers and system message.
 type ClaudeCodeTransformer struct {
 	transformer.Outbound
-	tokens oauth.TokenGetter
+	tokens          oauth.TokenGetter
+	isOfficial      bool
+	accountIdentity string
 }
 
 // TransformRequest overrides the base TransformRequest to add Claude Code specific modifications.
@@ -90,14 +101,12 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 
 	rawUA := ""
 	keepClientUA := false
+	var rawHeaders http.Header
 
 	if llmReq.RawRequest != nil && llmReq.RawRequest.Headers != nil {
-		rawUA = llmReq.RawRequest.Headers.Get("User-Agent")
+		rawHeaders = llmReq.RawRequest.Headers
+		rawUA = rawHeaders.Get("User-Agent")
 		keepClientUA = isClaudeCLIUserAgent(rawUA)
-
-		for _, header := range claudeCodeHeaders {
-			llmReq.RawRequest.Headers.Del(header[0])
-		}
 
 		if !keepClientUA {
 			llmReq.RawRequest.Headers.Del("User-Agent")
@@ -117,8 +126,11 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 	// Apply structured transformations before serialization
 	reqCopy = *disableThinkingIfToolChoiceForcedStructured(&reqCopy)
 	reqCopy = *injectClaudeCodeSystemMessageStructured(&reqCopy)
-	reqCopy = *injectFakeUserIDStructured(&reqCopy)
-	if isClaudeOAuthToken(apiKey) && !keepClientUA {
+	if t.isOfficial {
+		reqCopy = *ensureBillingSystemMessageCCH(&reqCopy)
+	}
+	reqCopy = injectFakeUserIDStructured(ctx, reqCopy, t.accountIdentity)
+	if t.isOfficial && !keepClientUA {
 		reqCopy = *applyClaudeToolPrefixStructured(&reqCopy, toolPrefix)
 	}
 
@@ -126,27 +138,6 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 	httpReq, err := t.Outbound.TransformRequest(ctx, &reqCopy)
 	if err != nil {
 		return nil, err
-	}
-
-	// Post-process: extract and merge betas (Anthropic-specific, not in llm.Request)
-	if len(httpReq.Body) > 0 {
-		bodyBytes := httpReq.Body
-
-		// Extract and remove betas array from body
-		extraBetas, bodyBytes := extractAndRemoveBetas(bodyBytes)
-
-		// Replace the body
-		httpReq.Body = bodyBytes
-
-		// Merge extra betas into Anthropic-Beta header
-		if len(extraBetas) > 0 {
-			baseBetas := httpReq.Headers.Get("Anthropic-Beta")
-			if baseBetas == "" {
-				baseBetas = claudeCodeHeaders[0][1] // Use default
-			}
-
-			httpReq.Headers.Set("Anthropic-Beta", mergeBetasIntoHeader(baseBetas, extraBetas))
-		}
 	}
 
 	// Add beta=true query parameter if not present
@@ -163,13 +154,27 @@ func (t *ClaudeCodeTransformer) TransformRequest(
 		httpReq.Metadata = make(map[string]string)
 	}
 
-	if isClaudeOAuthToken(apiKey) && !keepClientUA {
+	if t.isOfficial && !keepClientUA {
 		httpReq.Metadata["strip_tool_prefix"] = "true"
 	}
 
 	// Add/overwrite Claude Code specific headers
 	for _, header := range claudeCodeHeaders {
 		httpReq.Headers.Set(header[0], header[1])
+	}
+
+	// Passthrough inbound request headers, overriding defaults.
+	// Anthropic-Beta is merged instead of replaced to preserve required betas.
+	if rawHeaders != nil {
+		for _, header := range PassthroughHeaders {
+			if value := rawHeaders.Get(header); value != "" {
+				if header == "Anthropic-Beta" {
+					httpReq.Headers.Set(header, mergeBetasIntoHeader(httpReq.Headers.Get(header), []string{value}))
+				} else {
+					httpReq.Headers.Set(header, value)
+				}
+			}
+		}
 	}
 
 	// Set Accept header based on streaming

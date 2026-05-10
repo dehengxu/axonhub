@@ -15,12 +15,15 @@ type JinaHandlersParams struct {
 
 	ChannelService  *biz.ChannelService
 	ModelService    *biz.ModelService
+	DefaultSelector *orchestrator.DefaultSelector
 	RequestService  *biz.RequestService
 	SystemService   *biz.SystemService
 	UsageLogService *biz.UsageLogService
 	PromptService   *biz.PromptService
+	PromptProtectionRuleService *biz.PromptProtectionRuleService
 	QuotaService    *biz.QuotaService
 	HttpClient      *httpclient.HttpClient
+	LiveStreamRegistry *biz.LiveStreamRegistry
 }
 
 func NewJinaHandlers(params JinaHandlersParams) *JinaHandlers {
@@ -28,7 +31,7 @@ func NewJinaHandlers(params JinaHandlersParams) *JinaHandlers {
 		RerankHandlers: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
-				params.ModelService,
+				params.DefaultSelector,
 				params.RequestService,
 				params.HttpClient,
 				jina.NewRerankInboundTransformer(),
@@ -36,12 +39,14 @@ func NewJinaHandlers(params JinaHandlersParams) *JinaHandlers {
 				params.UsageLogService,
 				params.PromptService,
 				params.QuotaService,
+				params.PromptProtectionRuleService,
+				params.LiveStreamRegistry,
 			),
 		},
 		EmbeddingHandlers: &ChatCompletionHandlers{
 			ChatCompletionOrchestrator: orchestrator.NewChatCompletionOrchestrator(
 				params.ChannelService,
-				params.ModelService,
+				params.DefaultSelector,
 				params.RequestService,
 				params.HttpClient,
 				jina.NewEmbeddingInboundTransformer(),
@@ -49,6 +54,8 @@ func NewJinaHandlers(params JinaHandlersParams) *JinaHandlers {
 				params.UsageLogService,
 				params.PromptService,
 				params.QuotaService,
+				params.PromptProtectionRuleService,
+				params.LiveStreamRegistry,
 			),
 		},
 	}

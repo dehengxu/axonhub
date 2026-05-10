@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -168,7 +169,7 @@ func TestDefaultSelector_SelectModelCandidates_Cache(t *testing.T) {
 		selector.cacheMu.RUnlock()
 
 		require.NotSame(t, initialEntry, currentEntry, "cache entry should be refreshed when model is updated")
-		require.True(t, currentEntry.latestModelUpdatedAt.After(initialEntry.latestModelUpdatedAt), "model update time should be newer")
+		require.True(t, currentEntry.latestModelUpdateTime.After(initialEntry.latestModelUpdateTime), "model update time should be newer")
 	})
 
 	t.Run("cache invalidated when model associations updated", func(t *testing.T) {
@@ -216,7 +217,7 @@ func TestDefaultSelector_SelectModelCandidates_Cache(t *testing.T) {
 		require.NotSame(t, initialEntry, currentEntry, "cache entry should be refreshed when model associations are updated")
 		require.True(
 			t,
-			currentEntry.latestModelUpdatedAt.After(initialEntry.latestModelUpdatedAt) || !currentEntry.latestModelUpdatedAt.Equal(initialEntry.latestModelUpdatedAt),
+			currentEntry.latestModelUpdateTime.After(initialEntry.latestModelUpdateTime) || !currentEntry.latestModelUpdateTime.Equal(initialEntry.latestModelUpdateTime),
 			"model update time should be newer or different",
 		)
 	})
@@ -259,6 +260,192 @@ func TestDefaultSelector_SelectModelCandidates_Cache(t *testing.T) {
 		require.Contains(t, selector.associationCache, modelID)
 		require.Contains(t, selector.associationCache, differentModelID)
 		selector.cacheMu.RUnlock()
+	})
+
+	t.Run("conditional associations reuse cached resolution and apply request filtering", func(t *testing.T) {
+		conditionalModelID := "conditional-model"
+
+		longContextChannel, err := client.Channel.Create().
+			SetName("Long Context Channel").
+			SetType(channel.TypeAnthropic).
+			SetSupportedModels([]string{"claude-3-opus"}).
+			SetDefaultTestModel("claude-3-opus").
+			SetCredentials(objects.ChannelCredentials{APIKey: "test-key-long"}).
+			SetStatus(channel.StatusEnabled).
+			Save(ctx)
+		require.NoError(t, err)
+
+		client.Model.Create().
+			SetDeveloper("test-developer").
+			SetModelID(conditionalModelID).
+			SetType(model.TypeChat).
+			SetName("Conditional Model").
+			SetIcon("test-icon").
+			SetGroup("test-group").
+			SetModelCard(&objects.ModelCard{}).
+			SetStatus(model.StatusEnabled).
+			SetSettings(&objects.ModelSettings{
+				Associations: []*objects.ModelAssociation{
+					{
+						Type: "channel_model",
+						When: &objects.ModelAssociationWhen{
+							Enabled: true,
+							Condition: &objects.Condition{
+								Logic: "and",
+								Conditions: []objects.Condition{{
+									Field:    "prompt_tokens",
+									Operator: "lt",
+									Value:    100,
+								}},
+							},
+						},
+						ChannelModel: &objects.ChannelModelAssociation{
+							ChannelID: channels[0].ID,
+							ModelID:   "gpt-3.5-turbo",
+						},
+					},
+					{
+						Type: "channel_model",
+						When: &objects.ModelAssociationWhen{
+							Enabled: true,
+							Condition: &objects.Condition{
+								Logic: "and",
+								Conditions: []objects.Condition{{
+									Field:    "prompt_tokens",
+									Operator: "gt",
+									Value:    99,
+								}},
+							},
+						},
+						ChannelModel: &objects.ChannelModelAssociation{
+							ChannelID: longContextChannel.ID,
+							ModelID:   "claude-3-opus",
+						},
+					},
+				},
+			}).
+			SaveX(ctx)
+
+		selector.ChannelService = newTestChannelServiceForChannels(client)
+
+		smallReq := &llm.Request{
+			Model: conditionalModelID,
+			Messages: []llm.Message{{
+				Role: "user",
+				Content: llm.MessageContent{
+					Content: new("hello"),
+				},
+			}},
+		}
+
+		smallCandidates, err := selector.selectModelCandidates(ctx, smallReq)
+		require.NoError(t, err)
+		require.Len(t, smallCandidates, 1)
+		require.Equal(t, channels[0].ID, smallCandidates[0].Channel.ID)
+
+		largeReq := &llm.Request{
+			Model: conditionalModelID,
+			Messages: []llm.Message{{
+				Role: "user",
+				Content: llm.MessageContent{
+					Content: new(strings.Repeat("0123456789", 50)),
+				},
+			}},
+		}
+
+		largeCandidates, err := selector.selectModelCandidates(ctx, largeReq)
+		require.NoError(t, err)
+		require.Len(t, largeCandidates, 1)
+		require.Equal(t, longContextChannel.ID, largeCandidates[0].Channel.ID)
+
+		selector.cacheMu.RLock()
+		require.Contains(t, selector.associationCache, conditionalModelID)
+		selector.cacheMu.RUnlock()
+	})
+
+	t.Run("stream condition filters by request stream value", func(t *testing.T) {
+		streamModelID := "stream-conditional-model"
+
+		streamChannel, err := client.Channel.Create().
+			SetName("Stream Only Channel").
+			SetType(channel.TypeOpenai).
+			SetBaseURL("https://api.openai.com/v1").
+			SetCredentials(objects.ChannelCredentials{APIKey: "test-key-stream"}).
+			SetSupportedModels([]string{"gpt-4"}).
+			SetDefaultTestModel("gpt-4").
+			SetOrderingWeight(100).
+			SetStatus(channel.StatusEnabled).
+			Save(ctx)
+		require.NoError(t, err)
+
+		client.Model.Create().
+			SetDeveloper("test-developer").
+			SetModelID(streamModelID).
+			SetType(model.TypeChat).
+			SetName("Stream Conditional Model").
+			SetIcon("test-icon").
+			SetGroup("test-group").
+			SetModelCard(&objects.ModelCard{}).
+			SetStatus(model.StatusEnabled).
+			SetSettings(&objects.ModelSettings{
+				Associations: []*objects.ModelAssociation{
+					{
+						Type: "channel_model",
+						When: &objects.ModelAssociationWhen{
+							Enabled: true,
+							Condition: &objects.Condition{
+								Logic: "and",
+								Conditions: []objects.Condition{{
+									Field:    "stream",
+									Operator: "eq",
+									Value:    true,
+								}},
+							},
+						},
+						ChannelModel: &objects.ChannelModelAssociation{
+							ChannelID: streamChannel.ID,
+							ModelID:   "gpt-4",
+						},
+					},
+				},
+			}).
+			SaveX(ctx)
+
+		selector.ChannelService = newTestChannelServiceForChannels(client)
+
+		streamTrue := true
+		streamFalse := false
+
+		streamReq := &llm.Request{
+			Model:  streamModelID,
+			Stream: &streamTrue,
+			Messages: []llm.Message{{
+				Role: "user",
+				Content: llm.MessageContent{
+					Content: new("hello"),
+				},
+			}},
+		}
+
+		streamCandidates, err := selector.selectModelCandidates(ctx, streamReq)
+		require.NoError(t, err)
+		require.Len(t, streamCandidates, 1)
+		require.Equal(t, streamChannel.ID, streamCandidates[0].Channel.ID)
+
+		noStreamReq := &llm.Request{
+			Model:  streamModelID,
+			Stream: &streamFalse,
+			Messages: []llm.Message{{
+				Role: "user",
+				Content: llm.MessageContent{
+					Content: new("hello"),
+				},
+			}},
+		}
+
+		noStreamCandidates, err := selector.selectModelCandidates(ctx, noStreamReq)
+		require.NoError(t, err)
+		require.Empty(t, noStreamCandidates)
 	})
 
 	t.Run("empty channels returns empty candidates", func(t *testing.T) {

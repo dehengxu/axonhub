@@ -31,7 +31,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 
 log:
   level: "info"
@@ -129,7 +129,7 @@ volumes:
 axonhub:
   environment:
     - AXONHUB_DB_DIALECT=sqlite3
-    - AXONHUB_DB_DSN=file:axonhub.db?cache=shared&_fk=1
+    - AXONHUB_DB_DSN=file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)
 ```
 
 ### PostgreSQL (Production)
@@ -343,4 +343,4 @@ axonhub:
 - [OpenAI API](../api-reference/openai-api.md)
 - [Anthropic API](../api-reference/anthropic-api.md)
 - [Gemini API](../api-reference/gemini-api.md)
-- [Architecture Documentation](../architecture/erd.md)
+- [Architecture Documentation](../development/erd.md)

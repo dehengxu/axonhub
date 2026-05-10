@@ -176,7 +176,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	node = &Node{
 		ID:     _m.ID,
 		Type:   "Channel",
-		Fields: make([]*Field, 17),
+		Fields: make([]*Field, 19),
 		Edges:  make([]*Edge, 6),
 	}
 	var buf []byte
@@ -252,18 +252,34 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 		Name:  "supported_models",
 		Value: string(buf),
 	}
-	if buf, err = json.Marshal(_m.AutoSyncSupportedModels); err != nil {
+	if buf, err = json.Marshal(_m.ManualModels); err != nil {
 		return nil, err
 	}
 	node.Fields[9] = &Field{
+		Type:  "[]string",
+		Name:  "manual_models",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.AutoSyncSupportedModels); err != nil {
+		return nil, err
+	}
+	node.Fields[10] = &Field{
 		Type:  "bool",
 		Name:  "auto_sync_supported_models",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.AutoSyncModelPattern); err != nil {
+		return nil, err
+	}
+	node.Fields[11] = &Field{
+		Type:  "string",
+		Name:  "auto_sync_model_pattern",
 		Value: string(buf),
 	}
 	if buf, err = json.Marshal(_m.Tags); err != nil {
 		return nil, err
 	}
-	node.Fields[10] = &Field{
+	node.Fields[12] = &Field{
 		Type:  "[]string",
 		Name:  "tags",
 		Value: string(buf),
@@ -271,7 +287,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.DefaultTestModel); err != nil {
 		return nil, err
 	}
-	node.Fields[11] = &Field{
+	node.Fields[13] = &Field{
 		Type:  "string",
 		Name:  "default_test_model",
 		Value: string(buf),
@@ -279,7 +295,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.Policies); err != nil {
 		return nil, err
 	}
-	node.Fields[12] = &Field{
+	node.Fields[14] = &Field{
 		Type:  "objects.ChannelPolicies",
 		Name:  "policies",
 		Value: string(buf),
@@ -287,7 +303,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.Settings); err != nil {
 		return nil, err
 	}
-	node.Fields[13] = &Field{
+	node.Fields[15] = &Field{
 		Type:  "*objects.ChannelSettings",
 		Name:  "settings",
 		Value: string(buf),
@@ -295,7 +311,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.OrderingWeight); err != nil {
 		return nil, err
 	}
-	node.Fields[14] = &Field{
+	node.Fields[16] = &Field{
 		Type:  "int",
 		Name:  "ordering_weight",
 		Value: string(buf),
@@ -303,7 +319,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.ErrorMessage); err != nil {
 		return nil, err
 	}
-	node.Fields[15] = &Field{
+	node.Fields[17] = &Field{
 		Type:  "string",
 		Name:  "error_message",
 		Value: string(buf),
@@ -311,7 +327,7 @@ func (_m *Channel) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.Remark); err != nil {
 		return nil, err
 	}
-	node.Fields[16] = &Field{
+	node.Fields[18] = &Field{
 		Type:  "string",
 		Name:  "remark",
 		Value: string(buf),
@@ -934,7 +950,7 @@ func (_m *Project) Node(ctx context.Context) (node *Node, err error) {
 	node = &Node{
 		ID:     _m.ID,
 		Type:   "Project",
-		Fields: make([]*Field, 5),
+		Fields: make([]*Field, 6),
 		Edges:  make([]*Edge, 9),
 	}
 	var buf []byte
@@ -976,6 +992,14 @@ func (_m *Project) Node(ctx context.Context) (node *Node, err error) {
 	node.Fields[4] = &Field{
 		Type:  "project.Status",
 		Name:  "status",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Profiles); err != nil {
+		return nil, err
+	}
+	node.Fields[5] = &Field{
+		Type:  "*objects.ProjectProfiles",
+		Name:  "profiles",
 		Value: string(buf),
 	}
 	node.Edges[0] = &Edge{
@@ -1076,7 +1100,7 @@ func (_m *Prompt) Node(ctx context.Context) (node *Node, err error) {
 	node = &Node{
 		ID:     _m.ID,
 		Type:   "Prompt",
-		Fields: make([]*Field, 9),
+		Fields: make([]*Field, 10),
 		Edges:  make([]*Edge, 1),
 	}
 	var buf []byte
@@ -1144,10 +1168,18 @@ func (_m *Prompt) Node(ctx context.Context) (node *Node, err error) {
 		Name:  "status",
 		Value: string(buf),
 	}
-	if buf, err = json.Marshal(_m.Settings); err != nil {
+	if buf, err = json.Marshal(_m.Order); err != nil {
 		return nil, err
 	}
 	node.Fields[8] = &Field{
+		Type:  "int",
+		Name:  "order",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Settings); err != nil {
+		return nil, err
+	}
+	node.Fields[9] = &Field{
 		Type:  "objects.PromptSettings",
 		Name:  "settings",
 		Value: string(buf),
@@ -1161,6 +1193,74 @@ func (_m *Prompt) Node(ctx context.Context) (node *Node, err error) {
 		Scan(ctx, &node.Edges[0].IDs)
 	if err != nil {
 		return nil, err
+	}
+	return node, nil
+}
+
+// Node implements Noder interface
+func (_m *PromptProtectionRule) Node(ctx context.Context) (node *Node, err error) {
+	node = &Node{
+		ID:     _m.ID,
+		Type:   "PromptProtectionRule",
+		Fields: make([]*Field, 7),
+		Edges:  make([]*Edge, 0),
+	}
+	var buf []byte
+	if buf, err = json.Marshal(_m.CreatedAt); err != nil {
+		return nil, err
+	}
+	node.Fields[0] = &Field{
+		Type:  "time.Time",
+		Name:  "created_at",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.UpdatedAt); err != nil {
+		return nil, err
+	}
+	node.Fields[1] = &Field{
+		Type:  "time.Time",
+		Name:  "updated_at",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Name); err != nil {
+		return nil, err
+	}
+	node.Fields[2] = &Field{
+		Type:  "string",
+		Name:  "name",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Description); err != nil {
+		return nil, err
+	}
+	node.Fields[3] = &Field{
+		Type:  "string",
+		Name:  "description",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Pattern); err != nil {
+		return nil, err
+	}
+	node.Fields[4] = &Field{
+		Type:  "string",
+		Name:  "pattern",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Status); err != nil {
+		return nil, err
+	}
+	node.Fields[5] = &Field{
+		Type:  "promptprotectionrule.Status",
+		Name:  "status",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Settings); err != nil {
+		return nil, err
+	}
+	node.Fields[6] = &Field{
+		Type:  "*objects.PromptProtectionSettings",
+		Name:  "settings",
+		Value: string(buf),
 	}
 	return node, nil
 }
@@ -1264,7 +1364,7 @@ func (_m *Request) Node(ctx context.Context) (node *Node, err error) {
 	node = &Node{
 		ID:     _m.ID,
 		Type:   "Request",
-		Fields: make([]*Field, 20),
+		Fields: make([]*Field, 25),
 		Edges:  make([]*Edge, 7),
 	}
 	var buf []byte
@@ -1428,6 +1528,46 @@ func (_m *Request) Node(ctx context.Context) (node *Node, err error) {
 		Name:  "metrics_first_token_latency_ms",
 		Value: string(buf),
 	}
+	if buf, err = json.Marshal(_m.MetricsReasoningDurationMs); err != nil {
+		return nil, err
+	}
+	node.Fields[20] = &Field{
+		Type:  "int64",
+		Name:  "metrics_reasoning_duration_ms",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.ContentSaved); err != nil {
+		return nil, err
+	}
+	node.Fields[21] = &Field{
+		Type:  "bool",
+		Name:  "content_saved",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.ContentStorageID); err != nil {
+		return nil, err
+	}
+	node.Fields[22] = &Field{
+		Type:  "int",
+		Name:  "content_storage_id",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.ContentStorageKey); err != nil {
+		return nil, err
+	}
+	node.Fields[23] = &Field{
+		Type:  "string",
+		Name:  "content_storage_key",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.ContentSavedAt); err != nil {
+		return nil, err
+	}
+	node.Fields[24] = &Field{
+		Type:  "time.Time",
+		Name:  "content_saved_at",
+		Value: string(buf),
+	}
 	node.Edges[0] = &Edge{
 		Type: "APIKey",
 		Name: "api_key",
@@ -1506,7 +1646,7 @@ func (_m *RequestExecution) Node(ctx context.Context) (node *Node, err error) {
 	node = &Node{
 		ID:     _m.ID,
 		Type:   "RequestExecution",
-		Fields: make([]*Field, 18),
+		Fields: make([]*Field, 20),
 		Edges:  make([]*Edge, 3),
 	}
 	var buf []byte
@@ -1614,10 +1754,18 @@ func (_m *RequestExecution) Node(ctx context.Context) (node *Node, err error) {
 		Name:  "error_message",
 		Value: string(buf),
 	}
-	if buf, err = json.Marshal(_m.Status); err != nil {
+	if buf, err = json.Marshal(_m.ResponseStatusCode); err != nil {
 		return nil, err
 	}
 	node.Fields[13] = &Field{
+		Type:  "int",
+		Name:  "response_status_code",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.Status); err != nil {
+		return nil, err
+	}
+	node.Fields[14] = &Field{
 		Type:  "requestexecution.Status",
 		Name:  "status",
 		Value: string(buf),
@@ -1625,7 +1773,7 @@ func (_m *RequestExecution) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.Stream); err != nil {
 		return nil, err
 	}
-	node.Fields[14] = &Field{
+	node.Fields[15] = &Field{
 		Type:  "bool",
 		Name:  "stream",
 		Value: string(buf),
@@ -1633,7 +1781,7 @@ func (_m *RequestExecution) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.MetricsLatencyMs); err != nil {
 		return nil, err
 	}
-	node.Fields[15] = &Field{
+	node.Fields[16] = &Field{
 		Type:  "int64",
 		Name:  "metrics_latency_ms",
 		Value: string(buf),
@@ -1641,15 +1789,23 @@ func (_m *RequestExecution) Node(ctx context.Context) (node *Node, err error) {
 	if buf, err = json.Marshal(_m.MetricsFirstTokenLatencyMs); err != nil {
 		return nil, err
 	}
-	node.Fields[16] = &Field{
+	node.Fields[17] = &Field{
 		Type:  "int64",
 		Name:  "metrics_first_token_latency_ms",
+		Value: string(buf),
+	}
+	if buf, err = json.Marshal(_m.MetricsReasoningDurationMs); err != nil {
+		return nil, err
+	}
+	node.Fields[18] = &Field{
+		Type:  "int64",
+		Name:  "metrics_reasoning_duration_ms",
 		Value: string(buf),
 	}
 	if buf, err = json.Marshal(_m.RequestHeaders); err != nil {
 		return nil, err
 	}
-	node.Fields[17] = &Field{
+	node.Fields[19] = &Field{
 		Type:  "objects.JSONRawMessage",
 		Name:  "request_headers",
 		Value: string(buf),
