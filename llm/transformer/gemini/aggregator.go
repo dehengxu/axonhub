@@ -104,6 +104,7 @@ func AggregateStreamChunks(
 								Arguments: string(argsJSON),
 							},
 						}
+						setOutboundToolCallThoughtSignature(agg.toolCalls[toolCallIndex], part.ThoughtSignature)
 
 					case part.InlineData != nil:
 						agg.inlineDataParts = append(agg.inlineDataParts, part.InlineData)
@@ -181,12 +182,18 @@ func buildGeminiResponse(
 				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 			}
 
+			var thoughtSignature string
+			if signature := getInboundGeminiToolCallThoughtSignature(*tc); signature != nil {
+				thoughtSignature = *signature
+			}
+
 			parts = append(parts, &Part{
 				FunctionCall: &FunctionCall{
 					ID:   tc.ID,
 					Name: tc.Function.Name,
 					Args: args,
 				},
+				ThoughtSignature: thoughtSignature,
 			})
 		}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/looplj/axonhub/internal/contexts"
 	"github.com/looplj/axonhub/internal/ent"
 	"github.com/looplj/axonhub/internal/server/biz"
 )
@@ -158,18 +157,6 @@ func (f *fakeAdaptiveMetricsProvider) RecordFailure(channelID int) {
 	ch.lastFailureAtMs = &nowMs
 }
 
-type fakeTraceProvider struct {
-	lastSuccessful map[int]int
-}
-
-func newFakeTraceProvider() *fakeTraceProvider {
-	return &fakeTraceProvider{lastSuccessful: make(map[int]int)}
-}
-
-func (f *fakeTraceProvider) GetLastSuccessfulChannelID(_ context.Context, traceID int) (int, error) {
-	return f.lastSuccessful[traceID], nil
-}
-
 func buildSimulationCandidates(weights []int) []*ChannelModelsCandidate {
 	candidates := make([]*ChannelModelsCandidate, 0, len(weights))
 	for i, w := range weights {
@@ -189,8 +176,6 @@ func TestAdaptiveLoadBalancer_Simulation_Healthy_DistributionByWeight(t *testing
 	candidates := buildSimulationCandidates(weights)
 
 	metrics := newFakeAdaptiveMetricsProvider(600)
-	traceProvider := newFakeTraceProvider()
-	connectionTracker := NewDefaultConnectionTracker(0)
 
 	const totalRequests = 1000
 
@@ -199,10 +184,9 @@ func TestAdaptiveLoadBalancer_Simulation_Healthy_DistributionByWeight(t *testing
 	wrr.minScore = 0.0                         // Allow scores to drop below default floor for better distribution in simulation
 
 	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(traceProvider),
 		NewErrorAwareStrategy(metrics),
 		wrr,
-		NewConnectionAwareStrategy(nil, connectionTracker),
+		NewLatencyAwareStrategy(metrics),
 	}
 
 	lb := NewLoadBalancer(&mockSystemService{retryPolicy: &biz.RetryPolicy{Enabled: false}}, nil, strategies...)
@@ -214,7 +198,7 @@ func TestAdaptiveLoadBalancer_Simulation_Healthy_DistributionByWeight(t *testing
 	for range totalRequests {
 		metrics.AdvanceMs(tickMs)
 
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.Len(t, sorted, 1)
 
 		picked := sorted[0].Channel.ID
@@ -235,65 +219,39 @@ func TestAdaptiveLoadBalancer_Simulation_Healthy_DistributionByWeight(t *testing
 	}
 }
 
-func TestAdaptiveLoadBalancer_Simulation_TraceStickyOverridesWeight(t *testing.T) {
-	baseCtx := context.Background()
-	trace := &ent.Trace{ID: 1}
-	ctx := contexts.WithTrace(baseCtx, trace)
-
-	weights := []int{80, 50, 20, 10}
-	candidates := buildSimulationCandidates(weights)
-
-	metrics := newFakeAdaptiveMetricsProvider(600)
-	traceProvider := newFakeTraceProvider()
-	traceProvider.lastSuccessful[trace.ID] = candidates[2].Channel.ID
-	connectionTracker := NewDefaultConnectionTracker(0)
-
-	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(traceProvider),
-		NewErrorAwareStrategy(metrics),
-		NewWeightRoundRobinStrategy(metrics),
-		NewConnectionAwareStrategy(nil, connectionTracker),
-	}
-
-	lb := NewLoadBalancer(&mockSystemService{retryPolicy: &biz.RetryPolicy{Enabled: false}}, nil, strategies...)
-
-	const tickMs = int64(50)
-	for range 50 {
-		metrics.AdvanceMs(tickMs)
-
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
-		require.Len(t, sorted, 1)
-		require.Equal(t, candidates[2].Channel.ID, sorted[0].Channel.ID)
-		metrics.RecordSuccess(sorted[0].Channel.ID)
-	}
-}
-
-func TestAdaptiveLoadBalancer_Simulation_ConnectionPressureCanOverrideWeight(t *testing.T) {
+func TestAdaptiveLoadBalancer_Simulation_HighLatencyCanOverrideWeight(t *testing.T) {
 	ctx := context.Background()
 	weights := []int{80, 50, 20, 10}
 	candidates := buildSimulationCandidates(weights)
 
-	metrics := newFakeAdaptiveMetricsProvider(600)
-	traceProvider := newFakeTraceProvider()
-
-	connectionTracker := NewDefaultConnectionTracker(10)
-	for range 10 {
-		connectionTracker.IncrementConnection(candidates[0].Channel.ID)
+	// Give channel 0 (weight=80) very high latency, channel 1 (weight=50) very low latency
+	latencyProvider := &mockMetricsProvider{
+		metrics: map[int]*biz.AggregatedMetrics{
+			candidates[0].Channel.ID: {NonStreamingLatencyEWMA: 2800, NonStreamingSampleCount: 20},
+			candidates[1].Channel.ID: {NonStreamingLatencyEWMA: 100, NonStreamingSampleCount: 20},
+			candidates[2].Channel.ID: {NonStreamingLatencyEWMA: 100, NonStreamingSampleCount: 20},
+			candidates[3].Channel.ID: {NonStreamingLatencyEWMA: 100, NonStreamingSampleCount: 20},
+		},
 	}
 
+	metrics := newFakeAdaptiveMetricsProvider(600)
+
 	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(traceProvider),
 		NewErrorAwareStrategy(metrics),
 		NewWeightRoundRobinStrategy(metrics),
-		NewConnectionAwareStrategy(nil, connectionTracker),
+		NewLatencyAwareStrategy(latencyProvider),
 	}
 
 	lb := NewLoadBalancer(&mockSystemService{retryPolicy: &biz.RetryPolicy{Enabled: false}}, nil, strategies...)
 
 	metrics.AdvanceMs(50)
 
-	sorted := lb.Sort(ctx, candidates, "gpt-4")
+	sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 	require.Len(t, sorted, 1)
+	// Channel 0 has ~72pt latency penalty vs channel 1; with both at 0 requests,
+	// WeightRR gives 150 to both, ErrorAware gives 200 to both.
+	// Channel 0: 200 + 150 + 5.33 ≈ 355
+	// Channel 1: 200 + 150 + 77.33 ≈ 427  → channel 1 should win
 	require.NotEqual(t, candidates[0].Channel.ID, sorted[0].Channel.ID)
 }
 
@@ -303,14 +261,11 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorMigrationAndRecovery(t *testing.T)
 	candidates := buildSimulationCandidates(weights)
 
 	metrics := newFakeAdaptiveMetricsProvider(600)
-	traceProvider := newFakeTraceProvider()
-	connectionTracker := NewDefaultConnectionTracker(0)
 
 	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(traceProvider),
 		NewErrorAwareStrategy(metrics),
 		NewWeightRoundRobinStrategy(metrics),
-		NewConnectionAwareStrategy(nil, connectionTracker),
+		NewLatencyAwareStrategy(metrics),
 	}
 
 	lb := NewLoadBalancer(&mockSystemService{retryPolicy: &biz.RetryPolicy{Enabled: false}}, nil, strategies...)
@@ -323,7 +278,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorMigrationAndRecovery(t *testing.T)
 	for range warmup {
 		metrics.AdvanceMs(tickMs)
 
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.Len(t, sorted, 1)
 		metrics.RecordSuccess(sorted[0].Channel.ID)
 	}
@@ -342,7 +297,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorMigrationAndRecovery(t *testing.T)
 	for range 200 {
 		metrics.AdvanceMs(tickMs)
 
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.Len(t, sorted, 1)
 		require.NotEqual(t, failingID, sorted[0].Channel.ID)
 		metrics.RecordSuccess(sorted[0].Channel.ID)
@@ -360,7 +315,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorMigrationAndRecovery(t *testing.T)
 	for range 50 {
 		metrics.AdvanceMs(tickMs)
 
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.NotEqual(t, failingID, sorted[0].Channel.ID)
 		metrics.RecordSuccess(sorted[0].Channel.ID)
 	}
@@ -373,7 +328,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorMigrationAndRecovery(t *testing.T)
 	for range 2000 {
 		metrics.AdvanceMs(tickMs)
 
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.Len(t, sorted, 1)
 
 		if sorted[0].Channel.ID == failingID {
@@ -416,7 +371,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorAware_DetailedDecay(t *testing.T) 
 
 	// ch2 should be picked
 	for range 10 {
-		sorted := lb.Sort(ctx, candidates, "gpt-4")
+		sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 		require.Equal(t, ch2, sorted[0].Channel.ID)
 		metrics.RecordSuccess(ch2)
 	}
@@ -432,7 +387,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorAware_DetailedDecay(t *testing.T) 
 	// ch2 Total: 200 + 140 = 340
 	// ch1 Total: 180 + 150 = 330
 	// ch2 should still be picked (barely)
-	sorted := lb.Sort(ctx, candidates, "gpt-4")
+	sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 	require.Equal(t, ch2, sorted[0].Channel.ID)
 
 	// 3. Advance 1 more minute (total 5 minutes)
@@ -443,7 +398,7 @@ func TestAdaptiveLoadBalancer_Simulation_ErrorAware_DetailedDecay(t *testing.T) 
 	// ch1 Total: 200 + 150 = 350
 	// ch2 Total: 200 + 140 = 340
 	// ch1 should be picked now
-	sorted = lb.Sort(ctx, candidates, "gpt-4")
+	sorted = lb.Sort(ctx, candidates, "gpt-4", false)
 	require.Equal(t, ch1, sorted[0].Channel.ID)
 }
 
@@ -453,14 +408,11 @@ func TestAdaptiveLoadBalancer_Simulation_InactivityDecayAllowsComeback(t *testin
 	candidates := buildSimulationCandidates(weights)
 
 	metrics := newFakeAdaptiveMetricsProvider(600)
-	traceProvider := newFakeTraceProvider()
-	connectionTracker := NewDefaultConnectionTracker(0)
 
 	strategies := []LoadBalanceStrategy{
-		NewTraceAwareStrategy(traceProvider),
 		NewErrorAwareStrategy(metrics),
 		NewWeightRoundRobinStrategy(metrics),
-		NewConnectionAwareStrategy(nil, connectionTracker),
+		NewLatencyAwareStrategy(metrics),
 	}
 
 	lb := NewLoadBalancer(&mockSystemService{retryPolicy: &biz.RetryPolicy{Enabled: false}}, nil, strategies...)
@@ -472,13 +424,13 @@ func TestAdaptiveLoadBalancer_Simulation_InactivityDecayAllowsComeback(t *testin
 
 	metrics.AdvanceMs(50)
 
-	sorted := lb.Sort(ctx, candidates, "gpt-4")
+	sorted := lb.Sort(ctx, candidates, "gpt-4", false)
 	require.Len(t, sorted, 1)
 	require.NotEqual(t, heavyID, sorted[0].Channel.ID)
 
 	metrics.AdvanceMs(30 * 60 * 1000)
 
-	sorted2 := lb.Sort(ctx, candidates, "gpt-4")
+	sorted2 := lb.Sort(ctx, candidates, "gpt-4", false)
 	require.Len(t, sorted2, 1)
 	require.Equal(t, heavyID, sorted2[0].Channel.ID)
 }

@@ -95,8 +95,13 @@ func convertGeminiToLLMRequest(geminiReq *GenerateContentRequest) (*llm.Request,
 			chatReq.Modalities = convertGeminiModalitiesToLLM(gc.ResponseModalities)
 		}
 
-		// Convert ResponseSchema to ResponseFormat json_schema
-		if len(gc.ResponseSchema) > 0 {
+		// Convert ResponseSchema/ResponseJsonSchema to ResponseFormat json_schema
+		if len(gc.ResponseJsonSchema) > 0 {
+			chatReq.ResponseFormat = &llm.ResponseFormat{
+				Type:       "json_schema",
+				JSONSchema: gc.ResponseJsonSchema,
+			}
+		} else if len(gc.ResponseSchema) > 0 {
 			chatReq.ResponseFormat = &llm.ResponseFormat{
 				Type:       "json_schema",
 				JSONSchema: gc.ResponseSchema,
@@ -326,12 +331,28 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 						MIMEType: part.InlineData.MIMEType,
 					},
 				})
+			} else if isVideoMIMEType(part.InlineData.MIMEType) {
+				textParts = append(textParts, llm.MessageContentPart{
+					Type: "video_url",
+					VideoURL: &llm.VideoURL{
+						URL: dataURL,
+					},
+				})
+			} else if isAudioMIMEType(part.InlineData.MIMEType) {
+				textParts = append(textParts, llm.MessageContentPart{
+					Type: "input_audio",
+					InputAudio: &llm.InputAudio{
+						Format: audioMIMETypeToFormat(part.InlineData.MIMEType),
+						Data:   part.InlineData.Data,
+					},
+				})
 			} else {
 				// Image type
 				textParts = append(textParts, llm.MessageContentPart{
 					Type: "image_url",
 					ImageURL: &llm.ImageURL{
-						URL: dataURL,
+						URL:      dataURL,
+						MIMEType: part.InlineData.MIMEType,
 					},
 				})
 			}
@@ -348,18 +369,37 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 						MIMEType: mimeType,
 					},
 				})
+			} else if isVideoMIMEType(mimeType) {
+				textParts = append(textParts, llm.MessageContentPart{
+					Type: "video_url",
+					VideoURL: &llm.VideoURL{
+						URL: part.FileData.FileURI,
+					},
+				})
+			} else if isAudioMIMEType(mimeType) {
+				textParts = append(textParts, llm.MessageContentPart{
+					Type: "input_audio",
+					InputAudio: &llm.InputAudio{
+						Format: audioMIMETypeToFormat(mimeType),
+					},
+				})
 			} else {
 				// Image type
 				textParts = append(textParts, llm.MessageContentPart{
 					Type: "image_url",
 					ImageURL: &llm.ImageURL{
-						URL: part.FileData.FileURI,
+						URL:      part.FileData.FileURI,
+						MIMEType: mimeType,
 					},
 				})
 			}
 
 		case part.FunctionCall != nil:
-			argsJSON, _ := json.Marshal(part.FunctionCall.Args)
+			argsJSON := []byte("{}")
+			if part.FunctionCall.Args != nil {
+				argsJSON, _ = json.Marshal(part.FunctionCall.Args)
+			}
+
 			tc := llm.ToolCall{
 				ID:   part.FunctionCall.ID,
 				Type: "function",
@@ -368,7 +408,7 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 					Arguments: string(argsJSON),
 				},
 			}
-
+			setInboundToolCallThoughtSignature(&tc, part.ThoughtSignature)
 			toolCalls = append(toolCalls, tc)
 
 		case part.FunctionResponse != nil:
@@ -414,6 +454,34 @@ func convertGeminiContentToLLMMessage(content *Content, previousContents []*Cont
 	}
 
 	return msg, nil
+}
+
+func citationMetadataFromLLMAnnotations(annotations []llm.Annotation) *CitationMetadata {
+	citations := make([]*Citation, 0, len(annotations))
+	for _, ann := range annotations {
+		if ann.URLCitation == nil || ann.URLCitation.URL == "" {
+			continue
+		}
+
+		citation := &Citation{
+			URI:   ann.URLCitation.URL,
+			Title: ann.URLCitation.Title,
+		}
+		if ann.StartIndex != nil {
+			citation.StartIndex = *ann.StartIndex
+		}
+		if ann.EndIndex != nil {
+			citation.EndIndex = *ann.EndIndex
+		}
+
+		citations = append(citations, citation)
+	}
+
+	if len(citations) == 0 {
+		return nil
+	}
+
+	return &CitationMetadata{Citations: citations}
 }
 
 // convertLLMToGeminiResponse converts unified Response to Gemini GenerateContentResponse.
@@ -507,7 +575,15 @@ func convertLLMChoiceToGeminiCandidate(choice *llm.Choice, isStream bool) *Candi
 				case "image_url":
 					// Handle image_url type
 					if part.ImageURL != nil && part.ImageURL.URL != "" {
-						geminiPart := convertImageURLToGeminiPart(part.ImageURL.URL)
+						geminiPart := convertImageURLToGeminiPart(part.ImageURL)
+						if geminiPart != nil {
+							parts = append(parts, geminiPart)
+							lastPart = geminiPart
+						}
+					}
+				case "video_url":
+					if part.VideoURL != nil && part.VideoURL.URL != "" {
+						geminiPart := convertVideoURLToGeminiPart(part.VideoURL)
 						if geminiPart != nil {
 							parts = append(parts, geminiPart)
 							lastPart = geminiPart
@@ -526,6 +602,8 @@ func convertLLMChoiceToGeminiCandidate(choice *llm.Choice, isStream bool) *Candi
 			}
 		}
 
+		hasToolCallThoughtSignature := false
+
 		for _, toolCall := range msg.ToolCalls {
 			var args map[string]any
 			if toolCall.Function.Arguments != "" {
@@ -539,6 +617,10 @@ func convertLLMChoiceToGeminiCandidate(choice *llm.Choice, isStream bool) *Candi
 					Args: args,
 				},
 			}
+			if signature := getInboundGeminiToolCallThoughtSignature(toolCall); signature != nil {
+				part.ThoughtSignature = *signature
+				hasToolCallThoughtSignature = true
+			}
 
 			parts = append(parts, part)
 
@@ -548,21 +630,22 @@ func convertLLMChoiceToGeminiCandidate(choice *llm.Choice, isStream bool) *Candi
 			}
 		}
 
-		msgThoughtSignature := msg.ReasoningSignature
-		if len(msg.ToolCalls) > 0 && msgThoughtSignature == nil {
-			msgThoughtSignature = lo.ToPtr("context_engineering_is_the_way_to_go")
-		}
-
-		if msgThoughtSignature != nil && lastPart != nil {
+		if !hasToolCallThoughtSignature && msg.ReasoningSignature != nil {
 			if firstFunctionCallPart != nil {
-				firstFunctionCallPart.ThoughtSignature = *msgThoughtSignature
-			} else {
-				lastPart.ThoughtSignature = *msgThoughtSignature
+				firstFunctionCallPart.ThoughtSignature = *msg.ReasoningSignature
+			} else if lastPart != nil {
+				lastPart.ThoughtSignature = *msg.ReasoningSignature
 			}
 		}
 
 		content.Parts = parts
 		candidate.Content = content
+	}
+
+	if gm := xmap.GetPtr[GroundingMetadata](choice.TransformerMetadata, TransformerMetadataKeyGroundingMetadata); gm != nil {
+		candidate.GroundingMetadata = gm
+	} else if msg != nil && len(msg.Annotations) > 0 {
+		candidate.CitationMetadata = citationMetadataFromLLMAnnotations(msg.Annotations)
 	}
 
 	// Convert finish reason

@@ -202,6 +202,33 @@ func (_u *RequestUpdate) ClearMetricsFirstTokenLatencyMs() *RequestUpdate {
 	return _u
 }
 
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdate) SetMetricsReasoningDurationMs(v int64) *RequestUpdate {
+	_u.mutation.ResetMetricsReasoningDurationMs()
+	_u.mutation.SetMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// SetNillableMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field if the given value is not nil.
+func (_u *RequestUpdate) SetNillableMetricsReasoningDurationMs(v *int64) *RequestUpdate {
+	if v != nil {
+		_u.SetMetricsReasoningDurationMs(*v)
+	}
+	return _u
+}
+
+// AddMetricsReasoningDurationMs adds value to the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdate) AddMetricsReasoningDurationMs(v int64) *RequestUpdate {
+	_u.mutation.AddMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdate) ClearMetricsReasoningDurationMs() *RequestUpdate {
+	_u.mutation.ClearMetricsReasoningDurationMs()
+	return _u
+}
+
 // SetContentSaved sets the "content_saved" field.
 func (_u *RequestUpdate) SetContentSaved(v bool) *RequestUpdate {
 	_u.mutation.SetContentSaved(v)
@@ -415,6 +442,11 @@ func (_u *RequestUpdate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RequestUpdate) check() error {
+	if v, ok := _u.mutation.ExternalID(); ok {
+		if err := request.ExternalIDValidator(v); err != nil {
+			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "Request.external_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := request.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Request.status": %w`, err)}
@@ -446,6 +478,9 @@ func (_u *RequestUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(request.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReasoningEffortCleared() {
+		_spec.ClearField(request.FieldReasoningEffort, field.TypeString)
 	}
 	if value, ok := _u.mutation.RequestHeaders(); ok {
 		_spec.SetField(request.FieldRequestHeaders, field.TypeJSON, value)
@@ -506,6 +541,15 @@ func (_u *RequestUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.MetricsFirstTokenLatencyMsCleared() {
 		_spec.ClearField(request.FieldMetricsFirstTokenLatencyMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.MetricsReasoningDurationMs(); ok {
+		_spec.SetField(request.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMetricsReasoningDurationMs(); ok {
+		_spec.AddField(request.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.MetricsReasoningDurationMsCleared() {
+		_spec.ClearField(request.FieldMetricsReasoningDurationMs, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ContentSaved(); ok {
 		_spec.SetField(request.FieldContentSaved, field.TypeBool, value)
@@ -840,6 +884,33 @@ func (_u *RequestUpdateOne) ClearMetricsFirstTokenLatencyMs() *RequestUpdateOne 
 	return _u
 }
 
+// SetMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdateOne) SetMetricsReasoningDurationMs(v int64) *RequestUpdateOne {
+	_u.mutation.ResetMetricsReasoningDurationMs()
+	_u.mutation.SetMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// SetNillableMetricsReasoningDurationMs sets the "metrics_reasoning_duration_ms" field if the given value is not nil.
+func (_u *RequestUpdateOne) SetNillableMetricsReasoningDurationMs(v *int64) *RequestUpdateOne {
+	if v != nil {
+		_u.SetMetricsReasoningDurationMs(*v)
+	}
+	return _u
+}
+
+// AddMetricsReasoningDurationMs adds value to the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdateOne) AddMetricsReasoningDurationMs(v int64) *RequestUpdateOne {
+	_u.mutation.AddMetricsReasoningDurationMs(v)
+	return _u
+}
+
+// ClearMetricsReasoningDurationMs clears the value of the "metrics_reasoning_duration_ms" field.
+func (_u *RequestUpdateOne) ClearMetricsReasoningDurationMs() *RequestUpdateOne {
+	_u.mutation.ClearMetricsReasoningDurationMs()
+	return _u
+}
+
 // SetContentSaved sets the "content_saved" field.
 func (_u *RequestUpdateOne) SetContentSaved(v bool) *RequestUpdateOne {
 	_u.mutation.SetContentSaved(v)
@@ -1066,6 +1137,11 @@ func (_u *RequestUpdateOne) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *RequestUpdateOne) check() error {
+	if v, ok := _u.mutation.ExternalID(); ok {
+		if err := request.ExternalIDValidator(v); err != nil {
+			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "Request.external_id": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := request.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Request.status": %w`, err)}
@@ -1114,6 +1190,9 @@ func (_u *RequestUpdateOne) sqlSave(ctx context.Context) (_node *Request, err er
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(request.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.ReasoningEffortCleared() {
+		_spec.ClearField(request.FieldReasoningEffort, field.TypeString)
 	}
 	if value, ok := _u.mutation.RequestHeaders(); ok {
 		_spec.SetField(request.FieldRequestHeaders, field.TypeJSON, value)
@@ -1174,6 +1253,15 @@ func (_u *RequestUpdateOne) sqlSave(ctx context.Context) (_node *Request, err er
 	}
 	if _u.mutation.MetricsFirstTokenLatencyMsCleared() {
 		_spec.ClearField(request.FieldMetricsFirstTokenLatencyMs, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.MetricsReasoningDurationMs(); ok {
+		_spec.SetField(request.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedMetricsReasoningDurationMs(); ok {
+		_spec.AddField(request.FieldMetricsReasoningDurationMs, field.TypeInt64, value)
+	}
+	if _u.mutation.MetricsReasoningDurationMsCleared() {
+		_spec.ClearField(request.FieldMetricsReasoningDurationMs, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ContentSaved(); ok {
 		_spec.SetField(request.FieldContentSaved, field.TypeBool, value)

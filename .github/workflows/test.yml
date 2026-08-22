@@ -5,24 +5,26 @@ on:
   push:
     branches:
       - "unstable"
+      - "release/**"
   pull_request:
     branches:
       - "unstable"
+      - "release/**"
 env:
   GO111MODULE: on
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: stable
-          stable: true
 
       - name: Test
         run: make test-backend-all

@@ -3,28 +3,35 @@ package responses
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"reflect"
 	"strings"
 
 	"github.com/samber/lo"
 
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
+	"github.com/looplj/axonhub/llm/internal/pkg/xurl"
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer/shared"
 )
 
+// ErrStreamIncomplete is returned when the stream ends without a terminal event
+// (response.completed, response.failed, response.cancelled, or response.incomplete).
+// Keep this package alias for callers that already reference the Responses
+// transformer sentinel; retry policy should depend on the shared llm error.
+var ErrStreamIncomplete = llm.ErrStreamIncomplete
+
 // TransformStream transforms OpenAI Responses API SSE events to unified llm.Response stream.
 func (t *OutboundTransformer) TransformStream(
 	ctx context.Context,
+	req *httpclient.Request,
 	stream streams.Stream[*httpclient.StreamEvent],
 ) (streams.Stream[*llm.Response], error) {
-	// Append the DONE event to the stream
-	doneEvent := lo.ToPtr(llm.DoneStreamEvent)
-	streamWithDone := streams.AppendStream(stream, doneEvent)
-
-	return streams.NoNil(newResponsesOutboundStream(streamWithDone)), nil
+	return streams.NoNil(newResponsesOutboundStream(stream)), nil
 }
 
 // responsesOutboundStream wraps a stream and maintains state during processing.
@@ -36,14 +43,20 @@ type responsesOutboundStream struct {
 	eventQueue []*llm.Response
 	queueIndex int
 	err        error
+
+	// Track whether the response reached a real terminal event. A synthetic or
+	// provider `[DONE]` marker is valid only after this becomes true.
+	responseCompleted bool
+	doneEmitted       bool
 }
 
 // outboundStreamState holds the state for a streaming session.
 type outboundStreamState struct {
-	responseID    string
-	responseModel string
-	usage         *llm.Usage
-	created       int64
+	responseID         string
+	responseModel      string
+	previousResponseID *string
+	usage              *llm.Usage
+	created            int64
 
 	// Content accumulation
 	textContent      strings.Builder
@@ -55,18 +68,22 @@ type outboundStreamState struct {
 	toolCallIndex map[string]int           // callID -> index in the output
 
 	// Reasoning signature tracking
-	encryptedContentEmitted map[string]bool
-	hasEncryptedReasoning   bool
+	pendingReasoningEncryptedContent map[string]*string
+
+	// Transformer metadata tracking
+	transformerMetadata        map[string]any
+	transformerMetadataEmitted bool
 }
 
 func newResponsesOutboundStream(stream streams.Stream[*httpclient.StreamEvent]) *responsesOutboundStream {
 	return &responsesOutboundStream{
 		stream: stream,
 		state: &outboundStreamState{
-			toolCalls:               make(map[string]*llm.ToolCall),
-			itemToCallID:            make(map[string]string),
-			toolCallIndex:           make(map[string]int),
-			encryptedContentEmitted: make(map[string]bool),
+			toolCalls:                        make(map[string]*llm.ToolCall),
+			itemToCallID:                     make(map[string]string),
+			toolCallIndex:                    make(map[string]int),
+			pendingReasoningEncryptedContent: make(map[string]*string),
+			transformerMetadata:              make(map[string]any),
 		},
 	}
 }
@@ -87,6 +104,15 @@ func (s *responsesOutboundStream) Next() bool {
 
 	// Try to get the next chunk from source
 	if !s.stream.Next() {
+		if s.err == nil && s.stream.Err() == nil {
+			if !s.responseCompleted {
+				s.err = ErrStreamIncomplete
+			} else if !s.doneEmitted {
+				s.doneEmitted = true
+				s.enqueue(llm.DoneResponse)
+				return true
+			}
+		}
 		return false
 	}
 
@@ -111,9 +137,11 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		return nil
 	}
 
-	// Handle [DONE] marker
+	// A bare [DONE] is only a transport marker. It never proves semantic
+	// completion, and it must not stop source consumption: a decoder/network
+	// error may only become visible when the source is advanced to exhaustion.
+	// Clean EOF without a semantic terminal is classified by Next().
 	if string(event.Data) == "[DONE]" {
-		s.enqueue(llm.DoneResponse)
 		return nil
 	}
 
@@ -131,10 +159,11 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 
 	// Build base response
 	resp := &llm.Response{
-		Object:  "chat.completion.chunk",
-		ID:      s.state.responseID,
-		Model:   s.state.responseModel,
-		Created: s.state.created,
+		Object:             "chat.completion.chunk",
+		ID:                 s.state.responseID,
+		Model:              s.state.responseModel,
+		Created:            s.state.created,
+		PreviousResponseID: s.state.previousResponseID,
 	}
 
 	//nolint:exhaustive //Only process events we care about.
@@ -144,10 +173,12 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			s.state.responseID = streamEvent.Response.ID
 			s.state.responseModel = streamEvent.Response.Model
 			s.state.created = streamEvent.Response.CreatedAt
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
 
 			resp.ID = s.state.responseID
 			resp.Model = s.state.responseModel
 			resp.Created = s.state.created
+			resp.PreviousResponseID = s.state.previousResponseID
 
 			if streamEvent.Response.Usage != nil {
 				s.state.usage = streamEvent.Response.Usage.ToUsage()
@@ -170,6 +201,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			s.state.responseID = streamEvent.Response.ID
 			s.state.responseModel = streamEvent.Response.Model
 			s.state.created = streamEvent.Response.CreatedAt
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
 
 			if streamEvent.Response.Usage != nil {
 				s.state.usage = streamEvent.Response.Usage.ToUsage()
@@ -187,22 +219,15 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		item := streamEvent.Item
 		switch item.Type {
 		case "reasoning":
-			if item.EncryptedContent == nil || *item.EncryptedContent == "" {
+			if item.ID == "" || item.EncryptedContent == nil || *item.EncryptedContent == "" {
 				return nil // Intentionally skip this event
 			}
 
-			if !s.state.encryptedContentEmitted[item.ID] {
-				s.state.encryptedContentEmitted[item.ID] = true
-				s.state.hasEncryptedReasoning = true
-				resp.Choices = []llm.Choice{
-					{
-						Index: 0,
-						Delta: &llm.Message{
-							ReasoningSignature: shared.EncodeOpenAIEncryptedContent(item.EncryptedContent),
-						},
-					},
-				}
-			}
+			// Responses streams may send a provisional encrypted_content on item.added
+			// and the final blob on item.done. Hold the value until item.done so the
+			// final blob replaces the provisional one instead of being concatenated.
+			s.state.pendingReasoningEncryptedContent[item.ID] = shared.EncodeOpenAIEncryptedContent(item.EncryptedContent)
+			return nil
 
 		case "function_call":
 			// Initialize tool call tracking
@@ -212,6 +237,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 				Type: "function",
 				Function: llm.FunctionCall{
 					Name:      item.Name,
+					Namespace: item.Namespace,
 					Arguments: "",
 				},
 			}
@@ -229,7 +255,8 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 								Type:  "function",
 								Index: toolCallIdx,
 								Function: llm.FunctionCall{
-									Name: item.Name,
+									Name:      item.Name,
+									Namespace: item.Namespace,
 								},
 							},
 						},
@@ -309,15 +336,80 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		}
 
 	case StreamEventTypeFunctionCallArgumentsDone:
-		// Function call completed - update state but don't emit an event
-		if streamEvent.CallID != "" {
-			if tc, ok := s.state.toolCalls[streamEvent.CallID]; ok {
-				tc.Function.Name = streamEvent.Name
-				tc.Function.Arguments = streamEvent.Arguments
+		callID := streamEvent.CallID
+		if callID == "" && streamEvent.ItemID != nil {
+			callID = s.state.itemToCallID[*streamEvent.ItemID]
+			if callID == "" {
+				// Fallback: item_id might be the call_id itself.
+				callID = *streamEvent.ItemID
 			}
 		}
 
-		return nil // Intentionally skip this event
+		tc, ok := s.state.toolCalls[callID]
+		if !ok {
+			return nil // Intentionally skip an unknown tool call.
+		}
+
+		identityChanged := false
+		if streamEvent.Name != "" && streamEvent.Name != tc.Function.Name {
+			tc.Function.Name = streamEvent.Name
+			identityChanged = true
+		}
+		if streamEvent.Namespace != "" && streamEvent.Namespace != tc.Function.Namespace {
+			tc.Function.Namespace = streamEvent.Namespace
+			identityChanged = true
+		}
+
+		// Some upstreams provide the complete JSON arguments only in the done event.
+		// Preserve arguments already emitted through delta events and forward only the
+		// missing suffix so downstream Responses streams receive the full value once.
+		finalArgs := streamEvent.Arguments
+		missingArgs := ""
+		if finalArgs == "" {
+			if !identityChanged {
+				return nil // An empty done event must not overwrite accumulated deltas.
+			}
+		} else {
+			forwardedArgs := tc.Function.Arguments
+			switch {
+			case forwardedArgs == "":
+				missingArgs = finalArgs
+			case strings.HasPrefix(finalArgs, forwardedArgs):
+				missingArgs = strings.TrimPrefix(finalArgs, forwardedArgs)
+			case equalJSONValues(forwardedArgs, finalArgs):
+				// The final payload may be reformatted without changing its meaning.
+				// The complete arguments were already forwarded, so do not emit a duplicate.
+				missingArgs = ""
+			default:
+				return fmt.Errorf("function call arguments mismatch for call_id %q", callID)
+			}
+
+			tc.Function.Arguments = finalArgs
+			if missingArgs == "" && !identityChanged {
+				return nil
+			}
+		}
+
+		toolCallIdx := s.state.toolCallIndex[callID]
+		resp.Choices = []llm.Choice{
+			{
+				Index: 0,
+				Delta: &llm.Message{
+					ToolCalls: []llm.ToolCall{
+						{
+							ID:    tc.ID,
+							Type:  tc.Type,
+							Index: toolCallIdx,
+							Function: llm.FunctionCall{
+								Name:      tc.Function.Name,
+								Namespace: tc.Function.Namespace,
+								Arguments: missingArgs,
+							},
+						},
+					},
+				},
+			},
+		}
 
 	case StreamEventTypeCustomToolCallInputDelta:
 		// Custom tool call input delta - accumulate and emit as tool call delta
@@ -386,14 +478,24 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			},
 		}
 
-	case StreamEventTypeReasoningSummaryTextDelta:
+	case StreamEventTypeReasoningSummaryTextDelta, StreamEventTypeReasoningTextDelta:
 		// Reasoning content delta
 		s.state.reasoningContent.WriteString(streamEvent.Delta)
+		itemID := lo.FromPtr(streamEvent.ItemID)
+		if itemID == "" {
+			return nil // Intentionally skip an unassociated reasoning delta
+		}
+		resp.TransformerMetadata = map[string]any{
+			responsesReasoningItemTransformerMetadataKey: map[string]any{
+				"id": itemID,
+			},
+		}
 
 		resp.Choices = []llm.Choice{
 			{
 				Index: 0,
 				Delta: &llm.Message{
+					ID:               itemID,
 					ReasoningContent: &streamEvent.Delta,
 				},
 			},
@@ -403,20 +505,130 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		// Text content completed - skip, content was already streamed via deltas
 		return nil // Intentionally skip this event
 
-	case StreamEventTypeReasoningSummaryTextDone:
+	case StreamEventTypeReasoningSummaryTextDone, StreamEventTypeReasoningTextDone:
 		// Reasoning content completed - skip, content was already streamed via deltas
 		return nil // Intentionally skip this event
 
-	case StreamEventTypeOutputItemDone, StreamEventTypeContentPartDone,
+	case StreamEventTypeOutputItemDone:
+		if streamEvent.Item == nil {
+			return nil // Intentionally skip this event
+		}
+		if streamEvent.Item.Type == "compaction" || streamEvent.Item.Type == "compaction_summary" {
+			resp.Choices = []llm.Choice{{
+				Index: 0,
+				Delta: lo.ToPtr(convertOutputToMessage([]Item{*streamEvent.Item}, s.state.transformerMetadata)),
+			}}
+			break
+		}
+		if streamEvent.Item.Type == "web_search_call" {
+			appendResponseWebSearchCallMetadata(s.state.transformerMetadata, *streamEvent.Item)
+			return nil // Intentionally skip this event
+		}
+		if streamEvent.Item.Type == "reasoning" {
+			if streamEvent.Item.ID == "" {
+				return nil // Intentionally skip this event
+			}
+
+			encryptedContent := shared.EncodeOpenAIEncryptedContent(streamEvent.Item.EncryptedContent)
+			if encryptedContent == nil || *encryptedContent == "" {
+				encryptedContent = s.state.pendingReasoningEncryptedContent[streamEvent.Item.ID]
+			}
+			delete(s.state.pendingReasoningEncryptedContent, streamEvent.Item.ID)
+			if encryptedContent == nil || *encryptedContent == "" {
+				return nil // Intentionally skip this event
+			}
+
+			resp.TransformerMetadata = map[string]any{
+				responsesReasoningItemTransformerMetadataKey: map[string]any{
+					"id":   streamEvent.Item.ID,
+					"done": true,
+				},
+			}
+			resp.Choices = []llm.Choice{
+				{
+					Index: 0,
+					Delta: &llm.Message{
+						ReasoningSignature: encryptedContent,
+					},
+				},
+			}
+			break
+		}
+		if streamEvent.Item.Type != "message" {
+			return nil // Intentionally skip this event
+		}
+
+		msg := convertOutputToMessage([]Item{*streamEvent.Item}, s.state.transformerMetadata)
+		if len(msg.Annotations) == 0 {
+			return nil // Intentionally skip this event
+		}
+		if len(s.state.transformerMetadata) > 0 {
+			resp.TransformerMetadata = s.state.transformerMetadata
+			s.state.transformerMetadataEmitted = true
+		}
+
+		resp.Choices = []llm.Choice{
+			{
+				Index: 0,
+				Delta: &llm.Message{
+					Annotations: msg.Annotations,
+				},
+			},
+		}
+
+	case StreamEventTypeContentPartDone,
 		StreamEventTypeReasoningSummaryPartAdded, StreamEventTypeReasoningSummaryPartDone:
 		// These events don't need special handling - skip
 		return nil // Intentionally skip this event
 
 	case StreamEventTypeResponseCompleted:
+		if s.responseCompleted {
+			return nil
+		}
 		// Response completed - emit two events: one with finish_reason, one with usage
-		finishReason := "stop"
-		if len(s.state.toolCalls) > 0 {
-			finishReason = "tool_calls"
+		s.responseCompleted = true
+		if streamEvent.Response != nil {
+			s.state.previousResponseID = streamEvent.Response.PreviousResponseID
+			resp.PreviousResponseID = s.state.previousResponseID
+		}
+		if len(s.state.transformerMetadata) > 0 && !s.state.transformerMetadataEmitted {
+			resp.TransformerMetadata = s.state.transformerMetadata
+			s.state.transformerMetadataEmitted = true
+		}
+
+		// The Responses API signals abnormal completion via response.completed
+		// with a status other than "completed" (incomplete/failed/cancelled) - it
+		// does not emit separate events for those cases. Map the status onto the
+		// Chat Completions finish_reason; fall back to the tool_calls/stop
+		// inference only when the status is absent or plain "completed".
+		finishReason := ""
+		if streamEvent.Response != nil && streamEvent.Response.Status != nil {
+			switch *streamEvent.Response.Status {
+			case "incomplete":
+				// Distinguish truncation from content-filter rejection via the
+				// incomplete details the upstream attached to the response.
+				reason := ""
+				if streamEvent.Response.IncompleteDetails != nil {
+					reason = streamEvent.Response.IncompleteDetails.Reason
+				}
+				switch reason {
+				case "content_filter":
+					finishReason = "content_filter"
+				default:
+					finishReason = "length"
+				}
+			case "failed":
+				finishReason = "error"
+			case "cancelled", "canceled":
+				finishReason = "cancelled"
+			}
+		}
+		if finishReason == "" {
+			if len(s.state.toolCalls) > 0 {
+				finishReason = "tool_calls"
+			} else {
+				finishReason = "stop"
+			}
 		}
 
 		// First event: finish_reason with empty delta
@@ -432,12 +644,13 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		if streamEvent.Response != nil && streamEvent.Response.Usage != nil {
 			s.state.usage = streamEvent.Response.Usage.ToUsage()
 			usageResp := &llm.Response{
-				Object:  "chat.completion.chunk",
-				ID:      s.state.responseID,
-				Model:   s.state.responseModel,
-				Created: s.state.created,
-				Choices: []llm.Choice{},
-				Usage:   s.state.usage,
+				Object:             "chat.completion.chunk",
+				ID:                 s.state.responseID,
+				Model:              s.state.responseModel,
+				Created:            s.state.created,
+				PreviousResponseID: s.state.previousResponseID,
+				Choices:            []llm.Choice{},
+				Usage:              s.state.usage,
 			}
 
 			s.enqueue(resp)
@@ -447,7 +660,11 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		}
 
 	case StreamEventTypeResponseFailed:
+		if s.responseCompleted {
+			return nil
+		}
 		// Response failed
+		s.responseCompleted = true
 		finishReason := "error"
 		resp.Choices = []llm.Choice{
 			{
@@ -457,8 +674,26 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		}
 
 	case StreamEventTypeResponseIncomplete:
+		if s.responseCompleted {
+			return nil
+		}
 		// Response incomplete (e.g., max tokens)
+		s.responseCompleted = true
 		finishReason := "length"
+		resp.Choices = []llm.Choice{
+			{
+				Index:        0,
+				FinishReason: &finishReason,
+			},
+		}
+
+	case StreamEventTypeResponseCancelled:
+		if s.responseCompleted {
+			return nil
+		}
+		// Response cancelled
+		s.responseCompleted = true
+		finishReason := "cancelled"
 		resp.Choices = []llm.Choice{
 			{
 				Index:        0,
@@ -471,7 +706,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 			Detail: llm.ErrorDetail{
 				Code:    streamEvent.Code,
 				Message: streamEvent.Message,
-				Param:   streamEvent.Param,
+				Param:   lo.FromPtr(streamEvent.Param),
 			},
 		}
 
@@ -481,7 +716,7 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 		StreamEventTypeImageGenerationCompleted:
 		// Handle image generation events
 		if streamEvent.PartialImageB64 != "" {
-			imageURL := "data:image/png;base64," + streamEvent.PartialImageB64
+			imageURL := xurl.BuildDataURL("image/png", streamEvent.PartialImageB64, true)
 			resp.Choices = []llm.Choice{
 				{
 					Index: 0,
@@ -518,6 +753,39 @@ func (s *responsesOutboundStream) transformStreamChunk(event *httpclient.StreamE
 	return nil
 }
 
+func equalJSONValues(left, right string) bool {
+	leftValue, err := decodeJSONValue(left)
+	if err != nil {
+		return false
+	}
+
+	rightValue, err := decodeJSONValue(right)
+	if err != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(leftValue, rightValue)
+}
+
+// decodeJSONValue preserves numeric lexemes so semantic comparisons do not
+// lose precision for integers that cannot be represented exactly as float64.
+func decodeJSONValue(value string) (any, error) {
+	decoder := json.NewDecoder(strings.NewReader(value))
+	decoder.UseNumber()
+
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("unexpected trailing JSON value: %w", err)
+	}
+
+	return decoded, nil
+}
+
 func (s *responsesOutboundStream) Current() *llm.Response {
 	if s.queueIndex < len(s.eventQueue) {
 		event := s.eventQueue[s.queueIndex]
@@ -543,7 +811,7 @@ func (s *responsesOutboundStream) Close() error {
 
 // AggregateStreamChunks aggregates OpenAI Responses API streaming chunks into a complete response.
 func (t *OutboundTransformer) AggregateStreamChunks(
-	ctx context.Context,
+	ctx context.Context, _ *httpclient.Request,
 	chunks []*httpclient.StreamEvent,
 ) ([]byte, llm.ResponseMeta, error) {
 	return AggregateStreamChunks(ctx, chunks)

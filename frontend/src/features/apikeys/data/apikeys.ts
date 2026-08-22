@@ -1,12 +1,31 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { graphqlRequest } from '@/gql/graphql';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useSelectedProjectId } from '@/stores/projectStore';
 import { useErrorHandler } from '@/hooks/use-error-handler';
 import { useRequestPermissions } from '../../../hooks/useRequestPermissions';
-import type { ApiKey, ApiKeyConnection, ApiKeyProfileQuotaUsage, CreateApiKeyInput, UpdateApiKeyInput, UpdateApiKeyProfilesInput } from './schema';
-import { apiKeyConnectionSchema, apiKeyProfileQuotaUsageSchema, apiKeySchema } from './schema';
+import type {
+  ApiKey,
+  ApiKeyConnection,
+  ApiKeyProfileQuotaUsage,
+  ApiKeyProfileTemplate,
+  ApiKeyTokenUsageStats,
+  CreateApiKeyInput,
+  CreateApiKeyProfileTemplateInput,
+  UpdateApiKeyInput,
+  UpdateApiKeyProfileTemplateInput,
+  UpdateApiKeyProfilesInput,
+} from './schema';
+import {
+  apiKeyConnectionSchema,
+  apiKeyProfileQuotaUsageSchema,
+  apiKeyProfileTemplateSchema,
+  apiKeySchema,
+  apiKeyTokenUsageStatsSchema,
+} from './schema';
+
+const NOAUTH_API_KEY_TYPE = 'noauth';
 
 // Dynamic GraphQL query builders
 function buildApiKeysQuery(permissions: { canViewUsers: boolean }) {
@@ -32,6 +51,15 @@ function buildApiKeysQuery(permissions: { canViewUsers: boolean }) {
             type
             status
             scopes
+            allowedIps
+            profiles {
+              activeProfile
+              profiles {
+                name
+                templateID
+                templateName
+              }
+            }
           }
           cursor
         }
@@ -69,15 +97,20 @@ function buildApiKeyQuery(permissions: { canViewUsers: boolean }) {
         type
         status
         scopes
+        allowedIps
         profiles {
           activeProfile
           profiles {
             name
+            templateID
+            templateName
             modelMappings { from to }
             channelIDs
             channelTags
+            channelTagsMatchMode
             modelIDs
             loadBalanceStrategy
+            traceStickyMode
             quota {
               requests
               totalTokens
@@ -117,6 +150,7 @@ function buildCreateApiKeyMutation(permissions: { canViewUsers: boolean }) {
         type
         status
         scopes
+        allowedIps
       }
     }
   `;
@@ -143,6 +177,7 @@ function buildUpdateApiKeyMutation(permissions: { canViewUsers: boolean }) {
         type
         status
         scopes
+        allowedIps
       }
     }
   `;
@@ -167,14 +202,18 @@ const UPDATE_APIKEY_PROFILES_MUTATION = `
         activeProfile
         profiles {
           name
+          templateID
+          templateName
           modelMappings {
             from
             to
           }
           channelIDs
           channelTags
+          channelTagsMatchMode
           modelIDs
           loadBalanceStrategy
+          traceStickyMode
           quota {
             requests
             totalTokens
@@ -209,6 +248,21 @@ const BULK_ARCHIVE_APIKEYS_MUTATION = `
   }
 `;
 
+const ROTATE_APIKEY_MUTATION = `
+  mutation RotateAPIKey($id: ID!) {
+    rotateAPIKey(id: $id) {
+      id
+      key
+      name
+      type
+      status
+      scopes
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 const APIKEY_QUOTA_USAGES_QUERY = `
   query APIKeyQuotaUsages($apiKeyId: ID!) {
     apiKeyQuotaUsages(apiKeyId: $apiKeyId) {
@@ -229,12 +283,146 @@ const APIKEY_QUOTA_USAGES_QUERY = `
   }
 `;
 
+const APIKEY_TOKEN_USAGE_STATS_QUERY = `
+  query APIKeyTokenUsageStats($input: APIKeyTokenUsageStatsInput) {
+    apiKeyTokenUsageStats(input: $input) {
+      apiKeyId
+      inputTokens
+      outputTokens
+      cachedTokens
+      reasoningTokens
+      topModels {
+        modelId
+        inputTokens
+        outputTokens
+        cachedTokens
+        reasoningTokens
+      }
+    }
+  }
+`;
+
+const APIKEY_PROFILE_TEMPLATES_QUERY = `
+  query ApiKeyProfileTemplates($where: APIKeyProfileTemplateWhereInput) {
+    apiKeyProfileTemplates(first: 100, where: $where) {
+      edges {
+        node {
+          id
+          createdAt
+          updatedAt
+          name
+          description
+          projectID
+          linkedProfilesCount
+          profile {
+            name
+            modelMappings { from to }
+            channelIDs
+            channelTags
+            channelTagsMatchMode
+            modelIDs
+            loadBalanceStrategy
+            traceStickyMode
+            quota {
+              requests
+              totalTokens
+              cost
+              period {
+                type
+                pastDuration { value unit }
+                calendarDuration { unit }
+              }
+            }
+          }
+        }
+      }
+      totalCount
+    }
+  }
+`;
+
+const CREATE_APIKEY_PROFILE_TEMPLATE_MUTATION = `
+  mutation CreateApiKeyProfileTemplate($input: CreateAPIKeyProfileTemplateInput!, $profile: APIKeyProfileInput!) {
+    createApiKeyProfileTemplate(input: $input, profile: $profile) {
+      id
+      createdAt
+      updatedAt
+      name
+      description
+      linkedProfilesCount
+      profile {
+        name
+      }
+    }
+  }
+`;
+
+const UPDATE_APIKEY_PROFILE_TEMPLATE_MUTATION = `
+  mutation UpdateApiKeyProfileTemplate($id: ID!, $input: UpdateAPIKeyProfileTemplateInput!, $profile: APIKeyProfileInput) {
+    updateApiKeyProfileTemplate(id: $id, input: $input, profile: $profile) {
+      id
+      createdAt
+      updatedAt
+      name
+      description
+      linkedProfilesCount
+      profile {
+        name
+      }
+    }
+  }
+`;
+
+const DELETE_APIKEY_PROFILE_TEMPLATE_MUTATION = `
+  mutation DeleteApiKeyProfileTemplate($id: ID!) {
+    deleteApiKeyProfileTemplate(id: $id) {
+      id
+      name
+    }
+  }
+`;
+
+const LOAD_APIKEY_PROFILE_TEMPLATE_MUTATION = `
+  mutation LoadApiKeyProfileTemplate($input: LoadApiKeyProfileTemplateInput!) {
+    loadApiKeyProfileTemplate(input: $input) {
+      id
+      name
+      status
+      profiles {
+        activeProfile
+        profiles {
+          name
+          templateID
+          templateName
+          modelMappings { from to }
+          channelIDs
+          channelTags
+          channelTagsMatchMode
+          modelIDs
+          loadBalanceStrategy
+          traceStickyMode
+          quota {
+            requests
+            totalTokens
+            cost
+            period {
+              type
+              pastDuration { value unit }
+              calendarDuration { unit }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 // React Query hooks
 export function useApiKeys(
   variables?: {
     first?: number;
     after?: string;
-    orderBy?: { field: 'CREATED_AT'; direction: 'ASC' | 'DESC' };
+    orderBy?: { field: 'NAME' | 'CREATED_AT' | 'UPDATED_AT'; direction: 'ASC' | 'DESC' };
     where?: {
       nameContainsFold?: string;
       status?: string;
@@ -258,10 +446,17 @@ export function useApiKeys(
       try {
         const query = buildApiKeysQuery(permissions);
         const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
-        const data = await graphqlRequest<{ apiKeys: ApiKeyConnection }>(query, variables, headers);
+        const mergedVariables = {
+          ...variables,
+          where: {
+            ...variables?.where,
+            typeNotIn: [NOAUTH_API_KEY_TYPE],
+          },
+        };
+        const data = await graphqlRequest<{ apiKeys: ApiKeyConnection }>(query, mergedVariables, headers);
         return apiKeyConnectionSchema.parse(data?.apiKeys);
       } catch (error) {
-        handleError(error, t('apikeys.errors.fetchData'));
+        handleError(error, t('common.errors.internalServerError'));
         throw error;
       }
     },
@@ -284,7 +479,7 @@ export function useApiKey(id: string) {
         const data = await graphqlRequest<{ node: ApiKey }>(query, { id }, headers);
         return apiKeySchema.parse(data.node);
       } catch (error) {
-        handleError(error, t('apikeys.errors.fetchDetails'));
+        handleError(error, t('common.errors.internalServerError'));
         throw error;
       }
     },
@@ -315,7 +510,7 @@ export function useApiKeyQuotaUsages(
         );
         return apiKeyProfileQuotaUsageSchema.array().parse(data.apiKeyQuotaUsages);
       } catch (error) {
-        handleError(error, t('apikeys.errors.fetchDetails'));
+        handleError(error, t('common.errors.internalServerError'));
         throw error;
       }
     },
@@ -324,11 +519,48 @@ export function useApiKeyQuotaUsages(
   });
 }
 
+export function useApiKeyTokenUsageStats(
+  variables?: {
+    apiKeyIds?: string[];
+    createdAtGTE?: string;
+    createdAtLTE?: string;
+  },
+  options?: {
+    enabled?: boolean;
+  }
+) {
+  const { t } = useTranslation();
+  const { handleError } = useErrorHandler();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useQuery({
+    queryKey: ['apiKeyTokenUsageStats', variables, selectedProjectId],
+    queryFn: async () => {
+      try {
+        const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
+        const data = await graphqlRequest<{ apiKeyTokenUsageStats: ApiKeyTokenUsageStats[] }>(
+          APIKEY_TOKEN_USAGE_STATS_QUERY,
+          { input: variables && Object.keys(variables).length > 0 ? variables : undefined },
+          headers
+        );
+        return apiKeyTokenUsageStatsSchema.array().parse(data.apiKeyTokenUsageStats);
+      } catch (error) {
+        handleError(error, t('common.errors.internalServerError'));
+        throw error;
+      }
+    },
+    enabled: !!selectedProjectId && (options?.enabled ?? true),
+    placeholderData: keepPreviousData,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+  });
+}
+
 export function useCreateApiKey() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const permissions = useRequestPermissions();
   const selectedProjectId = useSelectedProjectId();
+  const { handleError } = useErrorHandler();
 
   return useMutation({
     mutationFn: (input: CreateApiKeyInput) => {
@@ -345,8 +577,8 @@ export function useCreateApiKey() {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast.success(t('apikeys.messages.createSuccess'));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.createError'));
+    onError: (error) => {
+      handleError(error, { context: t('apikeys.dialogs.create.title') });
     },
   });
 }
@@ -356,6 +588,7 @@ export function useUpdateApiKey() {
   const queryClient = useQueryClient();
   const permissions = useRequestPermissions();
   const selectedProjectId = useSelectedProjectId();
+  const { handleError } = useErrorHandler();
 
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateApiKeyInput }) => {
@@ -368,8 +601,8 @@ export function useUpdateApiKey() {
       queryClient.invalidateQueries({ queryKey: ['apiKey', variables.id] });
       toast.success(t('apikeys.messages.updateSuccess'));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.updateError'));
+    onError: (error) => {
+      handleError(error, { context: t('apikeys.dialogs.edit.title') });
     },
   });
 }
@@ -395,8 +628,8 @@ export function useUpdateApiKeyStatus() {
             : t('apikeys.status.archived');
       toast.success(t('apikeys.messages.statusUpdateSuccess', { status: statusText }));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.statusUpdateError'));
+    onError: () => {
+      toast.error(t('common.errors.internalServerError'));
     },
   });
 }
@@ -416,8 +649,8 @@ export function useUpdateApiKeyProfiles() {
       queryClient.invalidateQueries({ queryKey: ['apiKey', variables.id] });
       toast.success(t('apikeys.messages.profilesUpdateSuccess'));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.profilesUpdateError'));
+    onError: () => {
+      toast.error(t('common.errors.internalServerError'));
     },
   });
 }
@@ -437,8 +670,8 @@ export function useBulkDisableApiKeys() {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast.success(t('apikeys.messages.bulkDisableSuccess', { count: variables.length }));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.bulkDisableError'));
+    onError: () => {
+      toast.error(t('common.errors.internalServerError'));
     },
   });
 }
@@ -458,8 +691,8 @@ export function useBulkEnableApiKeys() {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast.success(t('apikeys.messages.bulkEnableSuccess', { count: variables.length }));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.bulkEnableError'));
+    onError: () => {
+      toast.error(t('common.errors.internalServerError'));
     },
   });
 }
@@ -479,8 +712,150 @@ export function useBulkArchiveApiKeys() {
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast.success(t('apikeys.messages.bulkArchiveSuccess', { count: variables.length }));
     },
-    onError: (_error) => {
-      toast.error(t('apikeys.messages.bulkArchiveError'));
+    onError: () => {
+      toast.error(t('common.errors.internalServerError'));
+    },
+  });
+}
+
+export function useRotateApiKey() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const selectedProjectId = useSelectedProjectId();
+  const { handleError } = useErrorHandler();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
+      const data = await graphqlRequest<{ rotateAPIKey: ApiKey }>(ROTATE_APIKEY_MUTATION, { id }, headers);
+      return apiKeySchema.parse(data.rotateAPIKey);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKey', variables] });
+      toast.success(t('apikeys.messages.rotateSuccess'));
+    },
+    onError: (error) => {
+      handleError(error, { context: t('apikeys.dialogs.rotate.title') });
+    },
+  });
+}
+
+export function useApiKeyProfileTemplates(projectID: string | null) {
+  const { t } = useTranslation();
+  const { handleError } = useErrorHandler();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useQuery({
+    queryKey: ['apiKeyProfileTemplates', projectID, selectedProjectId],
+    queryFn: async () => {
+      try {
+        const requestProjectId = projectID ?? selectedProjectId;
+        const headers = requestProjectId ? { 'X-Project-ID': requestProjectId } : undefined;
+        const data = await graphqlRequest<{ apiKeyProfileTemplates: { edges: { node: ApiKeyProfileTemplate }[]; totalCount: number } }>(
+          APIKEY_PROFILE_TEMPLATES_QUERY,
+          {},
+          headers
+        );
+        const templates = (data?.apiKeyProfileTemplates?.edges ?? []).map((e) => e.node);
+        return apiKeyProfileTemplateSchema.array().parse(templates);
+      } catch (error) {
+        handleError(error, t('common.errors.internalServerError'));
+        throw error;
+      }
+    },
+    enabled: !!projectID,
+  });
+}
+
+export function useCreateApiKeyProfileTemplate() {
+  const queryClient = useQueryClient();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useMutation({
+    mutationFn: (input: CreateApiKeyProfileTemplateInput) => {
+      const requestProjectId = input.projectID ?? selectedProjectId;
+      const headers = requestProjectId ? { 'X-Project-ID': requestProjectId } : undefined;
+      const { profile, ...inputFields } = {
+        ...input,
+        projectID: input.projectID ?? null,
+      };
+      return graphqlRequest<{ createApiKeyProfileTemplate: ApiKeyProfileTemplate }>(
+        CREATE_APIKEY_PROFILE_TEMPLATE_MUTATION,
+        { input: inputFields, profile: { ...profile, name: input.name } },
+        headers
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeyProfileTemplates'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKey'] });
+    },
+  });
+}
+
+export function useUpdateApiKeyProfileTemplate() {
+  const queryClient = useQueryClient();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useMutation({
+    mutationFn: ({ id, input, projectID }: { id: string; input: UpdateApiKeyProfileTemplateInput; projectID?: string | null }) => {
+      const requestProjectId = projectID ?? selectedProjectId;
+      const headers = requestProjectId ? { 'X-Project-ID': requestProjectId } : undefined;
+      const { profile, ...inputFields } = input;
+      const resolvedProfile = profile ? { ...profile, name: input.name ?? profile.name } : undefined;
+      return graphqlRequest<{ updateApiKeyProfileTemplate: ApiKeyProfileTemplate }>(
+        UPDATE_APIKEY_PROFILE_TEMPLATE_MUTATION,
+        { id, input: inputFields, profile: resolvedProfile },
+        headers
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeyProfileTemplates'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKey'] });
+    },
+  });
+}
+
+export function useDeleteApiKeyProfileTemplate() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useMutation({
+    mutationFn: (id: string) => {
+      const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
+      return graphqlRequest<{ deleteApiKeyProfileTemplate: { id: string; name: string } }>(
+        DELETE_APIKEY_PROFILE_TEMPLATE_MUTATION,
+        { id },
+        headers
+      );
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeyProfileTemplates'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKey'] });
+      toast.success(t('apikeys.templates.deleteSuccessMessage', { name: data.deleteApiKeyProfileTemplate.name }));
+    },
+    onError: () => {
+      toast.error(t('apikeys.templates.deleteErrorMessage'));
+    },
+  });
+}
+
+export function useLoadApiKeyProfileTemplate() {
+  const queryClient = useQueryClient();
+  const selectedProjectId = useSelectedProjectId();
+
+  return useMutation({
+    mutationFn: (input: { templateID: string; apiKeyID: string }) => {
+      const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
+      return graphqlRequest<{ loadApiKeyProfileTemplate: ApiKey }>(LOAD_APIKEY_PROFILE_TEMPLATE_MUTATION, { input }, headers);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
+      queryClient.invalidateQueries({ queryKey: ['apiKey', variables.apiKeyID] });
     },
   });
 }

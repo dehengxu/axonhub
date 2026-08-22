@@ -16,25 +16,30 @@ func DefaultModels() []string {
 		"gpt-5.2",
 		"gpt-5.2-codex",
 		"gpt-5.3-codex",
+		"gpt-5.3-codex-spark",
+		"gpt-5.4",
+		"gpt-5.4-mini",
+		"gpt-5.5",
+		"gpt-5.6-sol",
+		"gpt-5.6-terra",
+		"gpt-5.6-luna",
 	}
 }
 
 const (
-	AuthorizeURL = "https://auth.openai.com/oauth/authorize"
+	defaultImageMainModel = "gpt-5.4-mini"
+
+	AxonHubOriginator = "axonhub"
+	AuthorizeURL      = "https://auth.openai.com/oauth/authorize"
 	//nolint:gosec // false alert.
 	TokenURL    = "https://auth.openai.com/oauth/token"
 	ClientID    = "app_EMoamEEZ73f0CkXaXp7hrann"
 	RedirectURI = "http://localhost:1455/auth/callback"
 	Scopes      = "openid profile email offline_access"
-	// UserAgent keep consistent with Codex CLI.
-	UserAgent           = "codex_cli_rs/0.98.0 (Mac OS 15.6.1; arm64) iTerm.app/3.6.6"
-	codexDefaultVersion = "0.98.0"
-)
 
-// CodexInstructions is the default system prompt for Codex CLI.
-// Kept in sync with the Codex CLI reference prompt for compatibility.
-const (
-	CodexInstructions = "You are a coding agent running in the Codex CLI, a terminal-based coding assistant. Codex CLI is an open source project led by OpenAI. You are expected to be precise, safe, and helpful.\n\nYour capabilities:\n- Receive user prompts and other context provided by the harness, such as files in the workspace.\n- Communicate with the user by streaming thinking & responses, and by making & updating plans.\n- Emit function calls to run terminal commands and apply edits.  Depending on how this specific run is configured, you can request that these function calls be escalated to the user for approval before running. "
+	codexDefaultVersion = "0.144.1"
 
-	CodexInstructionPrefix = "You are a coding agent running in the Codex CLI"
+	// fabricatedBetaFeatures mirrors the X-Codex-Beta-Features value the current
+	// Codex CLI sends, used when a non-Codex inbound client omits the header.
+	fabricatedBetaFeatures = "remote_compaction_v2"
 )

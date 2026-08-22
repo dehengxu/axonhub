@@ -42,6 +42,28 @@ func TestConvertToChatCompletionResponse(t *testing.T) {
 	require.Equal(t, int64(30), result.Usage.TotalTokens)
 }
 
+func TestConvertToLlmResponse_PreservesMultipleThinkingItems(t *testing.T) {
+	result := convertToLlmResponse(&Message{
+		ID:   "msg_reasoning_items",
+		Role: "assistant",
+		Content: []MessageContentBlock{
+			{Type: "thinking", Thinking: lo.ToPtr("first"), Signature: lo.ToPtr("gAAAA_FIRST_BLOB")},
+			{Type: "thinking", Thinking: lo.ToPtr("second"), Signature: lo.ToPtr("gAAAA_SECOND_BLOB")},
+			{Type: "tool_use", ID: "call_tool", Name: lo.ToPtr("lookup"), Input: json.RawMessage(`{}`)},
+		},
+	}, PlatformDirect)
+
+	require.Len(t, result.Choices, 1)
+	message := result.Choices[0].Message
+	require.Equal(t, []llm.ReasoningItem{
+		{Content: "first", Signature: "Z0FBQUFfRklSU1RfQkxPQg=="},
+		{Content: "second", Signature: "Z0FBQUFfU0VDT05EX0JMT0I="},
+	}, message.ReasoningItems)
+	require.Equal(t, "firstsecond", lo.FromPtr(message.ReasoningContent))
+	require.Equal(t, "Z0FBQUFfU0VDT05EX0JMT0I=", lo.FromPtr(message.ReasoningSignature))
+	require.Len(t, message.ToolCalls, 1)
+}
+
 func TestConvertToolChoiceToAnthropic(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -517,6 +539,60 @@ func TestConvertToChatCompletionResponse_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestConvertToLlmResponse_WithTextBlockCitations(t *testing.T) {
+	anthropicResp := &Message{
+		ID:   "msg_citations",
+		Type: "message",
+		Role: "assistant",
+		Content: []MessageContentBlock{
+			{
+				Type: "text",
+				Text: lo.ToPtr("Answer with sources"),
+				Citations: []TextCitation{
+					{
+						Type:           "url_citation",
+						URL:            "https://example.com/a",
+						Title:          "Example A",
+						EncryptedIndex: lo.ToPtr("secret"),
+						CitedText:      lo.ToPtr("quoted"),
+					},
+					{
+						Type:  "url_citation",
+						URL:   "https://example.com/b",
+						Title: "Example B",
+					},
+				},
+			},
+		},
+		Model: "claude-3-sonnet-20240229",
+	}
+
+	result := convertToLlmResponse(anthropicResp, PlatformDirect)
+	require.NotNil(t, result)
+	require.Len(t, result.Choices, 1)
+	require.NotNil(t, result.Choices[0].Message)
+	require.Equal(t, []llm.Annotation{
+		{
+			Type: "url_citation",
+			URLCitation: &llm.URLCitation{
+				URL:   "https://example.com/a",
+				Title: "Example A",
+			},
+		},
+		{
+			Type: "url_citation",
+			URLCitation: &llm.URLCitation{
+				URL:   "https://example.com/b",
+				Title: "Example B",
+			},
+		},
+	}, result.Choices[0].Message.Annotations)
+	for _, annotation := range result.Choices[0].Message.Annotations {
+		require.Nil(t, annotation.StartIndex)
+		require.Nil(t, annotation.EndIndex)
+	}
+}
+
 func TestConvertToAnthropicRequest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -881,6 +957,170 @@ func TestConvertToAnthropicRequest(t *testing.T) {
 								},
 							},
 						},
+					},
+				},
+			},
+		},
+		{
+			name: "system message with MultipleContent single text part",
+			chatReq: &llm.Request{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: lo.ToPtr(int64(1024)),
+				Messages: []llm.Message{
+					{
+						Role: "system",
+						Content: llm.MessageContent{
+							MultipleContent: []llm.MessageContentPart{
+								{Type: "text", Text: lo.ToPtr("You are helpful.")},
+							},
+						},
+					},
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello!"),
+						},
+					},
+				},
+			},
+			expected: &MessageRequest{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: 1024,
+				System: &SystemPrompt{
+					Prompt: lo.ToPtr("You are helpful."),
+				},
+				Messages: []MessageParam{
+					{
+						Role:    "user",
+						Content: MessageContent{Content: lo.ToPtr("Hello!")},
+					},
+				},
+			},
+		},
+		{
+			name: "system message with MultipleContent multiple text parts",
+			chatReq: &llm.Request{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: lo.ToPtr(int64(1024)),
+				Messages: []llm.Message{
+					{
+						Role: "system",
+						Content: llm.MessageContent{
+							MultipleContent: []llm.MessageContentPart{
+								{Type: "text", Text: lo.ToPtr("You are helpful.")},
+								{Type: "text", Text: lo.ToPtr("Be concise.")},
+							},
+						},
+					},
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello!"),
+						},
+					},
+				},
+			},
+			expected: &MessageRequest{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: 1024,
+				System: &SystemPrompt{
+					MultiplePrompts: []SystemPromptPart{
+						{Type: "text", Text: "You are helpful."},
+						{Type: "text", Text: "Be concise."},
+					},
+				},
+				Messages: []MessageParam{
+					{
+						Role:    "user",
+						Content: MessageContent{Content: lo.ToPtr("Hello!")},
+					},
+				},
+			},
+		},
+		{
+			name: "system message with MultipleContent and wasArrayFormat",
+			chatReq: &llm.Request{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: lo.ToPtr(int64(1024)),
+				TransformOptions: llm.TransformOptions{
+					ArrayInstructions: lo.ToPtr(true),
+				},
+				Messages: []llm.Message{
+					{
+						Role: "system",
+						Content: llm.MessageContent{
+							MultipleContent: []llm.MessageContentPart{
+								{Type: "text", Text: lo.ToPtr("You are helpful.")},
+							},
+						},
+					},
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello!"),
+						},
+					},
+				},
+			},
+			expected: &MessageRequest{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: 1024,
+				System: &SystemPrompt{
+					MultiplePrompts: []SystemPromptPart{
+						{Type: "text", Text: "You are helpful."},
+					},
+				},
+				Messages: []MessageParam{
+					{
+						Role:    "user",
+						Content: MessageContent{Content: lo.ToPtr("Hello!")},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple system messages with mixed Content and MultipleContent",
+			chatReq: &llm.Request{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: lo.ToPtr(int64(1024)),
+				Messages: []llm.Message{
+					{
+						Role: "system",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("System instruction."),
+						},
+					},
+					{
+						Role: "developer",
+						Content: llm.MessageContent{
+							MultipleContent: []llm.MessageContentPart{
+								{Type: "text", Text: lo.ToPtr("Dev instruction 1.")},
+								{Type: "text", Text: lo.ToPtr("Dev instruction 2.")},
+							},
+						},
+					},
+					{
+						Role: "user",
+						Content: llm.MessageContent{
+							Content: lo.ToPtr("Hello!"),
+						},
+					},
+				},
+			},
+			expected: &MessageRequest{
+				Model:     "claude-3-sonnet-20240229",
+				MaxTokens: 1024,
+				System: &SystemPrompt{
+					MultiplePrompts: []SystemPromptPart{
+						{Type: "text", Text: "System instruction."},
+						{Type: "text", Text: "Dev instruction 1."},
+						{Type: "text", Text: "Dev instruction 2."},
+					},
+				},
+				Messages: []MessageParam{
+					{
+						Role:    "user",
+						Content: MessageContent{Content: lo.ToPtr("Hello!")},
 					},
 				},
 			},

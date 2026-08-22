@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/auth"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
 
@@ -106,6 +107,44 @@ func TestClenupConfig(t *testing.T) {
 			require.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestOutboundTransformer_TransformRequest_AccountIdentity(t *testing.T) {
+	outbound, err := NewOutboundTransformerWithConfig(Config{
+		BaseURL:        "https://generativelanguage.googleapis.com",
+		APIKeyProvider: auth.NewStaticKeyProvider("test-api-key"),
+	})
+	require.NoError(t, err)
+
+	req := &llm.Request{
+		Model: "gemini-2.0-flash",
+		Messages: []llm.Message{
+			{Role: "user", Content: llm.MessageContent{Content: lo.ToPtr("hi")}},
+		},
+	}
+
+	hreq, err := outbound.TransformRequest(t.Context(), req)
+	require.NoError(t, err)
+	require.Nil(t, hreq.Metadata)
+}
+
+func TestOutboundTransformer_TransformRequest_OmitsMetadataWhenEmpty(t *testing.T) {
+	outbound, err := NewOutboundTransformerWithConfig(Config{
+		BaseURL:        "https://generativelanguage.googleapis.com",
+		APIKeyProvider: auth.NewStaticKeyProvider(""),
+	})
+	require.NoError(t, err)
+
+	req := &llm.Request{
+		Model: "gemini-2.0-flash",
+		Messages: []llm.Message{
+			{Role: "user", Content: llm.MessageContent{Content: lo.ToPtr("hi")}},
+		},
+	}
+
+	hreq, err := outbound.TransformRequest(t.Context(), req)
+	require.NoError(t, err)
+	require.Nil(t, hreq.Metadata)
 }
 
 func TestOutboundTransformer_buildFullRequestURL(t *testing.T) {

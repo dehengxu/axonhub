@@ -15,10 +15,12 @@ import (
 	"github.com/looplj/axonhub/llm/transformer/anthropic/claudecode"
 )
 
-type ClaudeCodeQuotaChecker struct{}
+type ClaudeCodeQuotaChecker struct {
+	httpClient *httpclient.HttpClient
+}
 
-func NewClaudeCodeQuotaChecker() *ClaudeCodeQuotaChecker {
-	return &ClaudeCodeQuotaChecker{}
+func NewClaudeCodeQuotaChecker(httpClient *httpclient.HttpClient) *ClaudeCodeQuotaChecker {
+	return &ClaudeCodeQuotaChecker{httpClient: httpClient}
 }
 
 func (c *ClaudeCodeQuotaChecker) CheckQuota(ctx context.Context, ch *ent.Channel) (QuotaData, error) {
@@ -52,7 +54,7 @@ func (c *ClaudeCodeQuotaChecker) CheckQuota(ctx context.Context, ch *ent.Channel
 			Type:   httpclient.AuthTypeBearer,
 			APIKey: accessToken,
 		}).
-		WithHeader("anthropic-beta", claudecode.ClaudeCodeBetaHeader).
+		WithHeader("anthropic-beta", claudecode.ClaudeCodeQuotaCheckHeader).
 		WithHeader("anthropic-version", claudecode.ClaudeCodeVersionHeader).
 		WithHeader("anthropic-dangerous-direct-browser-access", claudecode.ClaudeCodeBrowserAccessHeader).
 		WithHeader("x-app", claudecode.ClaudeCodeAppHeader).
@@ -69,8 +71,11 @@ func (c *ClaudeCodeQuotaChecker) CheckQuota(ctx context.Context, ch *ent.Channel
 		}).
 		Build()
 
-	// Execute HTTP request
-	httpClient := httpclient.NewHttpClient()
+	// Use proxy-configured HTTP client if available
+	httpClient := c.httpClient
+	if ch.Settings != nil && ch.Settings.Proxy != nil {
+		httpClient = c.httpClient.WithProxy(ch.Settings.Proxy)
+	}
 
 	httpResponse, err := httpClient.Do(ctx, httpRequest)
 	if err != nil {
@@ -139,7 +144,7 @@ func (c *ClaudeCodeQuotaChecker) parseResponse(headers http.Header) (QuotaData, 
 		fiveHourUtilization := parseFloat(headers.Get("Anthropic-Ratelimit-Unified-5h-Utilization"))
 
 		sevenDayUtilization := parseFloat(headers.Get("Anthropic-Ratelimit-Unified-7d-Utilization"))
-		if fiveHourUtilization >= 0.8 || sevenDayUtilization >= 0.8 {
+		if fiveHourUtilization >= WarningThresholdRatio || sevenDayUtilization >= WarningThresholdRatio {
 			normalizedStatus = "warning"
 		}
 	}
@@ -163,17 +168,65 @@ func (c *ClaudeCodeQuotaChecker) parseResponse(headers http.Header) (QuotaData, 
 		}
 	}
 
+	limits := []QuotaLimitStatus{
+		c.buildTokenLimit("5h", headers),
+		c.buildTokenLimit("7d", headers),
+	}
+
 	return QuotaData{
 		Status:       normalizedStatus,
 		ProviderType: "claudecode",
 		RawData:      rawData,
 		NextResetAt:  nextResetAt,
-		Ready:        normalizedStatus == "available" || normalizedStatus == "warning",
+		Ready:        IsReadyStatus(normalizedStatus),
+		Limits:       limits,
 	}, nil
 }
 
 func (c *ClaudeCodeQuotaChecker) SupportsChannel(ch *ent.Channel) bool {
 	return ch.Type == channel.TypeClaudecode
+}
+
+func (c *ClaudeCodeQuotaChecker) buildTokenLimit(windowKey string, headers http.Header) QuotaLimitStatus {
+	var (
+		utilizationKey, resetKey string
+		window                   time.Duration
+	)
+
+	switch windowKey {
+	case "5h":
+		utilizationKey = "Anthropic-Ratelimit-Unified-5h-Utilization"
+		resetKey = "Anthropic-Ratelimit-Unified-5h-Reset"
+		window = 5 * time.Hour
+	case "7d":
+		utilizationKey = "Anthropic-Ratelimit-Unified-7d-Utilization"
+		resetKey = "Anthropic-Ratelimit-Unified-7d-Reset"
+		window = 7 * 24 * time.Hour
+	}
+
+	utilization := parseFloat(headers.Get(utilizationKey))
+	resetTs := parseUnixTimestamp(headers.Get(resetKey))
+
+	status := "available"
+	if utilization >= 1.0 {
+		status = "exhausted"
+	} else if utilization >= WarningThresholdRatio {
+		status = "warning"
+	}
+
+	var nextReset *time.Time
+	if resetTs > 0 {
+		t := time.Unix(resetTs, 0)
+		nextReset = &t
+	}
+
+	return QuotaLimitStatus{
+		Type:        QuotaLimitTypeToken,
+		Status:      status,
+		UsageRatio:  utilization,
+		Ready:       IsReadyStatus(status),
+		NextResetAt: nextReset,
+	}.WithWindow(windowKey, window)
 }
 
 func getEndpointURL(baseURL string) string {

@@ -562,9 +562,6 @@ func TestEmbeddingInboundTransformer_TransformResponse(t *testing.T) {
 }
 
 func TestEmbeddingTransformers_APIFormat(t *testing.T) {
-	inbound := NewEmbeddingInboundTransformer()
-	require.Equal(t, llm.APIFormatOpenAIEmbedding, inbound.APIFormat())
-
 	config := &Config{
 		PlatformType:   PlatformOpenAI,
 		BaseURL:        "https://api.openai.com/v1",
@@ -771,4 +768,28 @@ func TestOutboundTransformer_RawURL_Embedding(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmbeddingOutboundTransformer_CustomEndpointPath(t *testing.T) {
+	config := &Config{
+		PlatformType:   PlatformOpenAI,
+		BaseURL:        "https://custom.api.com",
+		APIKeyProvider: auth.NewStaticKeyProvider("test-key"),
+		EndpointPath:   "/custom/embeddings",
+	}
+
+	transformer, err := NewOutboundTransformerWithConfig(config)
+	require.NoError(t, err)
+
+	llmReq := &llm.Request{
+		Model:       "text-embedding-3-large",
+		RequestType: llm.RequestTypeEmbedding,
+		Embedding: &llm.EmbeddingRequest{
+			Input: llm.EmbeddingInput{String: "Hello world"},
+		},
+	}
+
+	httpReq, err := transformer.TransformRequest(context.Background(), llmReq)
+	require.NoError(t, err)
+	require.Equal(t, "https://custom.api.com/custom/embeddings", httpReq.URL)
 }

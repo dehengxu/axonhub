@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -18,7 +19,21 @@ import (
 const (
 	// defaultPerformanceWindowSize is the default size of the sliding window in seconds (10 minutes).
 	defaultPerformanceWindowSize = 600
+
+	// MinLatencyMs is the minimum latency value (10ms) used for tokens/second calculations.
+	// This matches the frontend standard MINIMUM_LATENCY_MS_FOR_CACHE_HITS.
+	MinLatencyMs = 10
 )
+
+// ClampLatency enforces the minimum latency value to prevent extreme TPS calculations.
+// Returns the latency if it's >= MinLatencyMs, otherwise returns MinLatencyMs.
+func ClampLatency(latencyMs int64) int64 {
+	if latencyMs < MinLatencyMs {
+		return MinLatencyMs
+	}
+
+	return latencyMs
+}
 
 // channelMetrics holds the performance metrics for a channel in memory.
 type channelMetrics struct {
@@ -82,11 +97,21 @@ type channelMetricsResult struct {
 // loadAllChannelMetricsFromExecutions loads metrics for all channels using a single GROUP BY query.
 // Uses raw SQL via Modify to get request count and last failure time in one query.
 func (svc *ChannelService) loadAllChannelMetricsFromExecutions(ctx context.Context, client *ent.Client, since time.Time) (map[int]*channelMetricsResult, error) {
-	// Single query to get request count and last failure time for all channels
+	// Aggregate result columns (MAX(...)) lose their declared type in SQLite and
+	// are returned as TEXT, formatted according to the driver that wrote them
+	// (currently "2026-08-10 13:22:10.251164681 +0000 UTC"; older versions may
+	// carry a fixed 9-digit fraction ".000000000"). database/sql cannot scan such
+	// TEXT directly into time.Time, so read it as a string first and parse manually.
+	// When there are no failed records the column is NULL: ent's struct scan wraps
+	// string fields in a *string intermediary (dialect/sql/scan.go), so NULL is
+	// safely received as an empty string instead of a scan error.
+	// Note: the lexical MAX(...) equals the chronologically latest failure because
+	// every write path (ent + the SQLite driver) serializes times with the same
+	// "YYYY-MM-DD HH:MM:SS" prefix, regardless of the fractional part.
 	type queryResult struct {
-		ChannelID     int       `json:"channel_id"`
-		RequestCount  int64     `json:"request_count"`
-		LastFailureAt time.Time `json:"last_failure_at"`
+		ChannelID     int    `json:"channel_id"`
+		RequestCount  int64  `json:"request_count"`
+		LastFailureAt string `json:"last_failure_at"`
 	}
 
 	var results []queryResult
@@ -119,14 +144,44 @@ func (svc *ChannelService) loadAllChannelMetricsFromExecutions(ctx context.Conte
 			ChannelID:    r.ChannelID,
 			RequestCount: r.RequestCount,
 		}
-		if !r.LastFailureAt.IsZero() {
-			m.LastFailureAt = &r.LastFailureAt
+		if r.LastFailureAt != "" {
+			if t, parseErr := parseDBTime(r.LastFailureAt); parseErr == nil {
+				m.LastFailureAt = &t
+			} else {
+				log.Warn(ctx, "failed to parse last_failure_at",
+					log.String("value", r.LastFailureAt),
+					log.Cause(parseErr),
+				)
+			}
 		}
 
 		metricsMap[r.ChannelID] = m
 	}
 
 	return metricsMap, nil
+}
+
+// dbTimeFormats covers the time formats written by historical SQLite drivers:
+//   - time.Time.String() format (current modernc driver default, e.g. "2026-08-10 13:22:10.251164681 +0000 UTC")
+//   - the legacy fixed 9-digit fraction format (e.g. "2026-04-18 07:41:37.000000000 +0000 UTC",
+//     matched by the same layout's .999999999)
+//   - RFC3339 / RFC3339Nano as a fallback
+var dbTimeFormats = []string{
+	"2006-01-02 15:04:05.999999999 -0700 MST",
+	time.RFC3339Nano,
+	time.RFC3339,
+	"2006-01-02 15:04:05",
+}
+
+// parseDBTime parses a time stored as text in SQLite into time.Time.
+func parseDBTime(value string) (time.Time, error) {
+	for _, format := range dbTimeFormats {
+		if t, err := time.Parse(format, value); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unrecognized time format: %q", value)
 }
 
 // populateChannelMetrics populates channelMetrics from the aggregated result.
@@ -166,13 +221,29 @@ type AggregatedMetrics struct {
 
 	LastSelectedAt *time.Time
 	LastFailureAt  *time.Time
+
+	// StreamingFirstTokenLatencyEWMA is the EWMA of first-token latency for streaming requests.
+	StreamingFirstTokenLatencyEWMA float64
+	// StreamingTokensPerSecondEWMA is the EWMA of completion throughput for streaming requests.
+	StreamingTokensPerSecondEWMA float64
+	// StreamingSampleCount tracks streaming samples recorded for latency-aware scoring.
+	StreamingSampleCount int64
+	// NonStreamingLatencyEWMA is the EWMA of total request latency for non-streaming requests.
+	NonStreamingLatencyEWMA float64
+	// NonStreamingSampleCount tracks non-streaming samples recorded for latency-aware scoring.
+	NonStreamingSampleCount int64
 }
 
 func (m *AggregatedMetrics) Clone() *AggregatedMetrics {
 	return &AggregatedMetrics{
-		metricsRecord:  m.metricsRecord,
-		LastSelectedAt: m.LastSelectedAt,
-		LastFailureAt:  m.LastFailureAt,
+		metricsRecord:                  m.metricsRecord,
+		LastSelectedAt:                 m.LastSelectedAt,
+		LastFailureAt:                  m.LastFailureAt,
+		StreamingFirstTokenLatencyEWMA: m.StreamingFirstTokenLatencyEWMA,
+		StreamingTokensPerSecondEWMA:   m.StreamingTokensPerSecondEWMA,
+		StreamingSampleCount:           m.StreamingSampleCount,
+		NonStreamingLatencyEWMA:        m.NonStreamingLatencyEWMA,
+		NonStreamingSampleCount:        m.NonStreamingSampleCount,
 	}
 }
 
@@ -189,6 +260,8 @@ func newChannelMetrics(channelID int) *channelMetrics {
 	return cm
 }
 
+const latencyEWMAAlpha = 0.3
+
 // recordSuccess records a successful request to the channel metrics.
 func (cm *channelMetrics) recordSuccess(slot *timeSlotMetrics, perf *PerformanceRecord) {
 	slot.SuccessCount++
@@ -197,6 +270,38 @@ func (cm *channelMetrics) recordSuccess(slot *timeSlotMetrics, perf *Performance
 
 	// Reset consecutive failures on success
 	cm.aggregatedMetrics.ConsecutiveFailures = 0
+
+	firstTokenLatencyMs, requestLatencyMs, tokensPerSecond := perf.Calculate()
+
+	if perf.Stream && perf.FirstTokenTime != nil {
+		firstTokenLatency := float64(firstTokenLatencyMs)
+		if cm.aggregatedMetrics.StreamingSampleCount == 0 {
+			cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA = firstTokenLatency
+		} else {
+			cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA = latencyEWMAAlpha*firstTokenLatency + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.StreamingFirstTokenLatencyEWMA
+		}
+
+		if tokensPerSecond > 0 {
+			if cm.aggregatedMetrics.StreamingSampleCount == 0 {
+				cm.aggregatedMetrics.StreamingTokensPerSecondEWMA = tokensPerSecond
+			} else {
+				cm.aggregatedMetrics.StreamingTokensPerSecondEWMA = latencyEWMAAlpha*tokensPerSecond + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.StreamingTokensPerSecondEWMA
+			}
+		}
+
+		cm.aggregatedMetrics.StreamingSampleCount++
+
+		return
+	}
+
+	latency := float64(requestLatencyMs)
+	if cm.aggregatedMetrics.NonStreamingSampleCount == 0 {
+		cm.aggregatedMetrics.NonStreamingLatencyEWMA = latency
+	} else {
+		cm.aggregatedMetrics.NonStreamingLatencyEWMA = latencyEWMAAlpha*latency + (1-latencyEWMAAlpha)*cm.aggregatedMetrics.NonStreamingLatencyEWMA
+	}
+
+	cm.aggregatedMetrics.NonStreamingSampleCount++
 }
 
 // recordFailure records a failed request to the channel metrics.
@@ -251,24 +356,35 @@ func (svc *ChannelService) RecordPerformance(ctx context.Context, perf *Performa
 		if perf.APIKey != "" {
 			svc.apiKeyErrorCountsLock.Lock()
 
+			rulePrefix := perf.APIKey + ":rule:"
 			if svc.apiKeyErrorCounts[perf.ChannelID] != nil {
 				delete(svc.apiKeyErrorCounts[perf.ChannelID], perf.APIKey)
+				for key := range svc.apiKeyErrorCounts[perf.ChannelID] {
+					if strings.HasPrefix(key, rulePrefix) {
+						delete(svc.apiKeyErrorCounts[perf.ChannelID], key)
+					}
+				}
+			}
+			for key := range svc.apiKeyRuleActionsInFlight[perf.ChannelID] {
+				if strings.HasPrefix(key, rulePrefix) {
+					svc.apiKeyRuleActionsInFlight[perf.ChannelID][key] = true
+				}
 			}
 
 			svc.apiKeyErrorCountsLock.Unlock()
 		}
 	} else if !perf.Canceled {
-		policy := svc.SystemService.RetryPolicyOrDefault(ctx)
-
-		if policy.AutoDisableChannel.Enabled {
-			// Check API key error first if available.
-			if perf.APIKey != "" {
-				if svc.checkAndHandleAPIKeyError(ctx, perf, policy) {
-					return
-				}
-			} else {
-				if svc.checkAndHandleChannelError(ctx, perf, policy) {
-					return
+		matched := false
+		if perf.APIKey != "" {
+			matched, _ = svc.checkAndHandleChannelAPIKeyRules(ctx, perf)
+		}
+		if !matched {
+			policy := svc.SystemService.RetryPolicyOrDefault(ctx)
+			if statuses, ok := svc.resolveAutoDisableStatuses(policy); ok {
+				if perf.APIKey != "" {
+					svc.checkAndHandleAPIKeyError(ctx, perf, statuses)
+				} else {
+					svc.checkAndHandleChannelError(ctx, perf, statuses)
 				}
 			}
 		}
@@ -328,7 +444,7 @@ func (svc *ChannelService) RecordPerformance(ctx context.Context, perf *Performa
 			log.Int("channel_id", perf.ChannelID),
 			log.String("key_suffix", keySuffix), // Only log last 4 chars for security
 			log.Bool("success", perf.Success),
-			log.Any("error_code", perf.ErrorStatusCode),
+			log.Any("error_code", perf.ResponseStatusCode),
 		)
 	}
 }
@@ -377,12 +493,9 @@ func (svc *ChannelService) GetChannelMetrics(ctx context.Context, channelID int)
 		return &AggregatedMetrics{}, nil
 	}
 
-	// Return a copy of the aggregated metrics to avoid concurrent modification
-	return &AggregatedMetrics{
-		metricsRecord:  cm.aggregatedMetrics.metricsRecord,
-		LastSelectedAt: cm.aggregatedMetrics.LastSelectedAt,
-		LastFailureAt:  cm.aggregatedMetrics.LastFailureAt,
-	}, nil
+	// Return a full copy of the aggregated metrics to avoid concurrent modification
+	// while preserving all load-balancing signals, including latency EWMA.
+	return cm.aggregatedMetrics.Clone(), nil
 }
 
 // IncrementChannelSelection increments the request count for a channel at selection time.
@@ -421,26 +534,35 @@ func (svc *ChannelService) IncrementChannelSelection(channelID int) {
 }
 
 func deriveErrorMessage(errorCode int) string {
-	return http.StatusText(errorCode)
+	if text := http.StatusText(errorCode); text != "" {
+		return text
+	}
+
+	return fmt.Sprintf("Error %d", errorCode)
 }
 
 // PerformanceRecord contains performance metrics collected during request processing.
 type PerformanceRecord struct {
-	ChannelID        int
-	APIKey           string // API key used for the request (sensitive, do not log full value)
-	StartTime        time.Time
-	FirstTokenTime   *time.Time
-	EndTime          time.Time
-	Stream           bool
-	Success          bool
-	Canceled         bool
-	RequestCompleted bool
+	ChannelID          int
+	APIKey             string // API key used for the request (sensitive, do not log full value)
+	StartTime          time.Time
+	FirstTokenTime     *time.Time
+	ReasoningStartTime *time.Time
+	ReasoningEndTime   *time.Time
+	EndTime            time.Time
+	Stream             bool
+	Success            bool
+	Canceled           bool
+	RequestCompleted   bool
 
-	// If error status code is 0, it means the request is successful.
-	ErrorStatusCode int
+	// If response status code is 0, it means the request is successful.
+	ResponseStatusCode int
+	ErrorMessage       string
+	CompletionTokens   int64
 }
 
 // Calculate calculates performance metrics from collected data.
+// It enforces minimum latency to prevent extreme TPS calculations.
 func (m *PerformanceRecord) Calculate() (firstTokenLatencyMs int64, requestLatencyMs int64, tokensPerSecond float64) {
 	totalDuration := m.EndTime.Sub(m.StartTime)
 	requestLatencyMs = totalDuration.Milliseconds()
@@ -451,7 +573,30 @@ func (m *PerformanceRecord) Calculate() (firstTokenLatencyMs int64, requestLaten
 		firstTokenLatencyMs = firstTokenLatency.Milliseconds()
 	}
 
+	// Enforce minimum latency to prevent extreme TPS calculations
+	requestLatencyMs = ClampLatency(requestLatencyMs)
+	firstTokenLatencyMs = ClampLatency(firstTokenLatencyMs)
+
+	if m.CompletionTokens > 0 {
+		effectiveLatencyMs := requestLatencyMs
+		if m.Stream && m.FirstTokenTime != nil {
+			effectiveLatencyMs = requestLatencyMs - firstTokenLatencyMs
+			effectiveLatencyMs = ClampLatency(effectiveLatencyMs)
+		}
+
+		tokensPerSecond = float64(m.CompletionTokens) / (float64(effectiveLatencyMs) / 1000.0)
+	}
+
 	return firstTokenLatencyMs, requestLatencyMs, tokensPerSecond
+}
+
+// CalculateReasoningDurationMs calculates the reasoning duration.
+func (m *PerformanceRecord) CalculateReasoningDurationMs() int64 {
+	if m.ReasoningStartTime == nil || m.ReasoningEndTime == nil {
+		return 0
+	}
+	duration := m.ReasoningEndTime.Sub(*m.ReasoningStartTime)
+	return duration.Milliseconds()
 }
 
 // MarkSuccess marks the request as completed.
@@ -469,12 +614,34 @@ func (m *PerformanceRecord) MarkFirstToken() {
 	}
 }
 
+// MarkReasoningStart marks the reasoning start time.
+func (m *PerformanceRecord) MarkReasoningStart() {
+	if m.ReasoningStartTime == nil {
+		now := time.Now()
+		m.ReasoningStartTime = &now
+	}
+}
+
+// MarkReasoningEnd marks the reasoning end time.
+func (m *PerformanceRecord) MarkReasoningEnd() {
+	if m.ReasoningEndTime == nil {
+		now := time.Now()
+		m.ReasoningEndTime = &now
+	}
+}
+
 // MarkFailed marks the request as failed.
 func (m *PerformanceRecord) MarkFailed(errorCode int) {
 	m.Success = false
-	m.ErrorStatusCode = errorCode
+	m.ResponseStatusCode = errorCode
 	m.RequestCompleted = true
 	m.EndTime = time.Now()
+}
+
+// MarkFailedWithMessage records the provider error text used by keyword rules.
+func (m *PerformanceRecord) MarkFailedWithMessage(errorCode int, errorMessage string) {
+	m.MarkFailed(errorCode)
+	m.ErrorMessage = errorMessage
 }
 
 // MarkCanceled marks the request as canceled by context.

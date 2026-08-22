@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,12 +36,14 @@ func (t *OutboundTransformer) buildVideoGenerationAPIRequest(ctx context.Context
 
 	// Seedance does not accept size; map common sizes to ratio+resolution if needed.
 	ratio := strings.TrimSpace(video.Ratio)
+
 	resolution := strings.TrimSpace(video.Resolution)
 	if ratio == "" && resolution == "" && strings.TrimSpace(video.Size) != "" {
 		r, res, ok := inferSeedanceRatioResolution(video.Size)
 		if !ok {
 			return nil, fmt.Errorf("%w: size %q cannot be mapped to ratio/resolution, please set ratio and resolution", transformer.ErrInvalidRequest, video.Size)
 		}
+
 		ratio, resolution = r, res
 	}
 
@@ -50,35 +53,47 @@ func (t *OutboundTransformer) buildVideoGenerationAPIRequest(ctx context.Context
 	}
 
 	if video.Duration != nil {
-		reqBody["duration"] = *video.Duration
+		if d, err := strconv.ParseFloat(strings.TrimSpace(*video.Duration), 64); err == nil {
+			reqBody["duration"] = int64(math.Round(d))
+		}
 	}
+
 	if ratio != "" {
 		reqBody["ratio"] = ratio
 	}
+
 	if resolution != "" {
 		reqBody["resolution"] = resolution
 	}
+
 	if video.Frames != nil {
 		reqBody["frames"] = *video.Frames
 	}
+
 	if video.Seed != nil {
 		reqBody["seed"] = *video.Seed
 	}
+
 	if video.GenerateAudio != nil {
 		reqBody["generate_audio"] = *video.GenerateAudio
 	}
+
 	if video.CameraFixed != nil {
 		reqBody["camera_fixed"] = *video.CameraFixed
 	}
+
 	if video.Watermark != nil {
 		reqBody["watermark"] = *video.Watermark
 	}
+
 	if video.Draft != nil {
 		reqBody["draft"] = *video.Draft
 	}
+
 	if strings.TrimSpace(video.ServiceTier) != "" {
 		reqBody["service_tier"] = video.ServiceTier
 	}
+
 	if video.ExecutionExpiresAfter != nil {
 		reqBody["execution_expires_after"] = *video.ExecutionExpiresAfter
 	}
@@ -114,6 +129,7 @@ func (t *OutboundTransformer) buildVideoGenerationAPIRequest(ctx context.Context
 	if req.TransformerMetadata == nil {
 		req.TransformerMetadata = map[string]any{}
 	}
+
 	req.TransformerMetadata["model"] = llmReq.Model
 
 	return req, nil
@@ -145,6 +161,7 @@ func inferSeedanceRatioResolution(size string) (string, string, bool) {
 
 func parseSize(size string) (int, int, bool) {
 	size = strings.TrimSpace(strings.ToLower(size))
+
 	before, after, ok := strings.Cut(size, "x")
 	if !ok {
 		return 0, 0, false
@@ -154,6 +171,7 @@ func parseSize(size string) (int, int, bool) {
 	if err != nil || w <= 0 {
 		return 0, 0, false
 	}
+
 	h, err := strconv.Atoi(strings.TrimSpace(after))
 	if err != nil || h <= 0 {
 		return 0, 0, false
@@ -229,6 +247,7 @@ func (t *OutboundTransformer) ParseGetVideoTaskResponse(ctx context.Context, htt
 	}
 
 	var completedAt int64
+
 	if status == "succeeded" || status == "failed" {
 		if resp.UpdatedAt != 0 {
 			completedAt = resp.UpdatedAt
@@ -238,16 +257,20 @@ func (t *OutboundTransformer) ParseGetVideoTaskResponse(ctx context.Context, htt
 	}
 
 	v := &llm.VideoResponse{
-		ID:         resp.ID,
-		Status:     status,
-		Model:      resp.Model,
-		CreatedAt:  resp.CreatedAt,
+		ID:          resp.ID,
+		Status:      status,
+		Model:       resp.Model,
+		CreatedAt:   resp.CreatedAt,
 		CompletedAt: completedAt,
-		Ratio:      resp.Ratio,
-		Resolution: resp.Resolution,
-		Duration:   resp.Duration,
-		FPS:        resp.FramesPerSecond,
-		Seed:       resp.Seed,
+		Ratio:       resp.Ratio,
+		Resolution:  resp.Resolution,
+		FPS:         resp.FramesPerSecond,
+		Seed:        resp.Seed,
+	}
+
+	if resp.Duration != nil {
+		d := strconv.FormatInt(*resp.Duration, 10)
+		v.Duration = &d
 	}
 
 	if resp.Content != nil {
@@ -291,39 +314,6 @@ func (t *OutboundTransformer) BuildDeleteVideoTaskRequest(ctx context.Context, p
 	}, nil
 }
 
-func (t *OutboundTransformer) TransformResponse(ctx context.Context, httpResp *httpclient.Response) (*llm.Response, error) {
-	// Delegate to wrapped OpenAI transformer for non-video requests.
-	if httpResp == nil || httpResp.Request == nil || httpResp.Request.RequestType != llm.RequestTypeVideo.String() {
-		return t.Outbound.TransformResponse(ctx, httpResp)
-	}
-
-	// Video create returns {id}.
-	var resp seedanceCreateResponse
-	if err := json.Unmarshal(httpResp.Body, &resp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal seedance create response: %w", err)
-	}
-
-	if strings.TrimSpace(resp.ID) == "" {
-		return nil, fmt.Errorf("%w: missing id in seedance create response", transformer.ErrInvalidResponse)
-	}
-
-	return &llm.Response{
-		ID:          resp.ID, // provider task id for persistence
-		Object:      "video.create",
-		Created:     time.Now().Unix(),
-		Model:       llmReqModelOrFallback(httpResp),
-		RequestType: llm.RequestTypeVideo,
-		APIFormat:   llm.APIFormatSeedanceVideo,
-		Choices:     []llm.Choice{},
-		Video: &llm.VideoResponse{
-			ID:        resp.ID,
-			Status:    "queued",
-			Model:     llmReqModelOrFallback(httpResp),
-			CreatedAt: time.Now().Unix(),
-		},
-	}, nil
-}
-
 func llmReqModelOrFallback(httpResp *httpclient.Response) string {
 	if httpResp != nil && httpResp.Request != nil && httpResp.Request.TransformerMetadata != nil {
 		if m, ok := httpResp.Request.TransformerMetadata["model"].(string); ok && m != "" {
@@ -334,6 +324,4 @@ func llmReqModelOrFallback(httpResp *httpclient.Response) string {
 	return ""
 }
 
-var (
-	_ transformer.VideoTaskOutbound     = (*OutboundTransformer)(nil)
-)
+var _ transformer.VideoTaskOutbound = (*OutboundTransformer)(nil)

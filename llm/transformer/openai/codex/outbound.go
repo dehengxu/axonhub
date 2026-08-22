@@ -2,14 +2,19 @@ package codex
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
 
 	"github.com/looplj/axonhub/llm"
+	"github.com/looplj/axonhub/llm/auth"
 	"github.com/looplj/axonhub/llm/httpclient"
 	"github.com/looplj/axonhub/llm/oauth"
 	"github.com/looplj/axonhub/llm/pipeline"
@@ -24,35 +29,37 @@ const (
 	codexAPIURL  = "https://chatgpt.com/backend-api/codex/responses"
 )
 
-var codexHeaders = [][]string{
-	{"Accept", "text/event-stream"},
-	{"Connection", "Keep-Alive"},
-	{"Openai-Beta", "responses=experimental"},
-	{"Originator", "codex_cli_rs"},
-}
-
 // OutboundTransformer implements transformer.Outbound for Codex proxy.
 // It always talks to the Codex Responses upstream (SSE only) and adapts requests accordingly.
 //
-// It also implements pipeline.ChannelCustomizedExecutor to support non-streaming callers:
-// the executor will transparently perform an SSE request and aggregate chunks.
-//
 //nolint:containedctx // It is used as a transformer.
 type OutboundTransformer struct {
-	tokens oauth.TokenGetter
+	tokens    oauth.TokenGetter
+	transport string
 
 	// reuse existing Responses outbound for payload building.
 	responsesOutbound *responses.OutboundTransformer
+
+	executorMu         sync.Mutex
+	webSocketExecutors map[pipeline.Executor]*responses.WebSocketExecutor
 }
 
 var (
 	_ transformer.Outbound               = (*OutboundTransformer)(nil)
+	_ transformer.PassThroughBodyPolicy  = (*OutboundTransformer)(nil)
 	_ pipeline.ChannelCustomizedExecutor = (*OutboundTransformer)(nil)
 )
+
+var responsesBlockedPassThroughFields = []string{
+	"max_output_tokens",
+	"max_completion_tokens",
+	"max_tokens",
+}
 
 type Params struct {
 	TokenProvider oauth.TokenGetter
 	BaseURL       string
+	Transport     string
 }
 
 func NewOutboundTransformer(params Params) (*OutboundTransformer, error) {
@@ -68,19 +75,46 @@ func NewOutboundTransformer(params Params) (*OutboundTransformer, error) {
 
 	// The underlying responses outbound requires baseURL/apiKey. We only need its request body logic.
 	// Use a dummy config and then override URL/auth.
-	ro, err := responses.NewOutboundTransformer(baseURL, "dummy")
+	ro, err := responses.NewOutboundTransformerWithConfig(&responses.Config{
+		BaseURL:        baseURL,
+		APIKeyProvider: auth.NewStaticKeyProvider("dummy"),
+		Transport:      params.Transport,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &OutboundTransformer{
 		tokens:            params.TokenProvider,
+		transport:         params.Transport,
 		responsesOutbound: ro,
 	}, nil
 }
 
 func (t *OutboundTransformer) APIFormat() llm.APIFormat {
 	return llm.APIFormatOpenAIResponse
+}
+
+func (t *OutboundTransformer) TokenProvider() oauth.TokenGetter {
+	if t == nil {
+		return nil
+	}
+
+	return t.tokens
+}
+
+func (t *OutboundTransformer) AllowPassThroughBody(_ context.Context, llmReq *llm.Request, _ *httpclient.Request) bool {
+	if llmReq == nil || llmReq.APIFormat != llm.APIFormatOpenAIResponse || llmReq.RawRequest == nil {
+		return true
+	}
+
+	for _, field := range responsesBlockedPassThroughFields {
+		if gjson.GetBytes(llmReq.RawRequest.Body, field).Exists() {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (t *OutboundTransformer) TransformError(ctx context.Context, rawErr *httpclient.Error) *llm.ResponseError {
@@ -92,32 +126,32 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 		return nil, errors.New("request is nil")
 	}
 
-	rawUA := ""
-	keepClientUA := false
-	rawVersion := ""
-	keepClientVersion := false
 	rawSessionID := ""
+	rawOriginator := ""
+	rawUserAgent := ""
+	rawTurnMetadata := ""
+
+	var rawHeaders http.Header
 
 	if llmReq.RawRequest != nil && llmReq.RawRequest.Headers != nil {
-		rawUA = llmReq.RawRequest.Headers.Get("User-Agent")
-		keepClientUA = isCodexCLIUserAgent(rawUA)
-		rawVersion = llmReq.RawRequest.Headers.Get("Version")
-		keepClientVersion = keepClientUA && isCodexCLIVersion(rawVersion)
-		rawSessionID = llmReq.RawRequest.Headers.Get("Session_id")
-
-		for _, header := range codexHeaders {
-			llmReq.RawRequest.Headers.Del(header[0])
+		rawHeaders = llmReq.RawRequest.Headers
+		rawSessionID = llmReq.RawRequest.Headers.Get(SessionHeader)
+		if rawSessionID == "" {
+			rawSessionID = llmReq.RawRequest.Headers.Get(SessionHeaderHyphen)
 		}
+		// Remove underscore variant to prevent it from leaking upstream via MergeInboundRequest.
+		llmReq.RawRequest.Headers.Del(SessionHeader)
+		rawOriginator = llmReq.RawRequest.Headers.Get("Originator")
+		rawUserAgent = llmReq.RawRequest.Headers.Get("User-Agent")
+		rawTurnMetadata = llmReq.RawRequest.Headers.Get(TurnMetadataHeader)
 
-		llmReq.RawRequest.Headers.Del("Conversation_id")
-		llmReq.RawRequest.Headers.Del("Chatgpt-Account-Id")
-
-		if !keepClientVersion {
-			llmReq.RawRequest.Headers.Del("Version")
-		}
-
-		if !keepClientUA {
-			llmReq.RawRequest.Headers.Del("User-Agent")
+		// Non-Codex inbound clients omit the Responses Lite signal. Fabricate it
+		// so the Codex upstream sees the same protocol shape as a real Codex
+		// client. This must be set on the raw request before the underlying
+		// Responses outbound runs: it reads this header to emit an explicit
+		// parallel_tool_calls=false body, matching what real Codex sends.
+		if strings.TrimSpace(rawHeaders.Get(ResponsesLiteHeader)) == "" {
+			rawHeaders.Set(ResponsesLiteHeader, "true")
 		}
 	}
 
@@ -131,139 +165,254 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 
 	// Clone request so we do not mutate upstream pipeline state.
 	reqCopy := *llmReq
+	originalRequestType := reqCopy.RequestType
+	originalAPIFormat := reqCopy.APIFormat
+	isImageRequest := originalRequestType == llm.RequestTypeImage
 
 	// Codex expects Responses API payload with some strict rules.
-	// Always enable stream and disable store.
-	reqCopy.Stream = lo.ToPtr(true)
+	// Always enable stream except for compact requests and disable store.
+	//nolint: exhaustive // We only care about compact requests.
+	switch reqCopy.RequestType {
+	case llm.RequestTypeCompact:
+		reqCopy.Stream = lo.ToPtr(false)
+	default:
+		reqCopy.Stream = lo.ToPtr(true)
+	}
+
 	reqCopy.Store = lo.ToPtr(false)
 
 	// Codex recommends parallel tool calls.
 	reqCopy.ParallelToolCalls = lo.ToPtr(true)
 
-	// Ask for encrypted reasoning content so the downstream can surface reasoning blocks.
 	if reqCopy.TransformerMetadata == nil {
 		reqCopy.TransformerMetadata = map[string]any{}
 	}
 
-	if _, ok := reqCopy.TransformerMetadata["include"]; !ok {
-		reqCopy.TransformerMetadata["include"] = []string{"reasoning.encrypted_content"}
+	if isImageRequest {
+		reqCopy.Model = defaultImageMainModel
+		reqCopy.TransformerMetadata[responses.ImageGenerationToolModelMetadataKey] = llmReq.Model
 	}
 
-	if reqCopy.ReasoningSummary == nil || *reqCopy.ReasoningSummary == "" {
-		// Enable reasoning summary for Codex CLI requests.
-		reqCopy.ReasoningSummary = lo.ToPtr("auto")
+	// Ask for encrypted reasoning content so the downstream can surface reasoning blocks.
+	if !isImageRequest {
+		if _, ok := reqCopy.TransformerMetadata["include"]; !ok {
+			reqCopy.TransformerMetadata["include"] = []string{"reasoning.encrypted_content"}
+		}
+
+		if reqCopy.ReasoningSummary == nil || *reqCopy.ReasoningSummary == "" {
+			// Enable reasoning summary for Codex CLI requests.
+			reqCopy.ReasoningSummary = lo.ToPtr("auto")
+		}
+
+		// Responses Lite (signaled on the raw request above) rejects requests
+		// whose reasoning context is not "all_turns"; clients that never sent a
+		// reasoning block would otherwise fail upstream with HTTP 400. Only fill
+		// in a missing context — never override what the client explicitly sent.
+		if providerExt := reqCopy.ProviderExtensions; providerExt == nil || providerExt.OpenAIResponses == nil ||
+			providerExt.OpenAIResponses.Request == nil || providerExt.OpenAIResponses.Request.ReasoningContext == "" {
+			oaiExt := llm.EnsureOpenAIResponsesProviderExtensions(&reqCopy)
+			if oaiExt != nil {
+				if oaiExt.Request == nil {
+					oaiExt.Request = &llm.OpenAIResponsesRequestExtensions{ReasoningContext: "all_turns"}
+				} else {
+					oaiExt.Request.ReasoningContext = "all_turns"
+				}
+			}
+		}
 	}
 
 	// Codex Responses rejects token limit fields, so strip them out.
 	reqCopy.MaxCompletionTokens = nil
 	reqCopy.MaxTokens = nil
 
-	// Strip sampling params and tier.
-	reqCopy.ServiceTier = nil
-	reqCopy.Temperature = nil
-	reqCopy.TopP = nil
 	reqCopy.Metadata = nil
 
-	// Codex upstream validates the raw `instructions` string more strictly.
-	// If incoming request is not already a Codex CLI prompt, force the Codex CLI instructions.
-	if !isCodexRequest(reqCopy.Messages) {
-		reqCopy.Messages = appendCodexSystemInstruction(reqCopy.Messages)
-	}
+	reqCopy.TransformOptions.ArrayInputs = lo.ToPtr(true)
 
 	hreq, err := t.responsesOutbound.TransformRequest(ctx, &reqCopy)
 	if err != nil {
 		return nil, err
 	}
 
-	// Codex upstream expects SSE.
-	for _, header := range codexHeaders {
-		hreq.Headers.Set(header[0], header[1])
+	if isImageRequest {
+		hreq.RequestType = originalRequestType.String()
+		hreq.APIFormat = originalAPIFormat.String()
 	}
 
 	// Overwrite auth.
 	hreq.Auth = &httpclient.AuthConfig{Type: httpclient.AuthTypeBearer, APIKey: creds.AccessToken}
-
-	// Keep Codex-specific headers.
-	if keepClientUA && rawUA != "" {
-		hreq.Headers.Set("User-Agent", rawUA)
+	// Compact requests expect JSON response, others expect SSE stream.
+	if llmReq.RequestType == llm.RequestTypeCompact {
+		hreq.Headers.Set("Accept", "application/json")
 	} else {
-		hreq.Headers.Set("User-Agent", UserAgent)
+		hreq.Headers.Set("Accept", "text/event-stream")
 	}
 
-	if keepClientVersion && rawVersion != "" {
-		hreq.Headers.Set("Version", rawVersion)
+	hreq.Headers.Del("User-Agent")
+
+	if rawOriginator != "" {
+		hreq.Headers.Set("Originator", rawOriginator)
 	} else {
-		hreq.Headers.Set("Version", codexDefaultVersion)
+		hreq.Headers.Set("Originator", AxonHubOriginator)
+	}
+
+	if rawUserAgent != "" {
+		hreq.Headers.Set("User-Agent", rawUserAgent)
+	}
+
+	for _, header := range PassthroughHeaders {
+		if value := rawHeaders.Get(header); value != "" {
+			hreq.Headers.Set(header, value)
+		}
 	}
 
 	if rawSessionID != "" {
-		hreq.Headers.Set("Session_id", rawSessionID)
-	} else if hreq.Headers.Get("Session_id") == "" {
+		hreq.Headers.Set(SessionHeaderHyphen, rawSessionID)
+	} else if sessionID := ExtractSessionIDFromTurnMetadata(rawTurnMetadata); sessionID != "" {
+		hreq.Headers.Set(SessionHeaderHyphen, sessionID)
+	} else if hreq.Headers.Get(SessionHeaderHyphen) == "" {
 		if sessionID, ok := shared.GetSessionID(ctx); ok {
-			hreq.Headers.Set("Session_id", sessionID)
+			hreq.Headers.Set(SessionHeaderHyphen, sessionID)
 		} else {
-			hreq.Headers.Set("Session_id", uuid.NewString())
+			hreq.Headers.Set(SessionHeaderHyphen, uuid.NewString())
 		}
+	}
+
+	// Fabricate the remaining Codex identity headers for non-Codex inbound
+	// clients so the upstream always sees a complete Codex session shape.
+	sessionID := hreq.Headers.Get(SessionHeaderHyphen)
+	windowID := sessionID + ":0"
+	if hreq.Headers.Get(ThreadIDHeader) == "" {
+		// Codex clients send Thread-Id equal to Session-Id (both identify the
+		// conversation/thread); keep thread-scoped upstream behavior (e.g.
+		// prompt caching) consistent for non-Codex clients too.
+		hreq.Headers.Set(ThreadIDHeader, sessionID)
+	}
+	if hreq.Headers.Get(WindowIDHeader) == "" {
+		hreq.Headers.Set(WindowIDHeader, windowID)
+	}
+	if hreq.Headers.Get(TurnMetadataHeader) == "" {
+		installationID := ""
+		if accountID != "" {
+			// Deterministic per-account installation id derived from the
+			// ChatGPT account id.
+			installationID = uuid.NewSHA1(uuid.NameSpaceOID, []byte(accountID)).String()
+		}
+		turnMetadata, _ := json.Marshal(TurnMetadata{
+			InstallationID:      installationID,
+			SessionID:           sessionID,
+			ThreadID:            sessionID,
+			TurnID:              uuid.NewString(),
+			WindowID:            windowID,
+			RequestKind:         "turn",
+			ThreadSource:        "user",
+			Sandbox:             "none",
+			TurnStartedAtUnixMS: turnStartedAtUnixMS(sessionID),
+		})
+		hreq.Headers.Set(TurnMetadataHeader, string(turnMetadata))
+	}
+	if hreq.Headers.Get(ClientRequestIDHeader) == "" {
+		hreq.Headers.Set(ClientRequestIDHeader, uuid.NewString())
+	}
+	if hreq.Headers.Get(BetaFeaturesHeader) == "" {
+		hreq.Headers.Set(BetaFeaturesHeader, fabricatedBetaFeatures)
 	}
 
 	if accountID != "" {
 		hreq.Headers.Set("Chatgpt-Account-Id", accountID)
 	}
 
+	if hreq.Headers.Get("Conversation_id") == "" {
+		if sessionID := hreq.Headers.Get(SessionHeaderHyphen); sessionID != "" {
+			hreq.Headers.Set("Conversation_id", sessionID)
+		}
+	}
+
+	if hreq.Headers.Get("Version") == "" {
+		hreq.Headers.Set("Version", codexDefaultVersion)
+	}
+
 	return hreq, nil
 }
 
-func appendCodexSystemInstruction(msgs []llm.Message) []llm.Message {
-	systemMsg := llm.Message{
-		Role: "system",
-		Content: llm.MessageContent{
-			Content: lo.ToPtr(CodexInstructions),
-		},
-	}
-
-	return append([]llm.Message{systemMsg}, msgs...)
-}
-
-func isCodexRequest(msgs []llm.Message) bool {
-	for _, msg := range msgs {
-		if msg.Role != "system" && msg.Role != "developer" {
-			continue
-		}
-
-		if msg.Content.Content != nil {
-			content := *msg.Content.Content
-			if strings.HasPrefix(content, CodexInstructionPrefix) || strings.HasPrefix(content, "You are Codex") {
-				return true
-			}
-		} else if len(msg.Content.MultipleContent) > 0 {
-			for _, item := range msg.Content.MultipleContent {
-				if item.Text != nil && (strings.HasPrefix(*item.Text, CodexInstructionPrefix) || strings.HasPrefix(*item.Text, "You are Codex")) {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
 func (t *OutboundTransformer) TransformResponse(ctx context.Context, httpResp *httpclient.Response) (*llm.Response, error) {
-	// Codex upstream returns Responses API response.
+	if httpResp != nil && httpResp.Request != nil && httpResp.Request.RequestType == llm.RequestTypeImage.String() {
+		if httpResp.StatusCode >= 400 {
+			return nil, fmt.Errorf("codex image HTTP error %d: %s", httpResp.StatusCode, httpResp.Body)
+		}
+
+		var upstream responses.Response
+		if err := json.Unmarshal(httpResp.Body, &upstream); err != nil {
+			return nil, err
+		}
+
+		metadata := map[string]any{}
+		if httpResp.Request != nil && httpResp.Request.TransformerMetadata != nil {
+			metadata = httpResp.Request.TransformerMetadata
+		}
+
+		return responses.BuildImageResponse(&upstream, metadata)
+	}
+
 	return t.responsesOutbound.TransformResponse(ctx, httpResp)
 }
 
-func (t *OutboundTransformer) TransformStream(ctx context.Context, streamIn streams.Stream[*httpclient.StreamEvent]) (streams.Stream[*llm.Response], error) {
-	return t.responsesOutbound.TransformStream(ctx, streamIn)
+func (t *OutboundTransformer) TransformStream(ctx context.Context, req *httpclient.Request, streamIn streams.Stream[*httpclient.StreamEvent]) (streams.Stream[*llm.Response], error) {
+	return t.responsesOutbound.TransformStream(ctx, req, streamIn)
 }
 
-func (t *OutboundTransformer) AggregateStreamChunks(ctx context.Context, chunks []*httpclient.StreamEvent) ([]byte, llm.ResponseMeta, error) {
-	return t.responsesOutbound.AggregateStreamChunks(ctx, chunks)
+func (t *OutboundTransformer) AggregateStreamChunks(ctx context.Context, req *httpclient.Request, chunks []*httpclient.StreamEvent) ([]byte, llm.ResponseMeta, error) {
+	return t.responsesOutbound.AggregateStreamChunks(ctx, req, chunks)
 }
 
 func (t *OutboundTransformer) CustomizeExecutor(executor pipeline.Executor) pipeline.Executor {
+	inner := executor
+	if t != nil && t.transport == responses.TransportWebSocket {
+		inner = t.customizeWebSocketExecutor(inner)
+	}
+
 	return &codexExecutor{
-		inner:       executor,
+		inner:       inner,
 		transformer: t,
+	}
+}
+
+func (t *OutboundTransformer) customizeWebSocketExecutor(executor pipeline.Executor) pipeline.Executor {
+	if !responses.ExecutorComparable(executor) {
+		return responses.NewWebSocketExecutor(executor)
+	}
+
+	t.executorMu.Lock()
+	defer t.executorMu.Unlock()
+
+	if t.webSocketExecutors == nil {
+		t.webSocketExecutors = make(map[pipeline.Executor]*responses.WebSocketExecutor)
+	}
+	if cached, ok := t.webSocketExecutors[executor]; ok {
+		return cached
+	}
+
+	webSocketExecutor := responses.NewWebSocketExecutor(executor)
+	t.webSocketExecutors[executor] = webSocketExecutor
+
+	return webSocketExecutor
+}
+
+func (t *OutboundTransformer) Stop() {
+	if t == nil {
+		return
+	}
+
+	t.executorMu.Lock()
+	executors := make([]*responses.WebSocketExecutor, 0, len(t.webSocketExecutors))
+	for _, executor := range t.webSocketExecutors {
+		executors = append(executors, executor)
+	}
+	t.webSocketExecutors = nil
+	t.executorMu.Unlock()
+
+	for _, executor := range executors {
+		_ = executor.Close()
 	}
 }
 
@@ -273,21 +422,8 @@ type codexExecutor struct {
 }
 
 func (e *codexExecutor) Do(ctx context.Context, request *httpclient.Request) (*httpclient.Response, error) {
-	// Ensure Codex-required headers are not overridden by inbound headers.
-	for _, header := range codexHeaders {
-		request.Headers.Set(header[0], header[1])
-	}
-
-	if !isCodexCLIUserAgent(request.Headers.Get("User-Agent")) {
-		request.Headers.Set("User-Agent", UserAgent)
-	}
-
-	if request.Headers.Get("Conversation_id") == "" {
-		request.Headers.Set("Conversation_id", request.Headers.Get("Session_id"))
-	}
-
-	if !isCodexCLIUserAgent(request.Headers.Get("User-Agent")) || !isCodexCLIVersion(request.Headers.Get("Version")) {
-		request.Headers.Set("Version", codexDefaultVersion)
+	if request.RequestType == string(llm.RequestTypeCompact) {
+		return e.inner.Do(ctx, request)
 	}
 
 	stream, err := e.inner.DoStream(ctx, request)
@@ -306,16 +442,22 @@ func (e *codexExecutor) Do(ctx context.Context, request *httpclient.Request) (*h
 		if ev == nil {
 			continue
 		}
-		// Copy data because decoder may reuse buffers.
-		copied := &httpclient.StreamEvent{Type: ev.Type, LastEventID: ev.LastEventID, Data: append([]byte(nil), ev.Data...)}
-		chunks = append(chunks, copied)
+
+		chunks = append(chunks, &httpclient.StreamEvent{
+			Type:        ev.Type,
+			LastEventID: ev.LastEventID,
+			Data:        append([]byte(nil), ev.Data...),
+		})
 	}
 
 	if err := stream.Err(); err != nil {
 		return nil, err
 	}
+	if err := responses.TopLevelWebSocketError(chunks); err != nil {
+		return nil, err
+	}
 
-	body, _, err := e.transformer.AggregateStreamChunks(ctx, chunks)
+	body, _, err := e.transformer.AggregateStreamChunks(ctx, request, chunks)
 	if err != nil {
 		return nil, err
 	}
@@ -331,26 +473,5 @@ func (e *codexExecutor) Do(ctx context.Context, request *httpclient.Request) (*h
 }
 
 func (e *codexExecutor) DoStream(ctx context.Context, request *httpclient.Request) (streams.Stream[*httpclient.StreamEvent], error) {
-	// Ensure Codex-required headers are not overridden by inbound headers.
-	for _, header := range codexHeaders {
-		request.Headers.Set(header[0], header[1])
-	}
-
-	if !isCodexCLIUserAgent(request.Headers.Get("User-Agent")) {
-		request.Headers.Set("User-Agent", UserAgent)
-	}
-
-	if request.Headers.Get("Conversation_id") == "" {
-		request.Headers.Set("Conversation_id", request.Headers.Get("Session_id"))
-	}
-
-	if !isCodexCLIUserAgent(request.Headers.Get("User-Agent")) || !isCodexCLIVersion(request.Headers.Get("Version")) {
-		request.Headers.Set("Version", codexDefaultVersion)
-	}
-
 	return e.inner.DoStream(ctx, request)
-}
-
-func isCodexCLIUserAgent(value string) bool {
-	return strings.HasPrefix(value, "codex_cli_rs/")
 }

@@ -1,13 +1,10 @@
 package claudecode
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
@@ -16,62 +13,18 @@ import (
 
 const claudeCodeBillingCCHMetadataKey = "claudecode_billing_cch"
 
-// userIDPattern matches Claude Code format: user_[64-hex]_account__session_[uuid-v4].
-var userIDPattern = regexp.MustCompile(`^user_[a-fA-F0-9]{64}_account__session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-// generateFakeUserID generates a fake user ID in Claude Code format.
-// Format: user_[64-hex-chars]_account__session_[UUID-v4].
-func generateFakeUserID() string {
-	hexBytes := make([]byte, 32)
-	_, _ = rand.Read(hexBytes)
-	hexPart := hex.EncodeToString(hexBytes)
-	uuidPart := uuid.New().String()
-
-	return "user_" + hexPart + "_account__session_" + uuidPart
-}
-
-// isValidUserID checks if a user ID matches Claude Code format.
-func isValidUserID(userID string) bool {
-	return userIDPattern.MatchString(userID)
-}
-
 // injectFakeUserIDStructured generates and injects a fake user ID into the request metadata.
-func injectFakeUserIDStructured(llmReq *llm.Request) *llm.Request {
+func injectFakeUserIDStructured(ctx context.Context, llmReq llm.Request, accountIdentity string) llm.Request {
 	if llmReq.Metadata == nil {
 		llmReq.Metadata = make(map[string]string)
 	}
 
 	existingUserID := llmReq.Metadata["user_id"]
-	if existingUserID == "" || !isValidUserID(existingUserID) {
-		llmReq.Metadata["user_id"] = generateFakeUserID()
+	if existingUserID == "" || ParseUserID(existingUserID) == nil {
+		llmReq.Metadata["user_id"] = GenerateUserID(ctx, accountIdentity)
 	}
 
 	return llmReq
-}
-
-// extractAndRemoveBetas extracts the "betas" array from the body and removes it.
-// Returns the extracted betas as a string slice and the modified body.
-func extractAndRemoveBetas(body []byte) ([]string, []byte) {
-	betasResult := gjson.GetBytes(body, "betas")
-	if !betasResult.Exists() {
-		return nil, body
-	}
-
-	var betas []string
-
-	if betasResult.IsArray() {
-		for _, item := range betasResult.Array() {
-			if s := strings.TrimSpace(item.String()); s != "" {
-				betas = append(betas, s)
-			}
-		}
-	} else if s := strings.TrimSpace(betasResult.String()); s != "" {
-		betas = append(betas, s)
-	}
-
-	body, _ = sjson.DeleteBytes(body, "betas")
-
-	return betas, body
 }
 
 // disableThinkingIfToolChoiceForcedStructured clears ReasoningEffort when tool_choice forces tool use.
@@ -165,12 +118,13 @@ func stripClaudeToolPrefixFromResponse(body []byte, prefix string) []byte {
 // mergeBetasIntoHeader merges beta features into the Anthropic-Beta header.
 func mergeBetasIntoHeader(baseBetas string, extraBetas []string) string {
 	var parts []string
+
 	existingSet := make(map[string]bool)
 
 	// Add existing betas if present
 	baseBetas = strings.TrimSpace(baseBetas)
 	if baseBetas != "" {
-		for _, b := range strings.Split(baseBetas, ",") {
+		for b := range strings.SplitSeq(baseBetas, ",") {
 			b = strings.TrimSpace(b)
 			if b != "" {
 				parts = append(parts, b)
@@ -225,6 +179,7 @@ func ensureBillingSystemMessageCCH(llmReq *llm.Request) *llm.Request {
 	}
 
 	cch := ""
+
 	if llmReq.TransformerMetadata != nil {
 		if v, ok := llmReq.TransformerMetadata[claudeCodeBillingCCHMetadataKey]; ok {
 			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
@@ -232,6 +187,7 @@ func ensureBillingSystemMessageCCH(llmReq *llm.Request) *llm.Request {
 			}
 		}
 	}
+
 	if cch == "" {
 		return llmReq
 	}
@@ -283,8 +239,8 @@ func ensureBillingHeaderCCHInText(text string, cch string) (string, bool) {
 		return text, false
 	}
 
-	parts := strings.Split(rest, ";")
-	for _, p := range parts {
+	parts := strings.SplitSeq(rest, ";")
+	for p := range parts {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
@@ -299,6 +255,7 @@ func ensureBillingHeaderCCHInText(text string, cch string) (string, bool) {
 	if !strings.HasSuffix(out, ";") {
 		out += ";"
 	}
+
 	out += " cch=" + strings.TrimSpace(cch) + ";"
 
 	return out, true

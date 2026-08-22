@@ -1,343 +1,239 @@
 # Channel Configuration Guide
 
-This guide explains how to configure AI provider channels in AxonHub. Channels are the bridge between your applications and AI model providers.
+This guide explains how to configure AI provider channels (like OpenAI, Anthropic, DeepSeek) in AxonHub.
 
-## Overview
+## What is a Channel?
 
-Each channel represents a connection to an AI provider (OpenAI, Anthropic, Gemini, etc.). Through channels, you can:
+A **channel** is AxonHub's connection to an AI provider. Think of it as a "provider connection line" — each channel connects to one AI service (like OpenAI, Claude, or DeepSeek).
 
+Through channels, you can:
 - Connect to multiple AI providers simultaneously
-- Configure model mappings and request parameter overrides
-- Enable/disable channels dynamically
-- Test connections before enabling
+- Set up model name conversion rules
+- Enable or disable providers
 - Configure multiple API Keys for load balancing
 
-## Channel Configuration
+## Where Channel Model Mapping Fits in the Request Flow
 
-### Basic Configuration
+Channel model mapping is the **last** step in a three-layer pipeline. For the full picture, see [Request Processing Guide](../getting-started/request-processing.md#core-concept-three-layers-of-model-settings).
 
-Configure AI provider channels in the management interface:
+In short: **API Key Profile renames → Model Association selects channel → Channel renames → Send upstream**
 
-```yaml
-# OpenAI channel example
-name: "openai"
-type: "openai"
-base_url: "https://api.openai.com/v1"
-credentials:
-  api_keys:
-    - "sk-your-openai-key-1"
-    - "sk-your-openai-key-2"
-    - "sk-your-openai-key-3"
-supported_models: ["gpt-5", "gpt-4o"]
-```
+## Creating a Channel
 
-### Configuration Fields
+### Basic Steps
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique channel identifier |
-| `type` | string | Yes | Provider type (openai, anthropic, gemini, etc.) |
-| `base_url` | string | Yes | API endpoint URL |
-| `credentials` | object | Yes | Authentication credentials (supports multiple API Keys) |
-| `supported_models` | array | Yes | List of models this channel supports |
-| `settings` | object | No | Advanced settings (mappings, overrides, etc.) |
-
-## Multiple API Key Configuration
-
-AxonHub supports configuring multiple API Keys for a single channel to achieve automatic load balancing and failover.
-
-### Configuration Method
-
-```yaml
-# Multiple API Key configuration example
-credentials:
-  api_keys:
-    - "sk-your-key-1"
-    - "sk-your-key-2"
-    - "sk-your-key-3"
-```
-
-### Load Balancing Strategy
-
-When multiple API Keys are configured, AxonHub uses the following strategies:
-
-| Scenario | Strategy | Description |
-| :--- | :--- | :--- |
-| With Trace ID | Consistent Hashing | Requests with the same Trace ID always use the same Key |
-| Without Trace ID | Random Selection | Randomly select from available Keys |
-
-### API Key Management
-
-#### Disabling API Key
-
-When an API Key encounters an error (such as quota exhausted, banned), the system will automatically or manually disable it:
-
-- Disabled Keys will no longer be used for new requests
-- The system will automatically switch to other available Keys
-- Disable information includes error code and reason
-
-#### Enabling API Key
-
-You can manually re-enable a previously disabled API Key:
-
-- Remove the Key from the disabled list
-- The Key will rejoin load balancing
-
-#### Deleting API Key
-
-You can completely delete an API Key that is no longer in use:
-
-- Delete from both the disabled list and credentials
-- At least one available API Key must be retained
-
-### Backward Compatibility
-
-AxonHub still supports single API Key configuration (legacy format), and the system will automatically handle compatibility:
-
-```yaml
-# Single API Key (legacy format, still supported)
-credentials:
-  api_key: "sk-your-single-key"
-
-# Equivalent to
-credentials:
-  api_keys:
-    - "sk-your-single-key"
-```
-
-## Testing Connection
-
-Before enabling a channel, test the connection to ensure credentials are correct:
-
-1. Navigate to **Channel Management** in the management interface
-2. Click the **Test** button next to your channel
-3. Wait for the test result
-4. If successful, proceed to enable the channel
-
-## Enabling a Channel
-
-After successful testing, enable the channel:
-
-1. Click the **Enable** button
-2. The channel status will change to **Active**
-3. The channel is now available for routing requests
-
-## Model Mappings
-
-When the requested model name differs from the upstream provider's supported names, you can use model mapping to automatically rewrite the model at the gateway side.
-
-### Use Cases
-
-- Map unsupported or legacy model IDs to available alternative models
-- Set fallback logic for multi-channel scenarios (different channels for different providers)
-- Simplify model names for your applications
-
-### Configuration
-
-```yaml
-# Example: map product-specific aliases to upstream models
-settings:
-  modelMappings:
-    - from: "gpt-4o-mini"
-      to: "gpt-4o"
-    - from: "claude-3-sonnet"
-      to: "claude-3.5-sonnet"
-```
-
-### Rules
-
-- AxonHub only accepts mappings to models already declared in `supported_models`
-- Mappings are applied in order; the first matching mapping is used
-- If no mapping matches, the original model name is used
-
-## Request Override
-
-Request Override allows you to enforce channel-specific default parameters or dynamically modify requests using templates. The following operation types are supported:
-
-| Operation Type | Description |
-| :--- | :--- |
-| `set` | Set field value |
-| `delete` | Delete field |
-| `rename` | Rename field |
-| `copy` | Copy field |
-
-### Request Body Override Example
-
-```json
-[
-  {
-    "op": "set",
-    "path": "temperature",
-    "value": "0.7"
-  },
-  {
-    "op": "set",
-    "path": "max_tokens",
-    "value": "2000"
-  },
-  {
-    "op": "delete",
-    "path": "frequency_penalty"
-  }
-]
-```
-
-### Request Header Override Example
-
-```json
-[
-  {
-    "op": "set",
-    "path": "X-Custom-Header",
-    "value": "{{.Model}}"
-  }
-]
-```
-
-For detailed information on how to use templates, conditional logic, and more advanced features, see the [Request Override Guide](request-override.md).
-
-## Best Practices
-
-1. **Test before enabling**: Always test connections before enabling channels
-2. **Use meaningful names**: Use descriptive channel names for easy identification
-3. **Configure multiple API Keys**: Configure multiple API Keys for production channels to improve availability
-4. **Monitor Key status**: Regularly check API Key usage and disabled status
-5. **Document mappings**: Keep track of model mappings for maintenance
-6. **Monitor usage**: Regularly review channel usage and performance
-7. **Backup credentials**: Store credentials securely and have backup plans
-
-## Troubleshooting
-
-### Connection Test Fails
-
-- Verify API key is correct and active
-- Check if the API endpoint is accessible
-- Ensure the account has sufficient credits/quota
-
-### Model Not Found
-
-- Verify the model is listed in `supported_models`
-- Check if model mappings are correctly configured
-- Confirm the model is available in the provider's catalog
-
-### Override Parameters Not Working
-
-- Ensure JSON is valid (use a JSON validator)
-- Check that field names match the provider's API specification
-- Verify nested fields use correct dot notation
-
-### API Key Frequently Disabled
-
-- Check if the API Key has sufficient quota
-- View the disable reason and error code
-- Consider increasing the number of API Keys to distribute load
-
-## Base URL Configuration
-
-### Overview
-
-`base_url` is a required field in channel configuration, used to specify the API endpoint address of the AI provider. AxonHub supports flexible URL configuration options to accommodate different deployment scenarios.
-
-### Default Base URLs
-
-Each channel type has a preset default Base URL that is automatically populated when you create a channel:
-
-| Channel Type | Default Base URL |
-|-------------|------------------|
-| openai | `https://api.openai.com/v1` |
-| anthropic | `https://api.anthropic.com` |
-| gemini | `https://generativelanguage.googleapis.com/v1beta` |
-| deepseek | `https://api.deepseek.com/v1` |
-| moonshot | `https://api.moonshot.cn/v1` |
-| ... | See configuration interface for other types |
-
-### Custom Base URL
-
-You can configure a custom Base URL to support:
-
-- **Third-party proxy services**: Access models through OpenAI/Anthropic-compatible proxy services
-- **Private deployments**: Connect to internally deployed AI services within your organization
-- **Multi-region deployments**: Use API endpoints from different regions
-
-### Special Suffixes
-
-AxonHub supports adding special suffixes to the end of the Base URL to control URL normalization behavior:
-
-#### `#` Suffix - Disable Automatic Version Appending
-
-Adding `#` at the end of the Base URL tells the system **not** to automatically append the API version:
-
-```yaml
-# Anthropic channel example - use raw URL without auto-appending /v1
-base_url: "https://custom-api.example.com/anthropic#"
-
-# Actual request URL: https://custom-api.example.com/anthropic/messages
-# Instead of: https://custom-api.example.com/anthropic/v1/messages
-```
-
-**Use Cases**:
-- Using custom proxy services where the URL path already includes version information
-- Providers using non-standard URL structures
-- Need full control over the request path
-
-#### `##` Suffix - Fully Raw Mode (OpenAI Format)
-
-Adding `##` at the end of the Base URL tells the system to:
-1. Disable automatic version appending
-2. Disable automatic endpoint appending (e.g., `/chat/completions`)
-
-```yaml
-# OpenAI channel example - fully raw mode
-base_url: "https://custom-gateway.example.com/api/v2##"
-
-# Actual request URL: https://custom-gateway.example.com/api/v2
-# Instead of: https://custom-gateway.example.com/api/v2/v1/chat/completions
-```
-
-**Use Cases**:
-- Using fully custom API gateways
-- Need precise control over the complete request URL
-- Compatible with special proxy or relay services
-
-### Automatic Version Appending Rules
-
-When not using `#` or `##` suffixes, the system automatically appends API versions based on channel type:
-
-| Channel Type | Automatically Appended Version |
-|-------------|-------------------------------|
-| openai, deepseek, moonshot, xai, etc. | `/v1` |
-| gemini | `/v1beta` |
-| doubao | `/v3` |
-| zai, zhipu | `/v4` |
-| anthropic | `/v1` |
-| anthropic_aws (Bedrock) | Not appended |
-| anthropic_gcp (Vertex) | Not appended |
+1. Go to AxonHub management interface → **Channel Management**
+2. Click **New Channel**
+3. Fill in basic information:
+   - **Name**: Give your channel a name (e.g., "OpenAI Main", "DeepSeek Backup")
+   - **Type**: Select provider type (OpenAI, Anthropic, DeepSeek, etc.)
+   - **Base URL**: API address (usually use the default)
+   - **API Key**: The key from your provider
 
 ### Configuration Examples
 
-```yaml
-# Standard configuration - use default behavior
-name: "openai-standard"
-type: "openai"
-base_url: "https://api.openai.com"
-# Actual request: https://api.openai.com/v1/chat/completions
+**OpenAI Channel:**
 
-# Disable version appending - Anthropic
-name: "anthropic-custom"
-type: "anthropic"
-base_url: "https://api.anthropic.com#"
-# Actual request: https://api.anthropic.com/messages
+| Field | Value |
+|-------|-------|
+| Name | OpenAI Main |
+| Type | openai |
+| Base URL | https://api.openai.com/v1 |
+| API Key | sk-your-openai-key |
+| Supported Models | gpt-4o, gpt-4o-mini, gpt-5 |
 
-# Fully raw mode - OpenAI
-name: "openai-raw"
-type: "openai"
-base_url: "https://gateway.example.com/proxy##"
-# Actual request: https://gateway.example.com/proxy
+**DeepSeek Channel:**
+
+| Field | Value |
+|-------|-------|
+| Name | DeepSeek China |
+| Type | deepseek |
+| Base URL | https://api.deepseek.com/v1 |
+| API Key | sk-your-deepseek-key |
+| Supported Models | deepseek-chat, deepseek-reasoner |
+
+## Multiple API Keys
+
+When an account has multiple API Keys, you can configure them all in the same channel. AxonHub will automatically rotate between them for better stability.
+
+Simply add all keys in the API Keys field, one per line:
 ```
+sk-key-1
+sk-key-2
+sk-key-3
+```
+
+### Load Balancing
+
+- Same Trace ID always uses the same Key (session consistency)
+- Different requests randomly select from available Keys
+- If one Key fails, the system automatically switches to another
+
+## Model Renaming
+
+AxonHub provides multiple mechanisms to rename or alias models at the channel level. When a request arrives, the channel resolves the request model to the actual upstream model through the following priority chain:
+
+1. **Direct match** — the request model is directly in the Supported Models list
+2. **Extra Model Prefix** — adds a prefix alias for all supported models
+3. **Auto-Trimmed Model Prefixes** — strips known prefixes from supported models to create trimmed aliases
+4. **Model Mappings** — explicit `from → to` alias pairs
+
+> **Note**: If multiple mechanisms produce the same request model name, the first match wins (based on the order above).
+
+### Model Mappings
+
+**When do you need model mappings?**
+
+When you want the client to use one name, but send a different name to the upstream provider.
+
+**Common Scenarios:**
+
+1. **Client uses simplified names**: Client requests `gpt-4`, but OpenAI receives `gpt-4o`
+2. **Unify model names across channels**: Both `claude-sonnet` and `gpt-4` point to the same actual model
+3. **Legacy compatibility**: Old model names automatically map to newer versions
+
+**How to Configure:**
+
+In the channel's **Settings** → **Model Mappings**, add `from → to` pairs:
+
+| From (Client Requests) | To (Sent to Provider) |
+|------------------------|----------------------|
+| gpt-4o-mini | gpt-4o |
+| claude-3-sonnet | claude-3.5-sonnet |
+
+**Note**: The target model (`to`) must be in the Supported Models list. If the target model is not supported, the mapping is silently ignored.
+
+### Extra Model Prefix
+
+Adds a **prefixed alias** for every model in the Supported Models list, allowing clients to request models with or without the prefix.
+
+**Use case**: You want to namespace all models in a channel under a common prefix (e.g., `deepseek/`).
+
+**Example:**
+- Supported Models: `deepseek-chat`, `deepseek-reasoner`
+- Extra Model Prefix: `deepseek`
+
+The channel now accepts **both** of the following request formats:
+- `deepseek-chat` → sends `deepseek-chat` upstream
+- `deepseek/deepseek-chat` → sends `deepseek-chat` upstream
+
+This is useful when you want to differentiate models from different channels that share the same name — clients can prefix the model with the channel's namespace.
+
+### Auto-Trimmed Model Prefixes
+
+Automatically **strips specified prefixes** from model names in the Supported Models list, creating trimmed aliases. This is the inverse of Extra Model Prefix.
+
+**Use case**: Providers like OpenRouter or SiliconFlow add vendor prefixes to model names (e.g., `openai/gpt-5.4`). You want clients to request using the short name `gpt-5.4` without manually creating mappings for every model.
+
+**Example:**
+- Supported Models: `openai/gpt-5.4`, `anthropic/claude-sonnet-4`, `deepseek-ai/deepseek-chat`
+- Auto-Trimmed Model Prefixes: `openai`, `anthropic`, `deepseek-ai`
+
+The channel now accepts both the original and trimmed names:
+- `gpt-5.4` → sends `openai/gpt-5.4` upstream
+- `claude-sonnet-4` → sends `anthropic/claude-sonnet-4` upstream
+- `deepseek-chat` → sends `deepseek-ai/deepseek-chat` upstream
+- `openai/gpt-5.4` → still works as a direct match
+
+> **Tip**: This is the recommended approach for providers that use vendor-prefixed model IDs. It enables batch model ID rewriting without having to create individual model mappings.
+
+### Lowercase Model Name
+
+When enabled, model name matching keys are converted to lowercase. Enable when channel-provided model names contain uppercase letters, to balance load with other lowercase model names. The actual model name sent to the provider retains its original casing.
+
+**Example**: Converts `GLM-5.1` to `glm-5.1`, allowing the channel to share load with other channels that provide `glm-5.1`.
+
+> **Note**: When enabled, model names that differ only in case (e.g., `GPT-4` and `gpt-4`) are treated as the same model. In case of collision, the highest-priority entry wins (direct > auto_trim > mapping > prefix).
+
+### Visibility Controls
+
+Two options control which model names are exposed in the model list (e.g., when clients call the `/v1/models` endpoint):
+
+| Option | Effect |
+|--------|--------|
+| **Hide Original Models** | Hides the original (direct) model names. Only transformed names (from prefix, auto-trim, or mapping) are shown. |
+| **Hide Mapped Models** | Hides the `from` names of model mappings. Only the original model names are shown. |
+
+**Example — Hide Original Models:**
+- Supported Models: `openai/gpt-5.4`
+- Auto-Trimmed Prefixes: `openai`
+- Hide Original Models: enabled
+
+The `/v1/models` response only shows `gpt-5.4`, not `openai/gpt-5.4`. Both names still work for requests.
+
+**Example — Hide Mapped Models:**
+- Supported Models: `gpt-4o`
+- Model Mapping: `gpt-4` → `gpt-4o`
+- Hide Mapped Models: enabled
+
+The `/v1/models` response shows `gpt-4o` but hides `gpt-4`. Both names still work for requests.
+
+## Testing and Enabling Channels
+
+### Test Connection
+
+Before enabling a channel, test the connection:
+
+1. Find your channel in the channel list
+2. Click the **Test** button
+3. Wait for the result
+4. If successful, proceed to enable
+
+### Enable Channel
+
+After testing passes, click **Enable**. The channel status changes to **Active** and can now receive requests.
+
+## Base URL Special Configuration
+
+### Default URLs
+
+| Provider | Default Base URL |
+|----------|-----------------|
+| OpenAI | `https://api.openai.com/v1` |
+| Anthropic | `https://api.anthropic.com` |
+| DeepSeek | `https://api.deepseek.com/v1` |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta` |
+
+### Custom URLs
+
+For proxies or private deployments, you can modify the Base URL.
+
+**Disable automatic version appending**: Add `#` at the end
+```
+https://custom-proxy.example.com/api#
+# Actual request: /api/messages (no /v1 added)
+```
+
+**Fully raw mode**: Add `##` at the end
+```
+https://custom-gateway.example.com/api##
+# Actual request: /api (no version or endpoint added)
+```
+
+## FAQ
+
+### Q: Connection test failed?
+
+- Check if the API Key is correct (no extra spaces when copying)
+- Verify the Base URL is accessible
+- Check if your provider account has sufficient credits
+
+### Q: "Model not found" error?
+
+- Confirm the model is in the Supported Models list
+- Check if model mapping is configured correctly
+- Verify the channel is enabled
+
+### Q: How to set up multiple API Keys?
+
+Enter all keys in the API Keys field, one per line. The system will automatically rotate them.
+
+### Q: How to restore a disabled API Key?
+
+Go to channel details, find the key in the **Disabled List**, and click **Restore**.
 
 ## Related Documentation
 
-- [Request Override Guide](request-override.md) - Advanced request modification with templates
-- [Model Management Guide](model-management.md) - Managing models across channels
-- [Load Balancing Guide](load-balance.md) - Distributing requests across channels
-- [API Key Profiles Guide](api-key-profiles.md) - Organizing API keys and permissions
+- [Model Management Guide](model-management.md) - Configure model-channel associations
+- [API Key Profiles Guide](api-key-profiles.md) - Configure model mappings and permissions
+- [Request Processing Guide](../getting-started/request-processing.md) - Understand the full request flow

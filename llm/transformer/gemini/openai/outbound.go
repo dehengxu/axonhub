@@ -137,9 +137,10 @@ func NewOutboundTransformerWithConfig(config *Config) (transformer.Outbound, err
 	baseURL := transformer.NormalizeBaseURL(config.BaseURL, "v1beta/openai")
 
 	oaiConfig := &openai.Config{
-		PlatformType:   openai.PlatformOpenAI,
+		PlatformType:   openai.PlatformGoogle,
 		BaseURL:        baseURL,
 		APIKeyProvider: config.APIKeyProvider,
+		ReasoningField: openai.ReasoningFieldContent,
 	}
 
 	outbound, err := openai.NewOutboundTransformerWithConfig(oaiConfig)
@@ -283,6 +284,8 @@ func (t *OutboundTransformer) TransformRequest(
 	switch llmReq.RequestType {
 	case llm.RequestTypeChat, "":
 		// continue
+	case llm.RequestTypeCompact:
+		return nil, fmt.Errorf("%w: compact is only supported by OpenAI Responses API", transformer.ErrInvalidRequest)
 	default:
 		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
 	}
@@ -298,6 +301,8 @@ func (t *OutboundTransformer) TransformRequest(
 
 	// Make a copy to avoid modifying the original request
 	req := *llmReq
+	// Gemini OpenAI endpoint does not accept metadata.
+	req.Metadata = nil
 
 	// Fallback: Filter out Google native tools (not supported by OpenAI-compatible endpoint)
 	// This is a graceful degradation when no native Gemini channels are available.
@@ -328,7 +333,8 @@ func (t *OutboundTransformer) TransformRequest(
 	}
 
 	// Convert llm.Request to openai.Request
-	oaiReq := openai.RequestFromLLM(&req)
+	oaiReq := openai.RequestFromLLM(&req, openai.ReasoningFieldContent)
+	fillGeminiThoughtSignatureForGeminiOpenAIRequest(&req, oaiReq)
 
 	geminiReq := Request{Request: *oaiReq}
 	if extraBody != nil {
@@ -356,12 +362,90 @@ func (t *OutboundTransformer) TransformRequest(
 	url := t.BaseURL + "/chat/completions"
 
 	return &httpclient.Request{
-		Method:  http.MethodPost,
-		URL:     url,
-		Headers: headers,
-		Body:    body,
-		Auth:    auth,
+		Method:                http.MethodPost,
+		URL:                   url,
+		Headers:               headers,
+		Body:                  body,
+		Auth:                  auth,
+		SkipInboundQueryMerge: true,
+		Metadata:              nil,
+		APIFormat:             string(llm.APIFormatOpenAIChatCompletion),
 	}, nil
+}
+
+func fillGeminiThoughtSignatureForGeminiOpenAIRequest(src *llm.Request, dst *openai.Request) {
+	if src == nil || dst == nil {
+		return
+	}
+
+	for i := range src.Messages {
+		if i >= len(dst.Messages) {
+			break
+		}
+
+		srcMsg := src.Messages[i]
+		if len(srcMsg.ToolCalls) == 0 || len(dst.Messages[i].ToolCalls) == 0 {
+			continue
+		}
+
+		dstToolCallIndexByID := make(map[string]int, len(dst.Messages[i].ToolCalls))
+		for j := range dst.Messages[i].ToolCalls {
+			if dst.Messages[i].ToolCalls[j].ID != "" {
+				dstToolCallIndexByID[dst.Messages[i].ToolCalls[j].ID] = j
+			}
+		}
+
+		hasToolCallThoughtSignature := false
+
+		for j := range srcMsg.ToolCalls {
+			raw, ok := srcMsg.ToolCalls[j].TransformerMetadata[openai.TransformerMetadataKeyGoogleThoughtSignature].(string)
+			if !ok || raw == "" {
+				continue
+			}
+
+			dstToolCallIndex := -1
+
+			if srcMsg.ToolCalls[j].ID != "" {
+				if idx, exists := dstToolCallIndexByID[srcMsg.ToolCalls[j].ID]; exists {
+					dstToolCallIndex = idx
+				}
+			}
+
+			if dstToolCallIndex == -1 && j < len(dst.Messages[i].ToolCalls) {
+				dstToolCallIndex = j
+			}
+
+			if dstToolCallIndex == -1 {
+				continue
+			}
+
+			// Gemini OpenAI response direction does not encode prefix (it reuses
+			// openai.OutboundTransformer.TransformResponse which stores raw values),
+			// so we passthrough the raw value here without attempting to decode.
+			ensureGoogleThoughtSignatureExtraContent(&dst.Messages[i].ToolCalls[dstToolCallIndex]).ThoughtSignature = raw
+			hasToolCallThoughtSignature = true
+		}
+
+		if hasToolCallThoughtSignature {
+			continue
+		}
+
+		if srcMsg.ReasoningSignature != nil && *srcMsg.ReasoningSignature != "" {
+			ensureGoogleThoughtSignatureExtraContent(&dst.Messages[i].ToolCalls[0]).ThoughtSignature = *srcMsg.ReasoningSignature
+		}
+	}
+}
+
+func ensureGoogleThoughtSignatureExtraContent(tc *openai.ToolCall) *openai.ToolCallGoogleExtraContent {
+	if tc.ExtraContent == nil {
+		tc.ExtraContent = &openai.ToolCallExtraContent{}
+	}
+
+	if tc.ExtraContent.Google == nil {
+		tc.ExtraContent.Google = &openai.ToolCallGoogleExtraContent{}
+	}
+
+	return tc.ExtraContent.Google
 }
 
 func (t *OutboundTransformer) TransformError(ctx context.Context, rawErr *httpclient.Error) *llm.ResponseError {

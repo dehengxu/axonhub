@@ -1,17 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Key, Zap, ChevronDown } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { BarChart3, Brain, Key, Users, Zap, ChevronDown, ChevronRight, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Header } from '@/components/layout/header';
 import { formatNumber } from '@/utils/format-number';
+import { TimePeriodSelector, type TimePeriod } from '@/components/time-period-selector';
 import { ChannelSuccessRate } from './components/channel-success-rate';
 import { DailyRequestStats } from './components/daily-requests-stats';
 import { RequestsByChannelChart } from './components/requests-by-channel-chart';
 import { RequestsByModelChart } from './components/requests-by-model-chart';
 import { RequestsByAPIKeyChart } from './components/requests-by-api-key-chart';
+import { TokensByUserChart } from './components/tokens-by-user-chart';
 import { TokensByAPIKeyChart } from './components/tokens-by-api-key-chart';
+import { TokensByChannelChart } from './components/tokens-by-channel-chart';
+import { TokensByModelChart } from './components/tokens-by-model-chart';
 import { SuccessRateCard } from './components/success-rate-card';
 import { TodayRequestsCard } from './components/today-requests-card';
 import { TokenStatsCard } from './components/token-stats-card';
@@ -21,6 +26,7 @@ import { FastestModelsCard } from './components/fastest-models-card';
 import { ModelPerformanceStats } from './components/model-performance-stats';
 import { ChannelPerformanceStats } from './components/channel-performance-stats';
 import { useDashboardStats } from './data/dashboard';
+import { useRoutePermissions } from '@/hooks/useRoutePermissions';
 
 interface CollapsibleSectionProps {
   title: string;
@@ -71,11 +77,10 @@ function CollapsibleSection({ title, icon, children, storageKey, defaultOpen = f
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className='overflow-visible'
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, ease: 'easeInOut' }}
           >
             <div className='space-y-4'>{children}</div>
           </motion.div>
@@ -88,8 +93,17 @@ function CollapsibleSection({ title, icon, children, storageKey, defaultOpen = f
 export default function DashboardPage() {
   const { t } = useTranslation();
   const { isLoading, error } = useDashboardStats();
+  const { isProjectOwner } = useRoutePermissions();
   const [modelTotalRequests, setModelTotalRequests] = useState(0);
   const [channelTotalRequests, setChannelTotalRequests] = useState(0);
+
+  const [channelTimePeriod, setChannelTimePeriod] = useState<TimePeriod>('allTime');
+  const [channelTokensTimePeriod, setChannelTokensTimePeriod] = useState<TimePeriod>('allTime');
+  const [modelTimePeriod, setModelTimePeriod] = useState<TimePeriod>('allTime');
+  const [modelTokensTimePeriod, setModelTokensTimePeriod] = useState<TimePeriod>('allTime');
+  const [apiKeyTimePeriod, setApiKeyTimePeriod] = useState<TimePeriod>('allTime');
+  const [apiKeyTokensTimePeriod, setApiKeyTokensTimePeriod] = useState<TimePeriod>('allTime');
+  const [userTokensTimePeriod, setUserTokensTimePeriod] = useState<TimePeriod>('day');
 
   const modelPerformanceDescription = useMemo(() => {
     return t('dashboard.charts.performanceDescription', { count: formatNumber(modelTotalRequests) });
@@ -157,6 +171,11 @@ export default function DashboardPage() {
             <CardHeader>
               <CardTitle>{t('dashboard.charts.channelSuccessRate')}</CardTitle>
               <CardDescription>{t('dashboard.charts.channelSuccessRateDescription')}</CardDescription>
+              <CardAction>
+                <Link to='/dashboard/channel-success-rates' className='text-sm text-primary hover:underline'>
+                  {t('dashboard.viewAll')}
+                </Link>
+              </CardAction>
             </CardHeader>
             <CardContent>
               <ChannelSuccessRate />
@@ -164,6 +183,23 @@ export default function DashboardPage() {
           </Card>
         </div>
       </section>
+
+      {/* 使用详情分析 - 导航卡片 */}
+      <Link
+        to='/analytics'
+        className='flex w-full items-center justify-between rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent/50'
+      >
+        <div className='flex items-center gap-3'>
+          <div className='flex h-8 w-8 items-center justify-center rounded-md bg-primary/10'>
+            <TrendingUp className='h-4 w-4 text-primary' />
+          </div>
+          <div>
+            <span className='text-lg font-semibold'>{t('dashboard.sections.analytics')}</span>
+            <p className='text-sm text-muted-foreground'>{t('dashboard.sections.analyticsDescription')}</p>
+          </div>
+        </div>
+        <ChevronRight className='h-5 w-5 text-muted-foreground' />
+      </Link>
 
       {/* 渠道分析 - 可折叠 */}
       <CollapsibleSection
@@ -174,20 +210,60 @@ export default function DashboardPage() {
         <div className='grid gap-4 md:grid-cols-2'>
           <Card className='hover-card'>
             <CardHeader>
-              <CardTitle>{t('dashboard.charts.requestsByChannel')}</CardTitle>
-              <CardDescription>{t('dashboard.charts.requestsByChannelDescription')}</CardDescription>
+              <CardTitle>{t('dashboard.charts.requestsCostByChannel')}</CardTitle>
+              <CardDescription>{t('dashboard.charts.requestsCostByChannelDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={channelTimePeriod} onChange={setChannelTimePeriod} />
+              </CardAction>
             </CardHeader>
             <CardContent>
-              <RequestsByChannelChart />
+              <RequestsByChannelChart timePeriod={channelTimePeriod} />
             </CardContent>
           </Card>
           <Card className='hover-card'>
             <CardHeader>
-              <CardTitle>{t('dashboard.charts.requestsByModel')}</CardTitle>
-              <CardDescription>{t('dashboard.charts.requestsByModelDescription')}</CardDescription>
+              <CardTitle>{t('dashboard.charts.tokensByChannel')}</CardTitle>
+              <CardDescription>{t('dashboard.charts.tokensByChannelDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={channelTokensTimePeriod} onChange={setChannelTokensTimePeriod} />
+              </CardAction>
             </CardHeader>
             <CardContent>
-              <RequestsByModelChart />
+              <TokensByChannelChart timePeriod={channelTokensTimePeriod} />
+            </CardContent>
+          </Card>
+        </div>
+      </CollapsibleSection>
+
+      {/* 模型分析 - 可折叠 */}
+      <CollapsibleSection
+        title={t('dashboard.sections.models')}
+        icon={<Brain className='h-4 w-4 text-primary' />}
+        storageKey='models'
+      >
+        <div className='grid gap-4 md:grid-cols-2'>
+          <Card className='hover-card'>
+            <CardHeader>
+              <CardTitle>{t('dashboard.charts.requestsCostByModel')}</CardTitle>
+              <CardDescription>{t('dashboard.charts.requestsCostByModelDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={modelTimePeriod} onChange={setModelTimePeriod} />
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <RequestsByModelChart timePeriod={modelTimePeriod} />
+            </CardContent>
+          </Card>
+          <Card className='hover-card'>
+            <CardHeader>
+              <CardTitle>{t('dashboard.charts.tokensByModel')}</CardTitle>
+              <CardDescription>{t('dashboard.charts.tokensByModelDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={modelTokensTimePeriod} onChange={setModelTokensTimePeriod} />
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <TokensByModelChart timePeriod={modelTokensTimePeriod} />
             </CardContent>
           </Card>
         </div>
@@ -202,24 +278,54 @@ export default function DashboardPage() {
         <div className='grid gap-4 md:grid-cols-2'>
           <Card className='hover-card'>
             <CardHeader>
-              <CardTitle>{t('dashboard.charts.requestsByAPIKey')}</CardTitle>
-              <CardDescription>{t('dashboard.charts.requestsByAPIKeyDescription')}</CardDescription>
+              <CardTitle>{t('dashboard.charts.requestsCostByAPIKey')}</CardTitle>
+              <CardDescription>{t('dashboard.charts.requestsCostByAPIKeyDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={apiKeyTimePeriod} onChange={setApiKeyTimePeriod} />
+              </CardAction>
             </CardHeader>
             <CardContent>
-              <RequestsByAPIKeyChart />
+              <RequestsByAPIKeyChart timePeriod={apiKeyTimePeriod} />
             </CardContent>
           </Card>
           <Card className='hover-card'>
             <CardHeader>
               <CardTitle>{t('dashboard.charts.tokensByAPIKey')}</CardTitle>
               <CardDescription>{t('dashboard.charts.tokensByAPIKeyDescription')}</CardDescription>
+              <CardAction>
+                <TimePeriodSelector value={apiKeyTokensTimePeriod} onChange={setApiKeyTokensTimePeriod} />
+              </CardAction>
             </CardHeader>
             <CardContent>
-              <TokensByAPIKeyChart />
+              <TokensByAPIKeyChart timePeriod={apiKeyTokensTimePeriod} />
             </CardContent>
           </Card>
         </div>
       </CollapsibleSection>
+
+      {/* 用户分析 - 可折叠 */}
+      {isProjectOwner && (
+        <CollapsibleSection
+          title={t('dashboard.sections.users')}
+          icon={<Users className='h-4 w-4 text-primary' />}
+          storageKey='users'
+        >
+          <div className='grid gap-4 md:grid-cols-1 lg:grid-cols-7'>
+            <Card className='hover-card col-span-1 lg:col-span-4'>
+              <CardHeader>
+                <CardTitle>{t('dashboard.charts.tokensByUser')}</CardTitle>
+                <CardDescription>{t('dashboard.charts.tokensByUserDescription')}</CardDescription>
+                <CardAction>
+                  <TimePeriodSelector value={userTokensTimePeriod} onChange={setUserTokensTimePeriod} />
+                </CardAction>
+              </CardHeader>
+              <CardContent>
+                <TokensByUserChart timePeriod={userTokensTimePeriod} />
+              </CardContent>
+            </Card>
+          </div>
+        </CollapsibleSection>
+      )}
 
       {/* 性能分析 - 可折叠 */}
       <CollapsibleSection

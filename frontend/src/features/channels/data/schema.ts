@@ -8,20 +8,61 @@ export const apiFormatSchema = z.enum([
   'openai/image_edit',
   'openai/image_variation',
   'openai/embeddings',
+  'openai/video',
+  'openai/moderations',
+  'openai/audio_speech',
+  'openai/audio_transcriptions',
+  'openai/audio_translations',
   'anthropic/messages',
   'gemini/contents',
+  'gemini/embeddings',
   'aisdk/text',
   'aisdk/datastream',
   'jina/rerank',
   'jina/embeddings',
+  'ollama/chat',
 ]);
 
 export type ApiFormat = z.infer<typeof apiFormatSchema>;
+
+export const configurableChannelEndpointApiFormats = [
+  'openai/chat_completions',
+  'openai/responses',
+  'openai/image_generation',
+  'openai/image_edit',
+  'openai/image_variation',
+  'openai/embeddings',
+  'openai/moderations',
+  'openai/audio_speech',
+  'openai/audio_transcriptions',
+  'openai/audio_translations',
+  'anthropic/messages',
+  'gemini/contents',
+  'gemini/embeddings',
+  'jina/rerank',
+  'jina/embeddings',
+] as const;
+
+export const configurableChannelEndpointApiFormatSchema = z.enum(configurableChannelEndpointApiFormats);
+
+// Channel Endpoint
+export const channelEndpointSchema = z.object({
+  apiFormat: z.string().min(1),
+  path: z.string().optional(),
+  baseURL: z.url('Invalid URL').optional().or(z.literal('')),
+  transport: z.enum(['http', 'websocket']).optional().or(z.literal('')),
+});
+export type ChannelEndpoint = z.infer<typeof channelEndpointSchema>;
 
 // Channel Types
 export const channelTypeSchema = z.enum([
   'openai',
   'openai_responses',
+  'atlascloud',
+  'qiniu',
+  'qiniu_anthropic',
+  'fenno',
+  'cline',
   'codex',
   'anthropic',
   'anthropic_aws',
@@ -45,24 +86,41 @@ export const channelTypeSchema = z.enum([
   'openai_fake',
   'openrouter',
   'xiaomi',
+  'xiaomi_anthropic',
   'xai',
+  'xai_responses',
+  'xai_subscription',
   'ppio',
   'siliconflow',
   'volcengine',
+  'volcengine_anthropic',
   'longcat',
   'longcat_anthropic',
   'minimax',
   'minimax_anthropic',
   'aihubmix',
+  'aihubmix_anthropic',
   'burncloud',
   'modelscope',
   'bailian',
+  'bailian_anthropic',
+  'moonshot_coding',
   'jina',
   'github',
+  'github_copilot',
   'claudecode',
   'antigravity',
   'cerebras',
   'nanogpt',
+  'nanogpt_responses',
+  'fireworks',
+  'opencode_go',
+  'opencode_go_anthropic',
+  'ollama',
+  'ollama_anthropic',
+  'evolink',
+  'evolink_anthropic',
+  'groq',
 ]);
 export type ChannelType = z.infer<typeof channelTypeSchema>;
 
@@ -73,8 +131,42 @@ export type ChannelStatus = z.infer<typeof channelStatusSchema>;
 export const capabilityPolicySchema = z.enum(['unlimited', 'require', 'forbid']);
 export type CapabilityPolicy = z.infer<typeof capabilityPolicySchema>;
 
+export const apiKeyAutoDisableActionSchema = z.enum([
+  'temporary_disable',
+  'disable_until_cron',
+  'permanent_disable',
+  'permanent_disable_delete',
+]);
+export type APIKeyAutoDisableAction = z.infer<typeof apiKeyAutoDisableActionSchema>;
+
+export const apiKeyAutoDisableRuleSchema = z.object({
+  statusCodes: z.array(z.number().int().min(100).max(599)).optional().nullable(),
+  keywordPatterns: z.array(z.string()).optional().nullable(),
+  times: z.number().int().min(1),
+  action: apiKeyAutoDisableActionSchema,
+  disableDurationMinutes: z.number().int().positive().optional().nullable(),
+  disableUntilCron: z.string().optional().nullable(),
+  disableUntilTimezone: z.string().optional().nullable(),
+});
+export type APIKeyAutoDisableRule = z.infer<typeof apiKeyAutoDisableRuleSchema>;
+
+export const apiKeyAutoDisableRuleFormSchema = apiKeyAutoDisableRuleSchema
+  .refine((rule) => (rule.statusCodes?.length ?? 0) > 0 || (rule.keywordPatterns?.some((pattern) => pattern.trim() !== '') ?? false), {
+    message: 'At least one status code or keyword pattern is required',
+    path: ['statusCodes'],
+  })
+  .refine((rule) => rule.action !== 'temporary_disable' || (rule.disableDurationMinutes ?? 0) > 0, {
+    message: 'Temporary disable requires a duration',
+    path: ['disableDurationMinutes'],
+  })
+  .refine((rule) => rule.action !== 'disable_until_cron' || (rule.disableUntilCron ?? '').trim() !== '', {
+    message: 'Scheduled recovery requires a cron expression',
+    path: ['disableUntilCron'],
+  });
+
 export const channelPoliciesSchema = z.object({
   stream: capabilityPolicySchema.optional(),
+  apiKeyAutoDisableRules: z.array(apiKeyAutoDisableRuleSchema).optional().nullable(),
 });
 export type ChannelPolicies = z.infer<typeof channelPoliciesSchema>;
 
@@ -93,15 +185,24 @@ export const headerEntrySchema = z.object({
 export type HeaderEntry = z.infer<typeof headerEntrySchema>;
 
 // Override Operation
+export const overrideMatchSchema = z.object({
+  path: z.string().trim().min(1),
+  eq: z.string().trim().min(1),
+});
+export type OverrideMatch = z.infer<typeof overrideMatchSchema>;
+
 export const overrideOperationSchema = z.object({
-  op: z.enum(['set', 'delete', 'rename', 'copy']),
+  op: z.enum(['set', 'set_if_absent', 'delete', 'rename', 'copy', 'array_append', 'array_prepend', 'array_insert', 'array_remove']),
   path: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   value: z.any().optional(),
   condition: z.string().optional(),
-})
-export type OverrideOperation = z.infer<typeof overrideOperationSchema>
+  match: overrideMatchSchema.nullish(),
+  index: z.number().int().nullish(),
+  splat: z.boolean().nullish(),
+});
+export type OverrideOperation = z.infer<typeof overrideOperationSchema>;
 
 // Proxy Type
 export const proxyTypeSchema = z.enum(['disabled', 'environment', 'url']);
@@ -113,14 +214,22 @@ export const proxyConfigSchema = z.object({
   url: z.string().optional(),
   username: z.string().optional(),
   password: z.string().optional(),
+  disableConnectionReuse: z.boolean().optional(),
 });
 export type ProxyConfig = z.infer<typeof proxyConfigSchema>;
 
 // Transform Options
+export const reasoningEffortMappingSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+});
+export type ReasoningEffortMapping = z.infer<typeof reasoningEffortMappingSchema>;
+
 export const transformOptionsSchema = z.object({
   forceArrayInstructions: z.boolean().optional(),
   forceArrayInputs: z.boolean().optional(),
   replaceDeveloperRoleWithSystem: z.boolean().optional(),
+  reasoningEffortMapping: z.array(reasoningEffortMappingSchema).nullish(),
 });
 export type TransformOptions = z.infer<typeof transformOptionsSchema>;
 
@@ -140,18 +249,51 @@ export const channelProbeDataSchema = z.object({
 });
 export type ChannelProbeData = z.infer<typeof channelProbeDataSchema>;
 
+// Channel Rate Limit
+export const channelRateLimitSchema = z.object({
+  rpm: z.number().int().nonnegative().optional().nullable(),
+  tpm: z.number().int().nonnegative().optional().nullable(),
+  maxConcurrent: z.number().int().nonnegative().optional().nullable(),
+  queueSize: z.number().int().nonnegative().optional().nullable(),
+  queueTimeoutMs: z.number().int().nonnegative().optional().nullable(),
+});
+export type ChannelRateLimit = z.infer<typeof channelRateLimitSchema>;
+
+// Live snapshot of the per-channel concurrency limiter.
+// Returned from the backend only when MaxConcurrent is configured.
+export const channelLimiterStatsSchema = z.object({
+  inFlight: z.number().int().nonnegative(),
+  waiting: z.number().int().nonnegative(),
+  capacity: z.number().int().nonnegative(),
+  queueSize: z.number().int().nonnegative(),
+});
+export type ChannelLimiterStats = z.infer<typeof channelLimiterStatsSchema>;
+
+export const retryableErrorPatternSchema = z.object({
+  pattern: z.string().min(1),
+  regex: z.boolean().optional().nullable(),
+});
+export type RetryableErrorPattern = z.infer<typeof retryableErrorPatternSchema>;
+
 // Channel Settings
 export const channelSettingsSchema = z.object({
   extraModelPrefix: z.string().optional(),
-  modelMappings: z.array(modelMappingSchema).nullable(),
+  modelMappings: z.array(modelMappingSchema).optional().nullable(),
   autoTrimedModelPrefixes: z.array(z.string()).optional().nullable(),
   hideOriginalModels: z.boolean().optional(),
   hideMappedModels: z.boolean().optional(),
+  lowercaseModelId: z.boolean().optional(),
   bodyOverrideOperations: z.array(overrideOperationSchema).optional(),
   headerOverrideOperations: z.array(overrideOperationSchema).optional(),
   proxy: proxyConfigSchema.optional().nullable(),
   transformOptions: transformOptionsSchema.optional(),
+  passThroughUserAgent: z.boolean().optional().nullable(),
+  passThroughBody: z.boolean().optional().nullable(),
+  rateLimit: channelRateLimitSchema.optional().nullable(),
+  retryableStatusCodes: z.array(z.number().int().min(400).max(599)).optional().nullable(),
+  retryableErrorPatterns: z.array(retryableErrorPatternSchema).optional().nullable(),
 });
+
 export type ChannelSettings = z.infer<typeof channelSettingsSchema>;
 
 // Channel Model Entry
@@ -195,8 +337,14 @@ export const disabledAPIKeySchema = z.object({
   disabledAt: z.string(),
   errorCode: z.number(),
   reason: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
 });
 export type DisabledAPIKey = z.infer<typeof disabledAPIKeySchema>;
+
+// Sentinel the backend uses to identify a channel's OAuth credential in the
+// disable bookkeeping (see objects.OAuthCredentialRef). It is not a real key,
+// so it must be labelled rather than masked, and it cannot be deleted.
+export const OAUTH_CREDENTIAL_REF = '__oauth__';
 
 // Channel
 export const channelSchema = z.object({
@@ -221,11 +369,42 @@ export const channelSchema = z.object({
   errorMessage: z.string().optional().nullable(),
   remark: z.string().optional().nullable(),
   allModelEntries: z.array(channelModelEntrySchema).optional(),
+  liveLimiterStats: channelLimiterStatsSchema.optional().nullable(),
+  endpoints: z.array(channelEndpointSchema).optional().default([]).nullable(),
+  defaultEndpoints: z.array(channelEndpointSchema).optional().default([]).nullable(),
 });
 export type Channel = z.infer<typeof channelSchema>;
 
+// Simplified schema for saveChannelEndpoints mutation response
+export const channelEndpointsResponseSchema = z.object({
+  id: z.string(),
+  type: channelTypeSchema,
+  name: z.string(),
+  defaultEndpoints: z.array(channelEndpointSchema).optional().default([]).nullable(),
+  endpoints: z.array(channelEndpointSchema).optional().default([]).nullable(),
+});
+export type ChannelEndpointsResponse = z.infer<typeof channelEndpointsResponseSchema>;
+
+export const testAPIKeyResultSchema = z.object({
+  keyPrefix: z.string(),
+  success: z.boolean(),
+  latency: z.number(),
+  error: z.string().optional().nullable(),
+  disabled: z.boolean(),
+});
+export type TestAPIKeyResult = z.infer<typeof testAPIKeyResultSchema>;
+
+export const testChannelAPIKeysPayloadSchema = z.object({
+  channelID: z.string(),
+  total: z.number(),
+  successCount: z.number(),
+  failedCount: z.number(),
+  results: z.array(testAPIKeyResultSchema),
+});
+export type TestChannelAPIKeysPayload = z.infer<typeof testChannelAPIKeysPayloadSchema>;
+
 // Pricing Schemas
-export const pricingModeSchema = z.enum(['flat_fee', 'usage_per_unit', 'usage_tiered']);
+export const pricingModeSchema = z.enum(['flat_fee', 'usage_per_unit', 'usage_tiered', 'usage_volume']);
 export type PricingMode = z.infer<typeof pricingModeSchema>;
 
 export const priceItemCodeSchema = z.enum(['prompt_tokens', 'completion_tokens', 'prompt_cached_tokens', 'prompt_write_cached_tokens']);
@@ -263,8 +442,44 @@ export const modelPriceItemSchema = z.object({
 });
 export type ModelPriceItem = z.infer<typeof modelPriceItemSchema>;
 
+// Time-based price schedule schemas
+// DailyTimeRange uses "HH:mm" format strings (e.g. "03:00", "18:30")
+export const dailyTimeRangeSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+});
+export type DailyTimeRange = z.infer<typeof dailyTimeRangeSchema>;
+
+export const dateRangeSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+});
+export type DateRange = z.infer<typeof dateRangeSchema>;
+
+export const overrideWhenSchema = z.object({
+  dailyTime: dailyTimeRangeSchema.optional().nullable(),
+  weekdays: z.array(z.number().int().min(1).max(7)).optional().nullable(),
+  dateRange: dateRangeSchema.optional().nullable(),
+});
+export type OverrideWhen = z.infer<typeof overrideWhenSchema>;
+
+export const priceOverrideSchema = z.object({
+  name: z.string(),
+  priority: z.number().int(),
+  when: overrideWhenSchema,
+  items: z.array(modelPriceItemSchema),
+});
+export type PriceOverride = z.infer<typeof priceOverrideSchema>;
+
+export const priceScheduleSchema = z.object({
+  timezone: z.string(),
+  overrides: z.array(priceOverrideSchema),
+});
+export type PriceSchedule = z.infer<typeof priceScheduleSchema>;
+
 export const modelPriceSchema = z.object({
   items: z.array(modelPriceItemSchema),
+  schedule: priceScheduleSchema.optional().nullable(),
 });
 export type ModelPrice = z.infer<typeof modelPriceSchema>;
 
@@ -280,8 +495,55 @@ export const saveChannelModelPriceInputSchema = z.object({
   price: modelPriceSchema,
 });
 export type SaveChannelModelPriceInput = z.infer<typeof saveChannelModelPriceInputSchema>;
+// Helper function to validate OAuth credentials
+function validateOAuthCredentials(type: string, apiKey: string | undefined, ctx: z.RefinementCtx) {
+  if (!apiKey) return;
+
+  const isCopilot = type === 'github_copilot';
+  const requiresJSON = isCopilot || type === 'xai_subscription';
+  if (requiresJSON && !apiKey.trim().startsWith('{')) {
+    ctx.addIssue({
+      code: 'custom' as const,
+      message: isCopilot
+        ? 'channels.dialogs.oauth.errors.copilotCredentialsInvalid'
+        : 'channels.dialogs.oauth.errors.credentialsInvalid',
+      path: ['credentials', 'apiKey'],
+    });
+    return;
+  }
+
+  // Only enforce JSON validation if it looks like JSON (starts with '{')
+  if (!apiKey.trim().startsWith('{')) return;
+
+  const issue = {
+    code: 'custom' as const,
+    message: 'channels.dialogs.oauth.errors.credentialsInvalid',
+    path: ['credentials', 'apiKey'],
+  };
+
+  let json: unknown;
+  try {
+    json = JSON.parse(apiKey);
+  } catch {
+    ctx.addIssue(issue);
+    return;
+  }
+
+  // GitHub Copilot only requires access_token, others may require refresh_token
+  const parsed = z
+    .object({
+      access_token: z.string().min(1),
+      refresh_token: isCopilot ? z.string().optional() : z.string().min(1),
+    })
+    .safeParse(json);
+
+  if (!parsed.success) {
+    ctx.addIssue(issue);
+  }
+}
 
 // Create Channel Input
+
 export const createChannelInputSchema = z
   .object({
     type: channelTypeSchema,
@@ -297,6 +559,7 @@ export const createChannelInputSchema = z
     remark: z.string().optional(),
     orderingWeight: z.number().int().optional(),
     settings: channelSettingsSchema.optional(),
+    endpoints: z.array(channelEndpointSchema).optional(),
     credentials: z.object({
       // apiKey is used for OAuth credentials (JSON string with access_token, refresh_token)
       apiKey: z.string().optional(),
@@ -312,9 +575,23 @@ export const createChannelInputSchema = z
     }),
   })
   .superRefine((data, ctx) => {
-    const isOAuthType = data.type === 'codex' || data.type === 'claudecode' || data.type === 'antigravity';
+    const isOAuthType =
+      data.type === 'codex' ||
+      data.type === 'claudecode' ||
+      data.type === 'antigravity' ||
+      data.type === 'github_copilot' ||
+      data.type === 'xai_subscription';
     const hasApiKey = data.credentials.apiKey && data.credentials.apiKey.trim().length > 0;
     const hasApiKeys = data.credentials.apiKeys && data.credentials.apiKeys.some((k) => k.trim().length > 0);
+
+    // github_copilot requires credentials.apiKey (OAuth JSON with access_token)
+    if (data.type === 'github_copilot' && !hasApiKey) {
+      ctx.addIssue({
+        code: 'custom' as const,
+        message: 'channels.dialogs.oauth.errors.copilotCredentialsRequired',
+        path: ['credentials', 'apiKey'],
+      });
+    }
 
     // Validate that at least one credential type is provided
     if (!hasApiKey && !hasApiKeys && data.type !== 'anthropic_aws' && data.type !== 'anthropic_gcp') {
@@ -327,35 +604,8 @@ export const createChannelInputSchema = z
 
     // For OAuth types, validate the OAuth JSON format if apiKey is provided
     if (isOAuthType && hasApiKey) {
-      const apiKey = data.credentials.apiKey!;
-      if (apiKey.trim().startsWith('{')) {
-        const issue = {
-          code: 'custom' as const,
-          message: 'channels.dialogs.fields.supportedModels.codexOAuthCredentialsRequired',
-          path: ['credentials', 'apiKey'],
-        };
-
-        let json: unknown;
-        try {
-          json = JSON.parse(apiKey);
-        } catch {
-          ctx.addIssue(issue);
-          return;
-        }
-
-        const parsed = z
-          .object({
-            access_token: z.string().min(1),
-            refresh_token: z.string().min(1),
-          })
-          .safeParse(json);
-
-        if (!parsed.success) {
-          ctx.addIssue(issue);
-        }
-      }
+      validateOAuthCredentials(data.type, data.credentials.apiKey, ctx);
     }
-
     // 如果是 anthropic_gcp 类型，GCP 字段必填（精确到字段级报错）
     if (data.type === 'anthropic_gcp') {
       const gcp = data.credentials?.gcp;
@@ -400,6 +650,7 @@ export const updateChannelInputSchema = z
     settings: channelSettingsSchema.optional(),
     errorMessage: z.string().optional().nullable(),
     remark: z.string().optional().nullable(),
+    endpoints: z.array(channelEndpointSchema).optional(),
     credentials: z
       .object({
         // apiKey 用于 OAuth 凭据 (codex/claudecode/antigravity)，存储 JSON 字符串（含 access_token, refresh_token）
@@ -418,39 +669,52 @@ export const updateChannelInputSchema = z
     orderingWeight: z.number().optional(),
   })
   .superRefine((data, ctx) => {
-    const isOAuthType = data.type === 'codex' || data.type === 'claudecode' || data.type === 'antigravity';
+    const effectiveType = data.type;
+    const hasApiKey = data.credentials?.apiKey && data.credentials.apiKey.trim().length > 0;
 
-    if (isOAuthType) {
-      if (!data.credentials) return;
+    // For OAuth validation on updates: validate if type is OAuth, or if credentials.apiKey is provided
+    // (which indicates OAuth credentials are being set)
+    const isOAuthType =
+      effectiveType === 'codex' ||
+      effectiveType === 'claudecode' ||
+      effectiveType === 'antigravity' ||
+      effectiveType === 'github_copilot' ||
+      effectiveType === 'xai_subscription';
 
-      const apiKey = data.credentials.apiKey;
-      // Only enforce JSON validation if it looks like JSON (starts with '{')
-      if (apiKey && apiKey.trim().startsWith('{')) {
-        const issue = {
-          code: 'custom' as const,
-          message: 'channels.dialogs.fields.supportedModels.codexOAuthCredentialsRequired',
-          path: ['credentials', 'apiKey'],
-        };
-
-        let json: unknown;
-        try {
-          json = JSON.parse(apiKey);
-        } catch {
-          ctx.addIssue(issue);
-          return;
-        }
-
-        const parsed = z
-          .object({
-            access_token: z.string().min(1),
-            refresh_token: z.string().min(1),
-          })
-          .safeParse(json);
-
-        if (!parsed.success) {
-          ctx.addIssue(issue);
-        }
+    // Derive type from parent context if not available
+    let derivedType = effectiveType;
+    if (!derivedType && hasApiKey) {
+      // Try to get type from parent context
+      const parent = ctx.parent;
+      if (parent && typeof parent === 'object' && 'type' in parent) {
+        derivedType = (parent as { type?: string }).type;
       }
+    }
+
+    // If we have an OAuth key but no type, check if it looks like Copilot credentials
+    const isCopilotKey = hasApiKey && data.credentials?.apiKey?.trim().startsWith('{');
+
+    if (isOAuthType || derivedType === 'github_copilot' || isCopilotKey) {
+      if (isCopilotKey && !derivedType) {
+        try {
+          const parsed = JSON.parse(data.credentials.apiKey);
+          if (!parsed.access_token) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'channels.dialogs.oauth.errors.copilotCredentialsInvalid',
+              path: ['credentials', 'apiKey'],
+            });
+          }
+        } catch {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'channels.dialogs.oauth.errors.copilotCredentialsInvalid',
+            path: ['credentials', 'apiKey'],
+          });
+        }
+        return;
+      }
+      validateOAuthCredentials(derivedType, data.credentials?.apiKey, ctx);
     }
 
     // 如果是 anthropic_gcp 类型且提供了 credentials，GCP 字段必填（字段级报错）
@@ -479,6 +743,7 @@ export const updateChannelInputSchema = z
       }
     }
   });
+
 export type UpdateChannelInput = z.infer<typeof updateChannelInputSchema>;
 
 // Channel Connection (for pagination)
@@ -549,6 +814,29 @@ export const channelOrderingConnectionSchema = z.object({
 });
 export type ChannelOrderingConnection = z.infer<typeof channelOrderingConnectionSchema>;
 
+export const channelSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: channelTypeSchema,
+  status: channelStatusSchema,
+  baseURL: z.string(),
+  orderingWeight: z.number(),
+  tags: z.array(z.string()).optional().default([]).nullable(),
+  endpoints: z.array(channelEndpointSchema).optional().default([]).nullable(),
+  allModelEntries: z.array(channelModelEntrySchema).optional().default([]),
+});
+export type ChannelSummary = z.infer<typeof channelSummarySchema>;
+
+export const channelSummaryConnectionSchema = z.object({
+  edges: z.array(
+    z.object({
+      node: channelSummarySchema,
+    })
+  ),
+  totalCount: z.number(),
+});
+export type ChannelSummaryConnection = z.infer<typeof channelSummaryConnectionSchema>;
+
 export const bulkUpdateChannelOrderingInputSchema = z.object({
   channels: z
     .array(
@@ -576,4 +864,6 @@ export type {
   UpdateChannelOverrideTemplateInput,
   ApplyChannelOverrideTemplateInput,
   ApplyChannelOverrideTemplatePayload,
+  ClearChannelOverrideTemplatesInput,
+  ClearChannelOverrideTemplatesPayload,
 } from './templates';

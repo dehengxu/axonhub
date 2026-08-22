@@ -51,7 +51,54 @@ func withReasoningSignature(sig string) func(*llm.Response) {
 		if r.Choices[0].Delta == nil {
 			r.Choices[0].Delta = &llm.Message{Role: "assistant"}
 		}
+
 		r.Choices[0].Delta.ReasoningSignature = lo.ToPtr(sig)
+	}
+}
+
+func withReasoningSignatureForItem(sig, itemID string) func(*llm.Response) {
+	return func(r *llm.Response) {
+		if r.Choices[0].Delta == nil {
+			r.Choices[0].Delta = &llm.Message{Role: "assistant"}
+		}
+
+		r.Choices[0].Delta.ID = itemID
+		r.Choices[0].Delta.ReasoningSignature = lo.ToPtr(sig)
+		r.TransformerMetadata = map[string]any{
+			"openai_responses_reasoning_item": map[string]any{
+				"id":   itemID,
+				"done": true,
+			},
+		}
+	}
+}
+
+func withProvisionalReasoningSignatureForItem(sig, itemID string) func(*llm.Response) {
+	return func(r *llm.Response) {
+		if r.Choices[0].Delta == nil {
+			r.Choices[0].Delta = &llm.Message{Role: "assistant"}
+		}
+
+		r.Choices[0].Delta.ID = itemID
+		r.Choices[0].Delta.ReasoningSignature = lo.ToPtr(sig)
+		r.TransformerMetadata = map[string]any{
+			"openai_responses_reasoning_item": map[string]any{"id": itemID},
+		}
+	}
+}
+
+func withReasoningContentForItem(content, itemID string) func(*llm.Response) {
+	return func(r *llm.Response) {
+		r.Choices[0].Delta = &llm.Message{
+			Role:             "assistant",
+			ID:               itemID,
+			ReasoningContent: lo.ToPtr(content),
+		}
+		r.TransformerMetadata = map[string]any{
+			"openai_responses_reasoning_item": map[string]any{
+				"id": itemID,
+			},
+		}
 	}
 }
 
@@ -61,6 +108,24 @@ func withTextContent(text string) func(*llm.Response) {
 			Role:    "assistant",
 			Content: llm.MessageContent{Content: lo.ToPtr(text)},
 		}
+	}
+}
+
+func withToolCall(index int, id, name, args string) func(*llm.Response) {
+	return func(r *llm.Response) {
+		if r.Choices[0].Delta == nil {
+			r.Choices[0].Delta = &llm.Message{Role: "assistant"}
+		}
+
+		r.Choices[0].Delta.ToolCalls = append(r.Choices[0].Delta.ToolCalls, llm.ToolCall{
+			Index: index,
+			ID:    id,
+			Type:  "function",
+			Function: llm.FunctionCall{
+				Name:      name,
+				Arguments: args,
+			},
+		})
 	}
 }
 
@@ -181,6 +246,146 @@ func TestPendingSignature_SignatureBeforeThinking(t *testing.T) {
 	require.Equal(t, "message_stop", events[10].Type)
 }
 
+func TestPendingSignature_SeparateResponsesReasoningItemsRemainSeparateAroundToolCall(t *testing.T) {
+	const (
+		id        = "msg_responses_reasoning_tool"
+		model     = "gpt-5"
+		firstSig  = "gAAAA_FIRST_BLOB"
+		secondSig = "gAAAA_SECOND_BLOB"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		buildChunk(id, model, withReasoningSignatureForItem(firstSig, "rs_first")),
+		buildChunk(id, model, withReasoningSignatureForItem(secondSig, "rs_second")),
+		buildChunk(id, model, withToolCall(0, "call_task_output", "TaskOutput", `{"task_id":"task_1","block":true}`)),
+		buildChunk(id, model, withFinishReason("tool_calls")),
+		buildChunk(id, model, withUsage(10, 20)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	var signatures []string
+	var thinkingIndexes []int64
+	for _, event := range events {
+		if event.Type != "content_block_delta" || event.Delta == nil || event.Delta.Type == nil || *event.Delta.Type != "signature_delta" {
+			continue
+		}
+
+		signatures = append(signatures, lo.FromPtr(event.Delta.Signature))
+		thinkingIndexes = append(thinkingIndexes, lo.FromPtr(event.Index))
+	}
+
+	require.Equal(t, []string{firstSig, secondSig}, signatures)
+	require.Equal(t, []int64{0, 1}, thinkingIndexes)
+	require.NotContains(t, signatures, firstSig+secondSig)
+	require.Equal(t, 2, countContentBlocksOfType(events, "thinking"))
+	require.Equal(t, 1, countContentBlocksOfType(events, "tool_use"))
+}
+
+func TestPendingSignature_ProvisionalAndFinalForSameResponsesItemUseFinalOnce(t *testing.T) {
+	const (
+		id    = "msg_responses_reasoning_provisional"
+		model = "gpt-5"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withProvisionalReasoningSignatureForItem("gAAAA_PROVISIONAL", "rs_same")),
+		buildChunk(id, model, withReasoningSignatureForItem("gAAAA_FINAL", "rs_same")),
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 10)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	var signatures []string
+	for _, event := range events {
+		if event.Type == "content_block_delta" && event.Delta != nil && event.Delta.Type != nil && *event.Delta.Type == "signature_delta" {
+			signatures = append(signatures, lo.FromPtr(event.Delta.Signature))
+		}
+	}
+
+	require.Equal(t, []string{"gAAAA_FINAL"}, signatures)
+}
+
+func TestPendingSignature_ResponsesReasoningSummariesFollowItemBoundaries(t *testing.T) {
+	const (
+		id    = "msg_responses_reasoning_summary"
+		model = "gpt-5"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		buildChunk(id, model, withReasoningContentForItem("first", "rs_first")),
+		buildChunk(id, model, withReasoningSignatureForItem("gAAAA_FIRST_BLOB", "rs_first")),
+		buildChunk(id, model, withReasoningContentForItem("second", "rs_second")),
+		buildChunk(id, model, withReasoningSignatureForItem("gAAAA_SECOND_BLOB", "rs_second")),
+		buildChunk(id, model, withToolCall(0, "call_task_output", "TaskOutput", `{"task_id":"task_1","block":true}`)),
+		buildChunk(id, model, withFinishReason("tool_calls")),
+		buildChunk(id, model, withUsage(10, 20)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	var thinking []string
+	var signatures []string
+	for _, event := range events {
+		if event.Type != "content_block_delta" || event.Delta == nil || event.Delta.Type == nil {
+			continue
+		}
+		switch *event.Delta.Type {
+		case "thinking_delta":
+			thinking = append(thinking, lo.FromPtr(event.Delta.Thinking))
+		case "signature_delta":
+			signatures = append(signatures, lo.FromPtr(event.Delta.Signature))
+		}
+	}
+
+	require.Equal(t, []string{"first", "second"}, thinking)
+	require.Equal(t, []string{"gAAAA_FIRST_BLOB", "gAAAA_SECOND_BLOB"}, signatures)
+}
+
+func TestPendingSignature_InterleavedResponsesReasoningSummariesRemainPaired(t *testing.T) {
+	responses := []*llm.Response{
+		buildChunk("msg_interleaved", "gpt-5", withReasoningContentForItem("first", "rs_first")),
+		buildChunk("msg_interleaved", "gpt-5", withReasoningContentForItem("second", "rs_second")),
+		buildChunk("msg_interleaved", "gpt-5", withReasoningSignatureForItem("gAAAA_FIRST_BLOB", "rs_first")),
+		buildChunk("msg_interleaved", "gpt-5", withReasoningSignatureForItem("gAAAA_SECOND_BLOB", "rs_second")),
+		buildChunk("msg_interleaved", "gpt-5", withFinishReason("tool_calls")),
+	}
+
+	events := collectStreamEvents(t, responses)
+	var pairs []string
+	var pendingThinking string
+	for _, event := range events {
+		if event.Type != "content_block_delta" || event.Delta == nil || event.Delta.Type == nil {
+			continue
+		}
+		switch *event.Delta.Type {
+		case "thinking_delta":
+			pendingThinking += lo.FromPtr(event.Delta.Thinking)
+		case "signature_delta":
+			pairs = append(pairs, pendingThinking+":"+lo.FromPtr(event.Delta.Signature))
+			pendingThinking = ""
+		}
+	}
+
+	require.Equal(t, []string{
+		"first:gAAAA_FIRST_BLOB",
+		"second:gAAAA_SECOND_BLOB",
+	}, pairs)
+}
+
+func countContentBlocksOfType(events []StreamEvent, blockType string) int {
+	count := 0
+	for _, event := range events {
+		if event.Type == "content_block_start" && event.ContentBlock != nil && event.ContentBlock.Type == blockType {
+			count++
+		}
+	}
+	return count
+}
+
 // TestPendingSignature_SignatureAfterThinking verifies the normal case:
 // when signature arrives after thinking has started, it is emitted immediately
 // (no buffering needed).
@@ -270,8 +475,9 @@ func TestPendingSignature_SignatureBeforeThinking_FinishWithoutText(t *testing.T
 	require.Equal(t, "content_block_stop", events[4].Type)
 }
 
-// TestPendingSignature_NoSignature verifies that the normal flow without
-// any signature works correctly (no regression).
+// TestPendingSignature_NoSignature verifies that when no signature is provided,
+// a placeholder signature_delta is still emitted to ensure the thinking block
+// always has a signature (required by Anthropic schema).
 func TestPendingSignature_NoSignature(t *testing.T) {
 	const (
 		id    = "msg_test_004"
@@ -288,10 +494,376 @@ func TestPendingSignature_NoSignature(t *testing.T) {
 
 	events := collectStreamEvents(t, responses)
 
-	// No signature_delta should appear
+	// Exactly one signature_delta should appear (placeholder generated by closeThinkingBlock).
+	var sigCount int
+
 	for _, ev := range events {
-		if ev.Delta != nil && ev.Delta.Type != nil {
-			require.NotEqual(t, "signature_delta", *ev.Delta.Type, "signature_delta should not appear without signature")
+		if ev.Delta != nil && ev.Delta.Type != nil && *ev.Delta.Type == "signature_delta" {
+			sigCount++
+
+			require.NotNil(t, ev.Delta.Signature)
+			require.NotEmpty(t, *ev.Delta.Signature, "placeholder signature should not be empty")
 		}
 	}
+
+	require.Equal(t, 1, sigCount, "exactly one placeholder signature_delta should be emitted")
+}
+
+// TestPendingSignature_SignatureWithoutThinking_AfterText verifies that when
+// a text block is already open and a signature arrives without any thinking
+// content, the text block is properly closed before the synthetic thinking
+// block is created.
+func TestPendingSignature_SignatureWithoutThinking_AfterText(t *testing.T) {
+	const (
+		id    = "msg_test_010"
+		model = "test-model"
+		sig   = "orphan_sig_after_text"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		// Text content first
+		buildChunk(id, model, withTextContent("Hello")),
+		// Signature without any thinking content
+		buildChunk(id, model, withReasoningSignature(sig)),
+		// Finish
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 10)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected event order:
+	// 0: message_start
+	// 1: content_block_start (text, index 0)
+	// 2: content_block_delta (text_delta "Hello")
+	// 3: content_block_stop (index 0) <-- close the text block
+	// 4: content_block_start (thinking, index 1) <-- synthetic thinking block
+	// 5: content_block_delta (signature_delta)
+	// 6: content_block_stop (index 1)
+	// 7: message_delta
+	// 8: message_stop
+
+	require.Len(t, events, 9)
+
+	// Text block
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "text", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "text_delta", *events[2].Delta.Type)
+	require.Equal(t, "Hello", *events[2].Delta.Text)
+
+	// Text block stop
+	require.Equal(t, "content_block_stop", events[3].Type)
+	require.Equal(t, int64(0), *events[3].Index)
+
+	// Synthetic thinking block
+	require.Equal(t, "content_block_start", events[4].Type)
+	require.Equal(t, "thinking", events[4].ContentBlock.Type)
+	require.Equal(t, int64(1), *events[4].Index)
+
+	// Signature on the thinking block
+	require.Equal(t, "content_block_delta", events[5].Type)
+	require.Equal(t, "signature_delta", *events[5].Delta.Type)
+	require.Equal(t, sig, *events[5].Delta.Signature)
+	require.Equal(t, int64(1), *events[5].Index)
+
+	require.Equal(t, "content_block_stop", events[6].Type)
+	require.Equal(t, int64(1), *events[6].Index)
+
+	require.Equal(t, "message_delta", events[7].Type)
+	require.Equal(t, "message_stop", events[8].Type)
+}
+
+// TestPendingSignature_SignatureWithoutThinking_AfterToolUse verifies that when
+// a tool block is already open and a signature arrives without any thinking
+// content, the tool block is properly closed before the synthetic thinking
+// block is created.
+func TestPendingSignature_SignatureWithoutThinking_AfterToolUse(t *testing.T) {
+	const (
+		id    = "msg_test_011"
+		model = "test-model"
+		sig   = "orphan_sig_after_tool"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		// Tool call first
+		buildChunk(id, model, withToolCall(0, "toolu_01", "Bash", `{"command":"ls"}`)),
+		// Signature without any thinking content
+		buildChunk(id, model, withReasoningSignature(sig)),
+		// Finish
+		buildChunk(id, model, withFinishReason("tool_calls")),
+		buildChunk(id, model, withUsage(10, 20)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected event order:
+	// 0: message_start
+	// 1: content_block_start (tool_use, index 0)
+	// 2: content_block_delta (input_json_delta)
+	// 3: content_block_stop (index 0) <-- close the tool block
+	// 4: content_block_start (thinking, index 1) <-- synthetic thinking block
+	// 5: content_block_delta (signature_delta)
+	// 6: content_block_stop (index 1)
+	// 7: message_delta
+	// 8: message_stop
+
+	require.Len(t, events, 9)
+
+	// Tool block
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "tool_use", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "input_json_delta", *events[2].Delta.Type)
+
+	// Tool block stop
+	require.Equal(t, "content_block_stop", events[3].Type)
+	require.Equal(t, int64(0), *events[3].Index)
+
+	// Synthetic thinking block
+	require.Equal(t, "content_block_start", events[4].Type)
+	require.Equal(t, "thinking", events[4].ContentBlock.Type)
+	require.Equal(t, int64(1), *events[4].Index)
+
+	// Signature on the thinking block
+	require.Equal(t, "content_block_delta", events[5].Type)
+	require.Equal(t, "signature_delta", *events[5].Delta.Type)
+	require.Equal(t, sig, *events[5].Delta.Signature)
+	require.Equal(t, int64(1), *events[5].Index)
+
+	require.Equal(t, "content_block_stop", events[6].Type)
+	require.Equal(t, int64(1), *events[6].Index)
+
+	require.Equal(t, "message_delta", events[7].Type)
+	require.Equal(t, "message_stop", events[8].Type)
+}
+
+// TestPendingSignature_SignatureWithoutThinking_ToolUse tests the defensive path:
+// signature arrives with no ReasoningContent at all, then tool_use directly.
+// The flushPendingSignatureBlock() creates a synthetic empty thinking block.
+func TestPendingSignature_SignatureWithoutThinking_ToolUse(t *testing.T) {
+	const (
+		id    = "msg_test_006"
+		model = "test-model"
+		sig   = "orphan_sig_tool"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		// Signature without any thinking content
+		buildChunk(id, model, withReasoningSignature(sig)),
+		// Tool use directly
+		buildChunk(id, model, withToolCall(0, "toolu_01", "Bash", `{"command":"ls"}`)),
+		buildChunk(id, model, withFinishReason("tool_calls")),
+		buildChunk(id, model, withUsage(10, 20)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected: synthetic thinking block created for the signature
+	// 0: message_start
+	// 1: content_block_start (thinking)
+	// 2: content_block_delta (signature_delta)
+	// 3: content_block_stop (index 0)
+	// 4: content_block_start (tool_use, index 1)
+	// 5: content_block_delta (input_json_delta)
+	// 6: content_block_stop (index 1)
+	// 7: message_delta
+	// 8: message_stop
+
+	require.Len(t, events, 9)
+
+	// Synthetic thinking block
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "thinking", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+
+	// Signature on the thinking block
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "signature_delta", *events[2].Delta.Type)
+	require.Equal(t, sig, *events[2].Delta.Signature)
+	require.Equal(t, int64(0), *events[2].Index)
+
+	require.Equal(t, "content_block_stop", events[3].Type)
+	require.Equal(t, int64(0), *events[3].Index)
+
+	// Tool use at index 1
+	require.Equal(t, "content_block_start", events[4].Type)
+	require.Equal(t, "tool_use", events[4].ContentBlock.Type)
+	require.Equal(t, int64(1), *events[4].Index)
+}
+
+// TestPendingSignature_SignatureWithoutThinking_Text tests the defensive path:
+// signature arrives with no ReasoningContent, then text directly.
+func TestPendingSignature_SignatureWithoutThinking_Text(t *testing.T) {
+	const (
+		id    = "msg_test_007"
+		model = "test-model"
+		sig   = "orphan_sig_text"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		// Signature without any thinking content
+		buildChunk(id, model, withReasoningSignature(sig)),
+		// Text directly
+		buildChunk(id, model, withTextContent("Hello")),
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 10)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected: synthetic thinking block, then text
+	// 0: message_start
+	// 1: content_block_start (thinking)
+	// 2: content_block_delta (signature_delta)
+	// 3: content_block_stop (index 0)
+	// 4: content_block_start (text, index 1)
+	// 5: content_block_delta (text_delta "Hello")
+	// 6: content_block_stop (index 1)
+	// 7: message_delta
+	// 8: message_stop
+
+	require.Len(t, events, 9)
+
+	// Synthetic thinking block
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "thinking", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+
+	// Signature on the thinking block
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "signature_delta", *events[2].Delta.Type)
+	require.Equal(t, sig, *events[2].Delta.Signature)
+	require.Equal(t, int64(0), *events[2].Index)
+
+	require.Equal(t, "content_block_stop", events[3].Type)
+
+	// Text at index 1
+	require.Equal(t, "content_block_start", events[4].Type)
+	require.Equal(t, "text", events[4].ContentBlock.Type)
+	require.Equal(t, int64(1), *events[4].Index)
+}
+
+// TestPendingSignature_SignatureWithoutThinking_FinishOnly tests the defensive path:
+// signature arrives with no ReasoningContent, then finish directly (no text/tool).
+// The flushPendingSignatureBlock() at finish_reason creates a synthetic thinking block.
+func TestPendingSignature_SignatureWithoutThinking_FinishOnly(t *testing.T) {
+	const (
+		id    = "msg_test_008"
+		model = "test-model"
+		sig   = "orphan_sig_finish"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		// Signature without any thinking content
+		buildChunk(id, model, withReasoningSignature(sig)),
+		// Finish directly
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 5)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected: synthetic thinking block created at finish
+	// 0: message_start
+	// 1: content_block_start (thinking)
+	// 2: content_block_delta (signature_delta)
+	// 3: content_block_stop (index 0)
+	// 4: content_block_stop (index 0) — from finish_reason (deduplicated)
+	// But due to dedup logic, the second content_block_stop is skipped
+	// So: 4: message_delta, 5: message_stop
+
+	require.Len(t, events, 6)
+
+	// Synthetic thinking block
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "thinking", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+
+	// Signature on the thinking block
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "signature_delta", *events[2].Delta.Type)
+	require.Equal(t, sig, *events[2].Delta.Signature)
+	require.Equal(t, int64(0), *events[2].Index)
+
+	require.Equal(t, "content_block_stop", events[3].Type)
+
+	require.Equal(t, "message_delta", events[4].Type)
+	require.Equal(t, "message_stop", events[5].Type)
+}
+
+// TestFinishReason_WithoutAnyOpenBlockPreservesTrailingStop verifies the legacy
+// finish_reason behavior: even when no text/tool block is open, the transformer
+// still emits a trailing content_block_stop before message_delta.
+func TestFinishReason_WithoutAnyOpenBlockPreservesTrailingStop(t *testing.T) {
+	const (
+		id    = "msg_test_finish_only"
+		model = "test-model"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 5)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	// Expected legacy event order:
+	// 0: message_start
+	// 1: content_block_stop (index 0)
+	// 2: message_delta
+	// 3: message_stop
+	require.Len(t, events, 4)
+	require.Equal(t, "message_start", events[0].Type)
+	require.Equal(t, "content_block_stop", events[1].Type)
+	require.Equal(t, int64(0), *events[1].Index)
+	require.Equal(t, "message_delta", events[2].Type)
+	require.Equal(t, "message_stop", events[3].Type)
+}
+
+func TestFinishReason_WithOpenTextBlock_EmitsSingleStop(t *testing.T) {
+	const (
+		id    = "msg_test_finish_text_only"
+		model = "test-model"
+	)
+
+	responses := []*llm.Response{
+		buildChunk(id, model, withUsage(10, 1)),
+		buildChunk(id, model, withTextContent("Hello")),
+		buildChunk(id, model, withFinishReason("stop")),
+		buildChunk(id, model, withUsage(10, 5)),
+	}
+
+	events := collectStreamEvents(t, responses)
+
+	require.Len(t, events, 6)
+	require.Equal(t, "message_start", events[0].Type)
+	require.Equal(t, "content_block_start", events[1].Type)
+	require.Equal(t, "text", events[1].ContentBlock.Type)
+	require.Equal(t, int64(0), *events[1].Index)
+	require.Equal(t, "content_block_delta", events[2].Type)
+	require.Equal(t, "text_delta", *events[2].Delta.Type)
+	require.Equal(t, "Hello", *events[2].Delta.Text)
+	require.Equal(t, "content_block_stop", events[3].Type)
+	require.Equal(t, int64(0), *events[3].Index)
+	require.Equal(t, "message_delta", events[4].Type)
+	require.Equal(t, "message_stop", events[5].Type)
+
+	stopCount := 0
+	for _, event := range events {
+		if event.Type == "content_block_stop" {
+			stopCount++
+		}
+	}
+	require.Equal(t, 1, stopCount)
 }

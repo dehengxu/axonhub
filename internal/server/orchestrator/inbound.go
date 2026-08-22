@@ -3,6 +3,9 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"errors"
+
+	"github.com/tidwall/gjson"
 
 	"github.com/looplj/axonhub/internal/dumper"
 	"github.com/looplj/axonhub/internal/ent"
@@ -13,6 +16,11 @@ import (
 	"github.com/looplj/axonhub/llm/streams"
 	"github.com/looplj/axonhub/llm/transformer"
 )
+
+// ErrStreamIncomplete reports an upstream stream that ended without a terminal
+// event and without an aggregated complete response. The same value is persisted
+// on the request and delivered to the client, so both sides agree on the reason.
+var ErrStreamIncomplete = errors.New("stream ended without terminal event or completed response")
 
 // InboundPersistentStream wraps a stream and tracks all responses for final saving to database.
 // It implements the streams.Stream interface and handles persistence in the Close method.
@@ -43,7 +51,7 @@ func NewInboundPersistentStream(
 	perf *biz.PerformanceRecord,
 	state *PersistenceState,
 ) *InboundPersistentStream {
-	return &InboundPersistentStream{
+	s := &InboundPersistentStream{
 		ctx:            ctx,
 		stream:         stream,
 		request:        request,
@@ -55,6 +63,8 @@ func NewInboundPersistentStream(
 		closed:         false,
 		state:          state,
 	}
+
+	return s
 }
 
 func (ts *InboundPersistentStream) Next() bool {
@@ -64,8 +74,10 @@ func (ts *InboundPersistentStream) Next() bool {
 func (ts *InboundPersistentStream) Current() *httpclient.StreamEvent {
 	event := ts.stream.Current()
 	if event != nil {
-		ts.responseChunks = append(ts.responseChunks, event)
-		if isTerminalStreamEvent(event) {
+		// For raw binary audio chunks (TTS stream_format=audio), persist only a size
+		// summary to avoid buffering the full audio payload in memory.
+		ts.responseChunks = append(ts.responseChunks, httpclient.SummarizeBinaryChunk(event))
+		if IsTerminalStreamEvent(event) {
 			ts.state.StreamCompleted = true
 		}
 	}
@@ -73,15 +85,65 @@ func (ts *InboundPersistentStream) Current() *httpclient.StreamEvent {
 	return event
 }
 
-// isTerminalStreamEvent checks if the event represents the end of a successfully completed stream.
-// For Chat Completions API this is the raw [DONE] event; for Responses API this is response.completed.
-func isTerminalStreamEvent(event *httpclient.StreamEvent) bool {
+// IsTerminalStreamEvent checks both SSE metadata and JSON data for a successful
+// protocol-level or semantic completion marker. The SSE writers use it to decide
+// whether the client actually received a completion marker, so this must stay the
+// single source of truth for "the stream ended properly".
+func IsTerminalStreamEvent(event *httpclient.StreamEvent) bool {
+	if event == nil {
+		return false
+	}
+
 	// For chat completions, check for [DONE] event
-	return bytes.Equal(event.Data, llm.DoneStreamEvent.Data) ||
+	if bytes.Equal(event.Data, llm.DoneStreamEvent.Data) ||
 		// For Responses API, check for response.completed event
 		event.Type == "response.completed" ||
 		// For Anthropic Messages API, check for message_stop event
-		event.Type == "message_stop"
+		event.Type == "message_stop" ||
+		// For OpenAI audio APIs (TTS sse / STT stream) which have no [DONE] sentinel:
+		// rely on the terminal *.done event surfaced as StreamEvent.Type.
+		event.Type == "speech.audio.done" ||
+		event.Type == "transcript.text.done" ||
+		event.Type == httpclient.BinaryStreamDoneEventType {
+		return true
+	}
+
+	// Compatible SSE providers do not always populate the SSE `event` field and
+	// instead carry the event type only in the JSON data. Also recognize a chat
+	// completion's finish_reason as semantic completion: clients commonly close
+	// the connection immediately after consuming that final useful chunk, before
+	// the trailing [DONE] marker is read by the server.
+	eventType := gjson.GetBytes(event.Data, "type").String()
+	switch eventType {
+	case "response.completed", "message_stop", "speech.audio.done", "transcript.text.done":
+		return true
+	}
+
+	// OpenAI chat completions: choices[].finish_reason
+	if hasNonEmptyJSONStringField(event.Data, "choices", "finish_reason") {
+		return true
+	}
+
+	// Gemini generateContent streams have no [DONE] sentinel. Completion is
+	// signaled by candidates[].finishReason (e.g. STOP, MAX_TOKENS, SAFETY).
+	return hasNonEmptyJSONStringField(event.Data, "candidates", "finishReason")
+}
+
+func hasNonEmptyJSONStringField(data []byte, arrayPath, field string) bool {
+	arr := gjson.GetBytes(data, arrayPath)
+	if !arr.IsArray() {
+		return false
+	}
+
+	completed := false
+	arr.ForEach(func(_, item gjson.Result) bool {
+		value := item.Get(field)
+		completed = value.Type == gjson.String && value.String() != ""
+
+		return !completed
+	})
+
+	return completed
 }
 
 func (ts *InboundPersistentStream) Err() error {
@@ -106,23 +168,76 @@ func (ts *InboundPersistentStream) Close() error {
 	// the client disconnects immediately after receiving the last chunk.
 	if ts.state.StreamCompleted {
 		// Stream completed successfully - perform final persistence
-		log.Debug(ctx, "Stream completed successfully (received [DONE]), performing final persistence")
+		log.Debug(ctx, "Stream completed successfully (received terminal event), performing final persistence")
 		ts.persistResponseChunks(ctx)
 
 		return ts.stream.Close()
 	}
 
-	// Check if context was canceled (client disconnected before [DONE])
-	if ctxErr != nil || streamErr != nil {
-		// Use context without cancellation to ensure persistence even if client canceled
-		if ts.request != nil {
-			persistCtx := context.WithoutCancel(ctx)
+	// If there's an explicit stream error (not just context cancellation), treat as failure
+	// regardless of what chunks we have. Stream errors indicate the upstream response
+	// was incomplete or corrupted.
+	if streamErr != nil && !errors.Is(streamErr, context.Canceled) && !errors.Is(streamErr, context.DeadlineExceeded) {
+		persistCtx := context.WithoutCancel(ctx)
+		ts.persistFailureChunks(persistCtx)
 
-			// Determine the actual error to report
-			errToReport := streamErr
-			if errToReport == nil {
-				errToReport = ctxErr
+		if ts.request != nil {
+			if err := ts.requestService.UpdateRequestStatusFromError(persistCtx, ts.request.ID, streamErr); err != nil {
+				log.Warn(persistCtx, "Failed to update request status from error", log.Cause(err))
 			}
+		}
+
+		return ts.stream.Close()
+	}
+
+	// If we haven't received a terminal event, check if the chunks we DO have form a complete response.
+	// This handles models that aggregate internally (like Codex) or upstream proxy hung connections
+	// where the provider sent the full JSON payload but failed to send [DONE] before dropping.
+	var responseBody []byte
+	var meta llm.ResponseMeta
+	var aggErr error
+
+	if len(ts.responseChunks) > 0 && !ts.state.StreamCompleted {
+		responseBody, meta, aggErr = ts.transformer.AggregateStreamChunks(context.WithoutCancel(ctx), ts.responseChunks)
+		if aggErr == nil && meta.ID != "" && len(responseBody) > 0 && isCompletedAggregated(meta) {
+			log.Debug(ctx, "Stream has valid complete response without terminal event, treating as completed")
+			ts.state.StreamCompleted = true
+		}
+	}
+
+	// Check if context was canceled (client disconnected before [DONE]).
+	// Skip the error path if we determined the stream actually completed successfully above.
+	if (ctxErr != nil || streamErr != nil) && !ts.state.StreamCompleted {
+		persistCtx := context.WithoutCancel(ctx)
+		ts.persistFailureChunks(persistCtx)
+
+		if ts.request != nil {
+			errToReport := ctxErr
+			if errToReport == nil {
+				errToReport = streamErr
+			}
+
+			if err := ts.requestService.UpdateRequestStatusFromError(persistCtx, ts.request.ID, errToReport); err != nil {
+				log.Warn(persistCtx, "Failed to update request status from error", log.Cause(err))
+			}
+		}
+
+		return ts.stream.Close()
+	}
+
+	// If the stream ended without a terminal event and we couldn't determine it was
+	// completed through aggregation, mark it as incomplete/failed. This handles the case
+	// where the upstream connection drops silently (EOF) without sending a terminal event,
+	// which would otherwise fall through and incorrectly mark the request as "completed".
+	if !ts.state.StreamCompleted {
+		log.Debug(ctx, "Stream ended without terminal event or completed response, treating as incomplete")
+
+		persistCtx := context.WithoutCancel(ctx)
+		// Persist partial chunks for debugging; do not mark the request completed.
+		ts.persistFailureChunks(persistCtx)
+
+		if ts.request != nil {
+			errToReport := ErrStreamIncomplete
 
 			if err := ts.requestService.UpdateRequestStatusFromError(persistCtx, ts.request.ID, errToReport); err != nil {
 				log.Warn(persistCtx, "Failed to update request status from error", log.Cause(err))
@@ -135,7 +250,12 @@ func (ts *InboundPersistentStream) Close() error {
 	// Stream completed successfully - perform final persistence
 	log.Debug(ctx, "Stream completed successfully, performing final persistence")
 
-	ts.persistResponseChunks(ctx)
+	// We already aggregated the chunks above, so pass them directly to avoid double-aggregation
+	if len(responseBody) > 0 {
+		ts._persistResponse(context.WithoutCancel(ctx), responseBody, meta)
+	} else {
+		ts.persistResponseChunks(ctx)
+	}
 
 	return ts.stream.Close()
 }
@@ -147,41 +267,61 @@ func (ts *InboundPersistentStream) persistResponseChunks(ctx context.Context) {
 		}
 	}()
 
-	// Update main request with aggregated response
 	// Use context without cancellation to ensure persistence even if client canceled
-	if ts.request != nil {
-		persistCtx := context.WithoutCancel(ctx)
+	persistCtx := context.WithoutCancel(ctx)
 
-		responseBody, meta, err := ts.transformer.AggregateStreamChunks(persistCtx, ts.responseChunks)
-		if err != nil {
-			log.Warn(persistCtx, "Failed to aggregate chunks for main request", log.Cause(err))
+	// Aggregate stream chunks first, then delegate to _persistResponse
+	responseBody, meta, err := ts.transformer.AggregateStreamChunks(persistCtx, ts.responseChunks)
+	if err != nil {
+		log.Warn(persistCtx, "Failed to aggregate chunks for main request", log.Cause(err))
+		dumper.DumpStreamEvents(persistCtx, ts.responseChunks, "response_chunks.json")
+	}
 
-			dumper.DumpStreamEvents(persistCtx, ts.responseChunks, "response_chunks.json")
+	ts._persistResponse(persistCtx, responseBody, meta)
+}
+
+// persistFailureChunks stores buffered SSE chunks for a failed/incomplete stream
+// without marking the request completed. Used so truncated upstream responses remain
+// inspectable when store_chunks is enabled.
+func (ts *InboundPersistentStream) persistFailureChunks(ctx context.Context) {
+	if ts.request == nil || len(ts.responseChunks) == 0 {
+		return
+	}
+
+	if err := ts.requestService.SaveRequestChunks(ctx, ts.request.ID, ts.responseChunks); err != nil {
+		log.Warn(ctx, "Failed to save request chunks after stream failure", log.Cause(err))
+	}
+}
+
+// _persistResponse performs the actual persistence with pre-aggregated data.
+// This avoids redundant aggregation when the data is already available.
+func (ts *InboundPersistentStream) _persistResponse(ctx context.Context, responseBody []byte, meta llm.ResponseMeta) {
+	if ts.request == nil {
+		return
+	}
+
+	// Build latency metrics from performance record
+	var metrics *biz.LatencyMetrics
+
+	if ts.perf != nil {
+		firstTokenLatencyMs, requestLatencyMs, _ := ts.perf.Calculate()
+
+		metrics = &biz.LatencyMetrics{
+			LatencyMs: &requestLatencyMs,
 		}
-
-		// Build latency metrics from performance record
-		var metrics *biz.LatencyMetrics
-
-		if ts.perf != nil {
-			firstTokenLatencyMs, requestLatencyMs, _ := ts.perf.Calculate()
-
-			metrics = &biz.LatencyMetrics{
-				LatencyMs: &requestLatencyMs,
-			}
-			if ts.perf.Stream && ts.perf.FirstTokenTime != nil {
-				metrics.FirstTokenLatencyMs = &firstTokenLatencyMs
-			}
+		if ts.perf.Stream && ts.perf.FirstTokenTime != nil {
+			metrics.FirstTokenLatencyMs = &firstTokenLatencyMs
 		}
+	}
 
-		err = ts.requestService.UpdateRequestCompleted(persistCtx, ts.request.ID, meta.ID, responseBody, metrics)
-		if err != nil {
-			log.Warn(persistCtx, "Failed to update request status to completed", log.Cause(err))
-		}
+	err := ts.requestService.UpdateRequestCompleted(ctx, ts.request.ID, meta.ID, responseBody, metrics)
+	if err != nil {
+		log.Warn(ctx, "Failed to update request status to completed", log.Cause(err))
+	}
 
-		// Save all response chunks at once
-		if err := ts.requestService.SaveRequestChunks(persistCtx, ts.request.ID, ts.responseChunks); err != nil {
-			log.Warn(persistCtx, "Failed to save request chunks", log.Cause(err))
-		}
+	// Save all response chunks at once
+	if err := ts.requestService.SaveRequestChunks(ctx, ts.request.ID, ts.responseChunks); err != nil {
+		log.Warn(ctx, "Failed to save request chunks", log.Cause(err))
 	}
 }
 
@@ -189,10 +329,6 @@ func (ts *InboundPersistentStream) persistResponseChunks(ctx context.Context) {
 type PersistentInboundTransformer struct {
 	wrapped transformer.Inbound
 	state   *PersistenceState
-}
-
-func (p *PersistentInboundTransformer) APIFormat() llm.APIFormat {
-	return p.wrapped.APIFormat()
 }
 
 func (p *PersistentInboundTransformer) TransformError(ctx context.Context, rawErr error) *httpclient.Error {
@@ -208,6 +344,7 @@ func (p *PersistentInboundTransformer) TransformRequest(ctx context.Context, req
 	llmRequest.RawRequest = request
 	p.state.RawRequest = request
 	p.state.LlmRequest = llmRequest
+	p.state.OriginalRequestStream = llmRequest.Stream
 
 	return llmRequest, nil
 }

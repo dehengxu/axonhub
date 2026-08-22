@@ -37,8 +37,24 @@ type ModelCard struct {
 }
 
 type ModelSettings struct {
-	Associations []*ModelAssociation `json:"associations"`
+	DisableDeveloperSettingsInheritance bool                `json:"disableDeveloperSettingsInheritance"`
+	Associations                        []*ModelAssociation `json:"associations"`
+	LoadBalancerStrategy                string              `json:"loadBalancerStrategy"`
+	TraceStickyMode                     string              `json:"traceStickyMode"`
 }
+
+const (
+	ModelAssociationConditionFieldPromptTokens        = "prompt_tokens"
+	ModelAssociationConditionFieldStream              = "stream"
+	ModelAssociationConditionFieldRequestFormat       = "request_format"
+	ModelAssociationConditionFieldDailyTime           = "daily_time"
+	ModelAssociationConditionFieldHasImage            = "has_image"
+	ModelAssociationConditionFieldHasVideo            = "has_video"
+	ModelAssociationConditionFieldHasDocument         = "has_document"
+	ModelAssociationConditionFieldHasAudio            = "has_audio"
+	ModelAssociationConditionFieldRequestHeader       = "request_header"
+	ModelAssociationConditionFieldRequestHeaderPrefix = "request_header."
+)
 
 type ModelAssociation struct {
 	// channel_model: the specified model id in the specified channel
@@ -50,12 +66,18 @@ type ModelAssociation struct {
 	Type             string                       `json:"type"`
 	Priority         int                          `json:"priority"` // Lower value = higher priority, default 0
 	Disabled         bool                         `json:"disabled"`
+	When             *ModelAssociationWhen        `json:"when,omitempty"`
 	ChannelModel     *ChannelModelAssociation     `json:"channelModel"`
 	ChannelRegex     *ChannelRegexAssociation     `json:"channelRegex"`
 	Regex            *RegexAssociation            `json:"regex"`
 	ModelID          *ModelIDAssociation          `json:"modelId"`
 	ChannelTagsModel *ChannelTagsModelAssociation `json:"channelTagsModel"`
 	ChannelTagsRegex *ChannelTagsRegexAssociation `json:"channelTagsRegex"`
+}
+
+type ModelAssociationWhen struct {
+	Enabled   bool       `json:"enabled"`
+	Condition *Condition `json:"condition,omitempty"`
 }
 
 type ExcludeAssociation struct {

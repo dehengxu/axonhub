@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, DoubleArrowLeftIcon, DoubleArrowRightIcon } from '@radix-ui/react-icons';
 import { Layers, Copy, Check, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -14,17 +14,24 @@ interface ChunksDialogProps {
   onOpenChange: (open: boolean) => void;
   chunks: any[];
   title?: string;
+  isLive?: boolean;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
 const DEFAULT_PAGE_SIZE = 20;
 
-export function ChunksDialog({ open, onOpenChange, chunks, title }: ChunksDialogProps) {
+export function ChunksDialog({ open, onOpenChange, chunks, title, isLive }: ChunksDialogProps) {
   const { t } = useTranslation();
   const [chunksPage, setChunksPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [pageInputValue, setPageInputValue] = useState('1');
   const [copied, setCopied] = useState(false);
+  const chunksPageRef = useRef(chunksPage);
+
+  // Keep ref in sync so live auto-scroll can read the current page
+  useEffect(() => {
+    chunksPageRef.current = chunksPage;
+  }, [chunksPage]);
 
   const handleCopyAll = async () => {
     try {
@@ -93,13 +100,23 @@ export function ChunksDialog({ open, onOpenChange, chunks, title }: ChunksDialog
     }
   }, [handlePageInputBlur]);
 
-  // Reset page when chunks change
+  // Reset page when dialog opens or chunks identity changes.
+  // Keep chunksPage out of deps so manual page navigation is not reverted.
   useEffect(() => {
     if (open && chunks.length > 0) {
-      setChunksPage(1);
-      setPageInputValue('1');
+      if (isLive) {
+        const newTotalPages = Math.ceil(chunks.length / pageSize);
+        // totalChunksPages is already re-computed in this render (depends on chunks.length + pageSize)
+        if (chunksPageRef.current >= totalChunksPages || chunksPageRef.current === 1) {
+          setChunksPage(newTotalPages);
+          setPageInputValue(String(newTotalPages));
+        }
+      } else {
+        setChunksPage(1);
+        setPageInputValue('1');
+      }
     }
-  }, [open, chunks.length]);
+  }, [open, chunks.length, isLive, pageSize]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,6 +125,12 @@ export function ChunksDialog({ open, onOpenChange, chunks, title }: ChunksDialog
           <DialogTitle className='flex items-center gap-2'>
             <Layers className='h-5 w-5' />
             {title || t('requests.dialogs.jsonViewer.responseChunks')}
+            {isLive && (
+              <Badge variant='secondary' className='ml-2 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'>
+                <span className='mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-green-500' />
+                Live
+              </Badge>
+            )}
             <Badge variant='secondary' className='ml-2'>
               {chunks.length} {t('requests.columns.responseChunks')}
             </Badge>

@@ -6,8 +6,8 @@ import (
 	"github.com/looplj/axonhub/llm"
 )
 
-// RequestFromLLM creates OpenAI Request from unified llm.Request.
-func RequestFromLLM(r *llm.Request) *Request {
+// RequestFromLLM creates OpenAI Request from unified llm.Request with reasoning field configuration.
+func RequestFromLLM(r *llm.Request, reasoningField ReasoningField) *Request {
 	if r == nil {
 		return nil
 	}
@@ -39,7 +39,7 @@ func RequestFromLLM(r *llm.Request) *Request {
 
 	// Convert messages
 	req.Messages = lo.Map(r.Messages, func(m llm.Message, _ int) Message {
-		return MessageFromLLM(m)
+		return MessageFromLLMWithConfig(m, reasoningField)
 	})
 
 	// Convert Stop
@@ -57,9 +57,11 @@ func RequestFromLLM(r *llm.Request) *Request {
 		}
 	}
 
-	// Convert Tools
-	req.Tools = lo.Map(r.Tools, func(t llm.Tool, _ int) Tool {
-		return ToolFromLLM(t)
+	// Convert Tools – only include function tools; other types
+	// (image_generation, responses_custom_tool, etc.) are not supported
+	// by the Chat Completions API and must be filtered out.
+	req.Tools = lo.FilterMap(r.Tools, func(t llm.Tool, _ int) (Tool, bool) {
+		return ToolFromLLM(t), t.Type == llm.ToolTypeFunction
 	})
 
 	// Convert ToolChoice
@@ -92,14 +94,86 @@ func RequestFromLLM(r *llm.Request) *Request {
 	return req
 }
 
+// applyReasoningEffortMapping replaces reasoning_effort according to a per-channel mapping.
+// The first entry whose From matches the effort value wins; values not in the list (or an
+// empty/nil list) pass through unchanged. This lets non-standard OpenAI-compatible providers
+// (ollama, opencode, evolink, self-hosted gateways) opt in to conversions like xhigh→max
+// without affecting standard OpenAI channels. Applied in OutboundTransformer.TransformRequest.
+func applyReasoningEffortMapping(effort string, mappings []llm.ReasoningEffortMapping) string {
+	if len(mappings) == 0 || effort == "" {
+		return effort
+	}
+	for _, m := range mappings {
+		if m.From == effort {
+			return m.To
+		}
+	}
+	return effort
+}
+
 // MessageFromLLM creates OpenAI Message from unified llm.Message.
+// Defaults to ReasoningFieldAll to preserve both reasoning fields.
 func MessageFromLLM(m llm.Message) Message {
+	return MessageFromLLMWithConfig(m, ReasoningFieldAll)
+}
+
+// MessageFromLLMWithConfig creates OpenAI Message from unified llm.Message with reasoning field configuration.
+func MessageFromLLMWithConfig(m llm.Message, reasoningField ReasoningField) Message {
+	var reasoningContent, reasoning *string
+
+	// Apply reasoning field configuration
+	switch reasoningField {
+	case ReasoningFieldContent:
+		// Only use reasoning_content field
+		// Prefer ReasoningContent, fallback to Reasoning if ReasoningContent is nil
+		reasoningContent = m.ReasoningContent
+		if reasoningContent == nil && m.Reasoning != nil {
+			reasoningContent = m.Reasoning
+		}
+		reasoning = nil
+	case ReasoningFieldReasoning:
+		// Only use reasoning field
+		// Prefer Reasoning, fallback to ReasoningContent if Reasoning is nil
+		reasoning = m.Reasoning
+		if reasoning == nil && m.ReasoningContent != nil {
+			reasoning = m.ReasoningContent
+		}
+		reasoningContent = nil
+	case ReasoningFieldNone:
+		// Strip all reasoning fields
+		reasoningContent = nil
+		reasoning = nil
+	default: // ReasoningFieldAll
+		// Preserve both reasoning fields with sync logic
+		reasoningContent = m.ReasoningContent
+		reasoning = m.Reasoning
+
+		// Sync: if one field has value and the other is nil/empty, copy the value
+		if reasoningContent == nil && reasoning != nil && *reasoning != "" {
+			reasoningContent = reasoning
+		}
+		if reasoning == nil && reasoningContent != nil && *reasoningContent != "" {
+			reasoning = reasoningContent
+		}
+	}
+
+	// Build the Message with determined fields
 	msg := Message{
 		Role:             m.Role,
 		Name:             m.Name,
 		Refusal:          m.Refusal,
 		ToolCallID:       m.ToolCallID,
-		ReasoningContent: m.ReasoningContent,
+		ReasoningContent: reasoningContent,
+		Reasoning:        reasoning,
+	}
+
+	if m.Audio != nil {
+		msg.Audio = &OutputAudio{
+			ID:         m.Audio.ID,
+			Data:       m.Audio.Data,
+			ExpiresAt:  m.Audio.ExpiresAt,
+			Transcript: m.Audio.Transcript,
+		}
 	}
 
 	// Convert Content
@@ -110,6 +184,16 @@ func MessageFromLLM(m llm.Message) Message {
 		msg.ToolCalls = lo.Map(m.ToolCalls, func(tc llm.ToolCall, _ int) ToolCall {
 			return ToolCallFromLLM(tc)
 		})
+	}
+
+	// An assistant turn that only requests tool calls has no content to send, and
+	// a message whose parts were all filtered out (e.g. compaction) is left with an
+	// empty part list. Both cases would reach the wire as a missing or null content
+	// field, which the OpenAI spec permits but stricter OpenAI-compatible upstreams
+	// reject because their schema only accepts a string or an array. Normalize to an
+	// empty string, which every implementation accepts and OpenAI treats as no content.
+	if len(msg.ToolCalls) > 0 && msg.Content.Content == nil && len(msg.Content.MultipleContent) == 0 {
+		msg.Content = MessageContent{Content: lo.ToPtr("")}
 	}
 
 	// Convert Annotations
@@ -125,7 +209,9 @@ func MessageFromLLM(m llm.Message) Message {
 // AnnotationFromLLM creates OpenAI Annotation from unified llm.Annotation.
 func AnnotationFromLLM(a llm.Annotation) Annotation {
 	annotation := Annotation{
-		Type: a.Type,
+		Type:       a.Type,
+		StartIndex: a.StartIndex,
+		EndIndex:   a.EndIndex,
 	}
 
 	if a.URLCitation != nil {
@@ -145,8 +231,13 @@ func MessageContentFromLLM(c llm.MessageContent) MessageContent {
 	}
 
 	if c.MultipleContent != nil {
-		content.MultipleContent = lo.Map(c.MultipleContent, func(p llm.MessageContentPart, _ int) MessageContentPart {
-			return MessageContentPartFromLLM(p)
+		content.MultipleContent = lo.FilterMap(c.MultipleContent, func(p llm.MessageContentPart, _ int) (MessageContentPart, bool) {
+			switch p.Type {
+			case "compaction", "compaction_summary":
+				return MessageContentPart{}, false
+			default:
+				return MessageContentPartFromLLM(p), true
+			}
 		})
 	}
 
@@ -156,7 +247,7 @@ func MessageContentFromLLM(c llm.MessageContent) MessageContent {
 // MessageContentPartFromLLM creates OpenAI MessageContentPart from unified llm.MessageContentPart.
 func MessageContentPartFromLLM(p llm.MessageContentPart) MessageContentPart {
 	part := MessageContentPart{
-		Type: p.Type,
+		Type: normalizeContentPartType(p.Type),
 		Text: p.Text,
 	}
 
@@ -167,14 +258,34 @@ func MessageContentPartFromLLM(p llm.MessageContentPart) MessageContentPart {
 		}
 	}
 
-	if p.Audio != nil {
-		part.Audio = &Audio{
-			Format: p.Audio.Format,
-			Data:   p.Audio.Data,
+	if p.VideoURL != nil {
+		part.VideoURL = &VideoURL{
+			URL: p.VideoURL.URL,
+		}
+	}
+
+	if p.InputAudio != nil {
+		part.InputAudio = &InputAudio{
+			Format: p.InputAudio.Format,
+			Data:   p.InputAudio.Data,
 		}
 	}
 
 	return part
+}
+
+// normalizeContentPartType maps Responses-only text part types onto the plain
+// "text" type used by Chat Completions. The Responses API distinguishes input
+// from output text, but Chat Completions has a single text part type, and strict
+// OpenAI-compatible upstreams reject the ones they do not know. Types that Chat
+// Completions does understand (image_url, video_url, input_audio, ...) pass through.
+func normalizeContentPartType(partType string) string {
+	switch partType {
+	case "input_text", "output_text":
+		return "text"
+	default:
+		return partType
+	}
 }
 
 // ToolFromLLM creates OpenAI Tool from unified llm.Tool.
@@ -192,7 +303,7 @@ func ToolFromLLM(t llm.Tool) Tool {
 
 // ToolCallFromLLM creates OpenAI ToolCall from unified llm.ToolCall.
 func ToolCallFromLLM(tc llm.ToolCall) ToolCall {
-	return ToolCall{
+	toolCall := ToolCall{
 		ID:   tc.ID,
 		Type: tc.Type,
 		Function: FunctionCall{
@@ -201,6 +312,16 @@ func ToolCallFromLLM(tc llm.ToolCall) ToolCall {
 		},
 		Index: tc.Index,
 	}
+
+	if raw, ok := tc.TransformerMetadata[TransformerMetadataKeyGoogleThoughtSignature].(string); ok && raw != "" {
+		toolCall.ExtraContent = &ToolCallExtraContent{
+			Google: &ToolCallGoogleExtraContent{
+				ThoughtSignature: raw,
+			},
+		}
+	}
+
+	return toolCall
 }
 
 // ToLLMResponse converts OpenAI Response to unified llm.Response.
@@ -241,6 +362,7 @@ func (r *Response) ToLLMResponse() *llm.Response {
 		if resp.TransformerMetadata == nil {
 			resp.TransformerMetadata = make(map[string]any)
 		}
+
 		resp.TransformerMetadata[TransformerMetadataKeyCitations] = r.Citations
 	}
 

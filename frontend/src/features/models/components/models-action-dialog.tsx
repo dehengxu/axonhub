@@ -22,8 +22,17 @@ import { useModels } from '../context/models-context';
 import { DEVELOPER_IDS, DEVELOPER_ICONS } from '../data/constants';
 import { useCreateModel, useUpdateModel } from '../data/models';
 import { useDevelopersData } from '../data/providers';
-import { type Provider, type ProviderModel } from '../data/providers.schema';
-import { CreateModelInput, createModelInputSchema, UpdateModelInput, ModelCard, ModelType, modelTypeSchema, updateModelInputSchema } from '../data/schema';
+import { type Provider, type ProviderModel, resolveVision } from '../data/providers.schema';
+import {
+  CreateModelInput,
+  createModelInputSchema,
+  UpdateModelInput,
+  ModelCard,
+  ModelType,
+  modelTypeSchema,
+  normalizeModelRoutingPolicyValue,
+  updateModelInputSchema,
+} from '../data/schema';
 
 function isDeveloper(provider: string) {
   return DEVELOPER_IDS.includes(provider);
@@ -102,7 +111,7 @@ export function ModelsActionDialog() {
       icon: '',
       group: '',
       modelCard: {},
-      settings: { associations: [] },
+      settings: { associations: [], loadBalancerStrategy: 'default', traceStickyMode: 'default' },
       remark: '',
     },
   });
@@ -117,7 +126,12 @@ export function ModelsActionDialog() {
         icon: currentRow.icon,
         group: currentRow.group,
         modelCard: currentRow.modelCard,
-        settings: currentRow.settings,
+        settings: {
+          ...currentRow.settings,
+          associations: currentRow.settings?.associations ?? [],
+          loadBalancerStrategy: normalizeModelRoutingPolicyValue(currentRow.settings?.loadBalancerStrategy),
+          traceStickyMode: normalizeModelRoutingPolicyValue(currentRow.settings?.traceStickyMode),
+        },
         remark: currentRow.remark || '',
       });
       setSelectedProvider(currentRow.developer);
@@ -134,7 +148,7 @@ export function ModelsActionDialog() {
         icon: '',
         group: '',
         modelCard: {},
-        settings: { associations: [] },
+        settings: { associations: [], loadBalancerStrategy: 'default', traceStickyMode: 'default' },
         remark: '',
       });
       setSelectedProvider('');
@@ -150,15 +164,29 @@ export function ModelsActionDialog() {
       setSelectedProvider(providerId);
       setDeveloperSearchValue(providerId);
       form.setValue('developer', providerId);
-      const icon = DEVELOPER_ICONS[providerId] || providerId;
-      form.setValue('icon', icon);
-      setModelIdInput('');
-      setModelIdSearchValue('');
-      form.setValue('modelID', '');
-      form.setValue('name', '');
-      form.setValue('group', '');
-      form.setValue('modelCard', {});
-      setSelectedModelCard({});
+      if (!isEdit) {
+        const icon = DEVELOPER_ICONS[providerId] || providerId;
+        form.setValue('icon', icon);
+        setModelIdInput('');
+        setModelIdSearchValue('');
+        form.setValue('modelID', '');
+        form.setValue('name', '');
+        form.setValue('group', '');
+        form.setValue('modelCard', {});
+        setSelectedModelCard({});
+      }
+    },
+    [form, isEdit]
+  );
+
+  // 用户直接在输入框键入时实时同步 form 值，避免 blur/submit 竞态导致提交旧值。
+  // 注意不要同步 modelIdInput：它是 AutoComplete 的“已提交选中值”，若跟随搜索词变化，
+  // 手输完整 model ID 后再点选该项会被判定为取消选择而清空，blur 时也不会再触发
+  // handleModelIdChange，导致新建模型时 name/group/type/modelCard 无法回填。
+  const handleModelIdSearchChange = useCallback(
+    (value: string) => {
+      setModelIdSearchValue(value);
+      form.setValue('modelID', value);
     },
     [form]
   );
@@ -168,10 +196,10 @@ export function ModelsActionDialog() {
       setModelIdInput(modelId);
       setModelIdSearchValue(modelId);
       form.setValue('modelID', modelId);
-  
+
       const selectedModel = selectedProviderModels.find((m: ProviderModel) => m.id === modelId);
-  
-      if (selectedModel) {
+
+      if (selectedModel && !isEdit) {
         form.setValue('name', selectedModel.display_name || selectedModel.name || '');
         form.setValue('group', selectedModel.family || selectedProvider);
         const normalizedType = selectedModel.type?.replace(/-/g, '_');
@@ -189,7 +217,7 @@ export function ModelsActionDialog() {
             input: selectedModel.modalities?.input || [],
             output: selectedModel.modalities?.output || [],
           },
-          vision: selectedModel.vision,
+          vision: resolveVision(selectedModel),
           cost: {
             input: selectedModel.cost?.input || 0,
             output: selectedModel.cost?.output || 0,
@@ -211,13 +239,16 @@ export function ModelsActionDialog() {
         setSelectedModelCard(currentModelCard || {});
       }
     },
-    [selectedProviderModels, selectedProvider, form]
+    [selectedProviderModels, selectedProvider, form, isEdit]
   );
 
   const onSubmit = async (data: CreateModelInput) => {
     try {
       if (isEdit && currentRow) {
         const updateData: UpdateModelInput = {
+          developer: data.developer,
+          modelID: data.modelID,
+          type: data.type,
           name: data.name,
           icon: data.icon,
           group: data.group,
@@ -266,20 +297,16 @@ export function ModelsActionDialog() {
                       <FormItem>
                         <FormLabel>{t('models.fields.developer')}</FormLabel>
                         <FormControl>
-                          {isEdit ? (
-                            <Input value={field.value} disabled={true} className='bg-muted' />
-                          ) : (
-                            <AutoComplete
-                              selectedValue={selectedProvider}
-                              onSelectedValueChange={handleProviderChange}
-                              searchValue={developerSearchValue}
-                              onSearchValueChange={setDeveloperSearchValue}
-                              items={developerOptions}
-                              placeholder={t('models.fields.selectDeveloper')}
-                              emptyMessage={t('models.fields.noModels')}
-                              portalContainer={dialogContent}
-                            />
-                          )}
+                          <AutoComplete
+                            selectedValue={selectedProvider}
+                            onSelectedValueChange={handleProviderChange}
+                            searchValue={developerSearchValue}
+                            onSearchValueChange={setDeveloperSearchValue}
+                            items={developerOptions}
+                            placeholder={t('models.fields.selectDeveloper')}
+                            emptyMessage={t('models.fields.noModels')}
+                            portalContainer={dialogContent}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -293,14 +320,12 @@ export function ModelsActionDialog() {
                       <FormItem>
                         <FormLabel>{t('models.fields.modelId')}</FormLabel>
                         <FormControl>
-                          {isEdit ? (
-                            <Input value={field.value} disabled={true} className='bg-muted' />
-                          ) : selectedProvider && modelIdOptions.length > 0 ? (
+                          {selectedProvider && modelIdOptions.length > 0 ? (
                             <AutoComplete
                               selectedValue={modelIdInput}
                               onSelectedValueChange={handleModelIdChange}
                               searchValue={modelIdSearchValue}
-                              onSearchValueChange={setModelIdSearchValue}
+                              onSearchValueChange={handleModelIdSearchChange}
                               items={modelIdOptions}
                               placeholder={t('models.fields.modelIdPlaceholder')}
                               emptyMessage={t('models.fields.noModels')}
@@ -311,7 +336,7 @@ export function ModelsActionDialog() {
                               selectedValue={modelIdInput}
                               onSelectedValueChange={handleModelIdChange}
                               searchValue={modelIdSearchValue}
-                              onSearchValueChange={setModelIdSearchValue}
+                              onSearchValueChange={handleModelIdSearchChange}
                               items={[]}
                               placeholder={t('models.fields.modelIdPlaceholder')}
                               emptyMessage={t('models.fields.noModels')}
@@ -379,7 +404,7 @@ export function ModelsActionDialog() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t('models.fields.type')}</FormLabel>
-                        <Select disabled={isEdit} value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue />

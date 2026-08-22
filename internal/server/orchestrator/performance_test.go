@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,15 @@ import (
 	"github.com/looplj/axonhub/llm"
 	"github.com/looplj/axonhub/llm/httpclient"
 )
+
+func TestExtractErrorMessageForMatchingCapsResponseBody(t *testing.T) {
+	body := []byte(strings.Repeat("x", errorMatchBodyLimit+1024))
+	err := &httpclient.Error{StatusCode: 500, Body: body}
+
+	message := extractErrorMessageForMatching(err)
+	expected := ExtractErrorMessage(err) + "\n" + string(body[:errorMatchBodyLimit])
+	require.Equal(t, expected, message)
+}
 
 // mockChannelService is a mock implementation of ChannelService for testing
 type mockChannelService struct{}
@@ -30,12 +40,12 @@ func TestPerformanceRecording_OnInboundLlmRequest_SetsStreamFlag(t *testing.T) {
 	}{
 		{
 			name:         "streaming request - Stream is true",
-			streamValue:  boolPtr(true),
+			streamValue:  new(true),
 			expectedFlag: true,
 		},
 		{
 			name:         "non-streaming request - Stream is false",
-			streamValue:  boolPtr(false),
+			streamValue:  new(false),
 			expectedFlag: false,
 		},
 		{
@@ -332,8 +342,3 @@ func TestPerformanceRecording_StreamFlagBugRegression(t *testing.T) {
 
 // TestRecordPerformanceStream_MarksFirstToken verifies that recordPerformanceStream
 // correctly marks the first token time.
-
-// Helper function for creating bool pointers
-func boolPtr(b bool) *bool {
-	return &b
-}

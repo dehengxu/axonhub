@@ -116,26 +116,28 @@ export function useUsageLogs(variables?: {
     requestID?: string;
     [key: string]: any;
   };
-}) {
+}, options?: { projectId?: string | null; enabled?: boolean }) {
   const { handleError } = useErrorHandler();
   const { t } = useTranslation();
   const permissions = useUsageLogPermissions();
   const selectedProjectId = useSelectedProjectId();
+  const projectId = options?.projectId !== undefined ? options.projectId : selectedProjectId;
+  const enabled = options?.enabled ?? !!projectId;
 
   return useQuery({
-    queryKey: ['usageLogs', variables, permissions, selectedProjectId],
+    queryKey: ['usageLogs', variables, permissions, projectId],
     queryFn: async () => {
       try {
         const query = buildUsageLogsQuery(permissions);
-        const headers = selectedProjectId ? { 'X-Project-ID': selectedProjectId } : undefined;
+        const headers = projectId ? { 'X-Project-ID': projectId } : undefined;
         const data = await graphqlRequest<{ usageLogs: UsageLogConnection }>(query, variables, headers);
         return usageLogConnectionSchema.parse(data?.usageLogs);
       } catch (error) {
-        handleError(error, t('usageLogs.errors.loadUsageLogsFailed'));
+        handleError(error, t('common.errors.internalServerError'));
         throw error;
       }
     },
-    enabled: !!selectedProjectId, // Only query when a project is selected
+    enabled,
   });
 }
 
@@ -157,7 +159,7 @@ export function useUsageLog(id: string) {
         }
         return usageLogSchema.parse(data.node);
       } catch (error) {
-        handleError(error, t('usageLogs.errors.loadUsageLogDetailFailed'));
+        handleError(error, t('common.errors.internalServerError'));
         throw error;
       }
     },

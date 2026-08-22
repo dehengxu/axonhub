@@ -7,7 +7,7 @@ This guide will help you get started with AxonHub quickly. In just a few minutes
 ## Prerequisites
 
 - Docker and Docker Compose (recommended)
-- Or Go 1.24+ and Node.js 18+ for development setup
+- Or Go 1.26+ and Node.js 18+ for development setup
 - A valid API key from an AI provider (OpenAI, Anthropic, etc.)
 
 ## Quick Setup Methods
@@ -324,7 +324,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 
 log:
   level: "info"
@@ -352,6 +352,9 @@ log:
 ```
 
 ## Next Steps
+
+### Understand the Request Flow
+- [Request Processing Guide](request-processing.md): Understand the full request lifecycle from entry to upstream execution, and the differences between model mapping, model association, and channel selection
 
 ### Explore Features
 - **Tracing**: Set up request tracing for observability
@@ -387,7 +390,7 @@ log:
 ### Getting Help
 
 - Check the [GitHub Issues](https://github.com/looplj/axonhub/issues)
-- Review the [Architecture Documentation](../architecture/erd.md)
+- Review the [Architecture Documentation](../development/erd.md)
 - Join the community discussions
 
 ## What's Next?

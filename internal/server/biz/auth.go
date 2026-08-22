@@ -20,36 +20,14 @@ import (
 	"github.com/looplj/axonhub/internal/log"
 )
 
-type AuthServiceParams struct {
-	fx.In
-
-	SystemService *SystemService
-	APIKeyService *APIKeyService
-	UserService   *UserService
-	Ent           *ent.Client
-}
-
-func NewAuthService(params AuthServiceParams) *AuthService {
-	return &AuthService{
-		AbstractService: &AbstractService{
-			db: params.Ent,
-		},
-		SystemService: params.SystemService,
-		APIKeyService: params.APIKeyService,
-		UserService:   params.UserService,
-	}
-}
-
-type AuthService struct {
-	*AbstractService
-
-	SystemService *SystemService
-	APIKeyService *APIKeyService
-	UserService   *UserService
-}
+const OIDC_ONLY_PLACEHOLDER = "!OIDC_SSO_ONLY!"
 
 // HashPassword hashes a password using bcrypt.
 func HashPassword(password string) (string, error) {
+	if password == OIDC_ONLY_PLACEHOLDER {
+		return OIDC_ONLY_PLACEHOLDER, nil
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
@@ -60,12 +38,50 @@ func HashPassword(password string) (string, error) {
 
 // VerifyPassword verifies a password against a hash.
 func VerifyPassword(hashedPassword, password string) error {
+	if hashedPassword == OIDC_ONLY_PLACEHOLDER {
+		return ErrOIDCLoginRequired
+	}
+
 	decodedHashedPassword, err := hex.DecodeString(hashedPassword)
 	if err != nil {
 		return fmt.Errorf("failed to decode hashed password: %w", err)
 	}
 
 	return bcrypt.CompareHashAndPassword(decodedHashedPassword, []byte(password))
+}
+
+type AuthServiceParams struct {
+	fx.In
+
+	SystemService *SystemService
+	APIKeyService *APIKeyService
+	UserService   *UserService
+	OIDCService   *OIDCService
+	Ent           *ent.Client
+	AllowNoAuth   bool `name:"allow_no_auth"`
+}
+
+func NewAuthService(params AuthServiceParams) *AuthService {
+	return &AuthService{
+		AbstractService: &AbstractService{
+			db: params.Ent,
+		},
+		SystemService: params.SystemService,
+		APIKeyService: params.APIKeyService,
+		UserService:   params.UserService,
+		OIDCService:   params.OIDCService,
+		AllowNoAuth:   params.AllowNoAuth,
+	}
+}
+
+type AuthService struct {
+	*AbstractService
+
+	SystemService *SystemService
+	APIKeyService *APIKeyService
+	UserService   *UserService
+	OIDCService   *OIDCService
+	AllowNoAuth   bool
 }
 
 // GenerateSecretKey generates a random secret key for JWT.
@@ -126,6 +142,10 @@ func (s *AuthService) AuthenticateUser(
 		return nil, ErrInternal
 	}
 
+	if s.OIDCService != nil && s.OIDCService.IsUserRestrictedToOIDC(ctx, u) {
+		return nil, ErrOIDCLoginRequired
+	}
+
 	err = VerifyPassword(u.Password, password)
 	if err != nil {
 		return nil, fmt.Errorf("invalid email or password %w", ErrInvalidPassword)
@@ -183,12 +203,44 @@ func (s *AuthService) AuthenticateJWTToken(ctx context.Context, tokenString stri
 	return u, nil
 }
 
-func (s *AuthService) AnthenticateAPIKey(ctx context.Context, key string) (*ent.APIKey, error) {
+func (s *AuthService) AuthenticateAPIKey(ctx context.Context, key string) (*ent.APIKey, error) {
 	apiKey, err := authz.RunWithSystemBypass(ctx, "auth-lookup", func(bypassCtx context.Context) (*ent.APIKey, error) {
 		return s.APIKeyService.GetAPIKey(bypassCtx, key)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get api key: %w", err)
+	}
+
+	if apiKey.Status != apikey.StatusEnabled {
+		return nil, fmt.Errorf("api key not enabled: %w", ErrInvalidAPIKey)
+	}
+
+	proj, err := apiKey.Project(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get api key project: %w", err)
+	}
+
+	if proj == nil || proj.Status != project.StatusActive {
+		return nil, fmt.Errorf("api key project not valid: %w", ErrInvalidAPIKey)
+	}
+
+	if apiKey.Type == apikey.TypeNoauth {
+		return nil, fmt.Errorf("noauth api key is only available when api auth is disabled: %w", ErrInvalidAPIKey)
+	}
+
+	return apiKey, nil
+}
+
+func (s *AuthService) AuthenticateNoAuth(ctx context.Context) (*ent.APIKey, error) {
+	if !s.AllowNoAuth {
+		return nil, fmt.Errorf("%w: API key required", ErrInvalidAPIKey)
+	}
+
+	apiKey, err := authz.RunWithSystemBypass(ctx, "auth-noauth", func(bypassCtx context.Context) (*ent.APIKey, error) {
+		return s.APIKeyService.EnsureNoAuthAPIKey(bypassCtx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to ensure noauth api key: %w", err)
 	}
 
 	if apiKey.Status != apikey.StatusEnabled {

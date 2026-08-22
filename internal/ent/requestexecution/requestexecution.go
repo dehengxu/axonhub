@@ -35,6 +35,8 @@ const (
 	FieldModelID = "model_id"
 	// FieldFormat holds the string denoting the format field in the database.
 	FieldFormat = "format"
+	// FieldReasoningEffort holds the string denoting the reasoning_effort field in the database.
+	FieldReasoningEffort = "reasoning_effort"
 	// FieldRequestBody holds the string denoting the request_body field in the database.
 	FieldRequestBody = "request_body"
 	// FieldResponseBody holds the string denoting the response_body field in the database.
@@ -43,6 +45,8 @@ const (
 	FieldResponseChunks = "response_chunks"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
+	// FieldResponseStatusCode holds the string denoting the response_status_code field in the database.
+	FieldResponseStatusCode = "response_status_code"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldStream holds the string denoting the stream field in the database.
@@ -51,8 +55,14 @@ const (
 	FieldMetricsLatencyMs = "metrics_latency_ms"
 	// FieldMetricsFirstTokenLatencyMs holds the string denoting the metrics_first_token_latency_ms field in the database.
 	FieldMetricsFirstTokenLatencyMs = "metrics_first_token_latency_ms"
+	// FieldMetricsReasoningDurationMs holds the string denoting the metrics_reasoning_duration_ms field in the database.
+	FieldMetricsReasoningDurationMs = "metrics_reasoning_duration_ms"
 	// FieldRequestHeaders holds the string denoting the request_headers field in the database.
 	FieldRequestHeaders = "request_headers"
+	// FieldRequestURL holds the string denoting the request_url field in the database.
+	FieldRequestURL = "request_url"
+	// FieldPassThroughApplied holds the string denoting the pass_through_applied field in the database.
+	FieldPassThroughApplied = "pass_through_applied"
 	// EdgeRequest holds the string denoting the request edge name in mutations.
 	EdgeRequest = "request"
 	// EdgeChannel holds the string denoting the channel edge name in mutations.
@@ -96,15 +106,20 @@ var Columns = []string{
 	FieldExternalID,
 	FieldModelID,
 	FieldFormat,
+	FieldReasoningEffort,
 	FieldRequestBody,
 	FieldResponseBody,
 	FieldResponseChunks,
 	FieldErrorMessage,
+	FieldResponseStatusCode,
 	FieldStatus,
 	FieldStream,
 	FieldMetricsLatencyMs,
 	FieldMetricsFirstTokenLatencyMs,
+	FieldMetricsReasoningDurationMs,
 	FieldRequestHeaders,
+	FieldRequestURL,
+	FieldPassThroughApplied,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -126,10 +141,14 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultProjectID holds the default value on creation for the "project_id" field.
 	DefaultProjectID int
+	// ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
+	ExternalIDValidator func(string) error
 	// DefaultFormat holds the default value on creation for the "format" field.
 	DefaultFormat string
 	// DefaultStream holds the default value on creation for the "stream" field.
 	DefaultStream bool
+	// DefaultPassThroughApplied holds the default value on creation for the "pass_through_applied" field.
+	DefaultPassThroughApplied bool
 )
 
 // Status defines the type for the "status" enum field.
@@ -211,9 +230,19 @@ func ByFormat(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFormat, opts...).ToFunc()
 }
 
+// ByReasoningEffort orders the results by the reasoning_effort field.
+func ByReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReasoningEffort, opts...).ToFunc()
+}
+
 // ByErrorMessage orders the results by the error_message field.
 func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+}
+
+// ByResponseStatusCode orders the results by the response_status_code field.
+func ByResponseStatusCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldResponseStatusCode, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
@@ -234,6 +263,21 @@ func ByMetricsLatencyMs(opts ...sql.OrderTermOption) OrderOption {
 // ByMetricsFirstTokenLatencyMs orders the results by the metrics_first_token_latency_ms field.
 func ByMetricsFirstTokenLatencyMs(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMetricsFirstTokenLatencyMs, opts...).ToFunc()
+}
+
+// ByMetricsReasoningDurationMs orders the results by the metrics_reasoning_duration_ms field.
+func ByMetricsReasoningDurationMs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMetricsReasoningDurationMs, opts...).ToFunc()
+}
+
+// ByRequestURL orders the results by the request_url field.
+func ByRequestURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestURL, opts...).ToFunc()
+}
+
+// ByPassThroughApplied orders the results by the pass_through_applied field.
+func ByPassThroughApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPassThroughApplied, opts...).ToFunc()
 }
 
 // ByRequestField orders the results by request field.

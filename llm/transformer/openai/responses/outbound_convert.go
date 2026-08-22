@@ -3,6 +3,7 @@ package responses
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/samber/lo"
 
@@ -131,6 +132,7 @@ func convertInputFromMessages(msgs []llm.Message, transformOptions llm.Transform
 			}
 		case "tool":
 			itemType := "function_call_output"
+
 			if msg.ToolCallID != nil {
 				if mapped, ok := toolResultItemTypeByCallID[*msg.ToolCallID]; ok {
 					itemType = mapped
@@ -173,6 +175,10 @@ func convertUserMessage(msg llm.Message) Item {
 						Detail:   p.ImageURL.Detail,
 					})
 				}
+			case "compaction", "compaction_summary":
+				if p.Compact != nil {
+					contentItems = append(contentItems, compactionItemFromPart(p, p.Type))
+				}
 			}
 		}
 	}
@@ -187,26 +193,38 @@ func convertUserMessage(msg llm.Message) Item {
 // convertAssistantMessage converts an assistant message to Responses API Item(s) format.
 // Returns multiple items if the message contains tool calls.
 func convertAssistantMessage(msg llm.Message) []Item {
-	var items []Item
+	var (
+		items         []Item
+		toolCallItems []Item
+	)
 
 	// Handle reasoning content first.
 	// For Requests, reasoning is represented as an `input` item with type="reasoning".
 	// The Responses API uses the `summary` field to hold the reasoning summary text.
-	if (msg.ReasoningContent != nil && *msg.ReasoningContent != "") || msg.ReasoningSignature != nil {
+	reasoningItems := msg.ReasoningItems
+	if len(reasoningItems) == 0 && msg.ReasoningSignature != nil {
+		reasoningItems = []llm.ReasoningItem{{
+			Content:   lo.FromPtr(msg.ReasoningContent),
+			Signature: *msg.ReasoningSignature,
+		}}
+	}
+
+	for _, reasoningItem := range reasoningItems {
+		encryptedContent := shared.DecodeOpenAIEncryptedContent(&reasoningItem.Signature)
+		if encryptedContent == nil {
+			continue
+		}
+
 		summary := []ReasoningSummary{}
-		if msg.ReasoningContent != nil && *msg.ReasoningContent != "" {
+		if reasoningItem.Content != "" {
 			summary = append(summary, ReasoningSummary{
 				Type: "summary_text",
-				Text: *msg.ReasoningContent,
+				Text: reasoningItem.Content,
 			})
 		}
 
-		var encryptedContent *string
-		if msg.ReasoningSignature != nil {
-			encryptedContent = shared.DecodeOpenAIEncryptedContent(msg.ReasoningSignature)
-		}
-
 		items = append(items, Item{
+			ID:               reasoningItem.ID,
 			Type:             "reasoning",
 			EncryptedContent: encryptedContent,
 			Summary:          summary,
@@ -216,17 +234,18 @@ func convertAssistantMessage(msg llm.Message) []Item {
 	// Handle tool calls
 	for _, tc := range msg.ToolCalls {
 		if tc.ResponseCustomToolCall != nil {
-			items = append(items, Item{
+			toolCallItems = append(toolCallItems, Item{
 				Type:   "custom_tool_call",
 				CallID: tc.ResponseCustomToolCall.CallID,
 				Name:   tc.ResponseCustomToolCall.Name,
 				Input:  lo.ToPtr(tc.ResponseCustomToolCall.Input),
 			})
 		} else {
-			items = append(items, Item{
+			toolCallItems = append(toolCallItems, Item{
 				Type:      "function_call",
 				CallID:    tc.ID,
 				Name:      tc.Function.Name,
+				Namespace: tc.Function.Namespace,
 				Arguments: tc.Function.Arguments,
 			})
 		}
@@ -234,32 +253,51 @@ func convertAssistantMessage(msg llm.Message) []Item {
 
 	var contentItems []Item
 
-	if msg.Content.Content != nil {
-		contentItems = append(contentItems, Item{
-			Type:        "output_text",
-			Text:        msg.Content.Content,
-			Annotations: []Annotation{},
-		})
-	} else {
-		for _, p := range msg.Content.MultipleContent {
-			if p.Type == "text" && p.Text != nil {
-				contentItems = append(contentItems, Item{
-					Type:        "output_text",
-					Text:        p.Text,
-					Annotations: []Annotation{},
-				})
-			}
+	flushMessage := func() {
+		if len(contentItems) == 0 {
+			return
 		}
-	}
 
-	if len(contentItems) > 0 {
 		items = append(items, Item{
 			Type:    "message",
 			Role:    msg.Role,
 			Status:  lo.ToPtr("completed"),
 			Content: &Input{Items: contentItems},
 		})
+		contentItems = nil
 	}
+
+	if msg.Content.Content != nil {
+		contentItems = append(contentItems, Item{
+			Type: "output_text",
+			Text: msg.Content.Content,
+		})
+	} else {
+		for _, p := range msg.Content.MultipleContent {
+			switch p.Type {
+			case "text":
+				if p.Text != nil {
+					contentItems = append(contentItems, Item{
+						Type: "output_text",
+						Text: p.Text,
+					})
+				}
+			case "compaction", "compaction_summary":
+				if p.Compact != nil {
+					flushMessage()
+
+					items = append(items, compactionItemFromPart(p, p.Type))
+				}
+			}
+		}
+	}
+
+	// In the common assistant flow, the visible message content precedes any
+	// subsequent tool calls. Flush message segments before appending tool-call
+	// items so the encoded Responses item order matches that expectation.
+	flushMessage()
+
+	items = append(items, toolCallItems...)
 
 	return items
 }
@@ -272,11 +310,31 @@ func convertToolMessageWithType(msg llm.Message, itemType string) Item {
 		output.Text = msg.Content.Content
 	} else if len(msg.Content.MultipleContent) > 0 {
 		for _, p := range msg.Content.MultipleContent {
-			if p.Type == "text" && p.Text != nil {
-				output.Items = append(output.Items, Item{
-					Type: "input_text",
-					Text: p.Text,
-				})
+			switch p.Type {
+			case "text":
+				if p.Text != nil {
+					output.Items = append(output.Items, Item{
+						Type: "input_text",
+						Text: p.Text,
+					})
+				}
+			case "image_url":
+				// Tool results can carry images (Codex's view_image, MCP screenshot
+				// tools, ...); the Responses schema allows text/image/file content in
+				// function_call_output and custom_tool_call_output. Skipping them left
+				// output empty, which the fallback below turned into "" — a blank but
+				// successful tool result the model cannot distinguish from a real one.
+				if p.ImageURL != nil {
+					// `detail` is required by InputImageContent, which is what a
+					// custom_tool_call_output's content array resolves to; the
+					// function_call_output param schema makes it optional. Both
+					// document "auto" as the default, so always send one.
+					output.Items = append(output.Items, Item{
+						Type:     "input_image",
+						ImageURL: &p.ImageURL.URL,
+						Detail:   lo.ToPtr(lo.FromPtrOr(p.ImageURL.Detail, "auto")),
+					})
+				}
 			}
 		}
 	}
@@ -289,7 +347,6 @@ func convertToolMessageWithType(msg llm.Message, itemType string) Item {
 	return Item{
 		Type:   itemType,
 		CallID: lo.FromPtr(msg.ToolCallID),
-		Name:   lo.FromPtr(msg.ToolCallName),
 		Output: &output,
 	}
 }
@@ -302,12 +359,46 @@ func convertImageGenerationToTool(src llm.Tool) Tool {
 		tool.Model = src.ImageGeneration.Model
 		tool.Background = src.ImageGeneration.Background
 		tool.InputFidelity = src.ImageGeneration.InputFidelity
+		tool.InputImageMask = src.ImageGeneration.InputImageMask
 		tool.Moderation = src.ImageGeneration.Moderation
 		tool.OutputCompression = src.ImageGeneration.OutputCompression
 		tool.OutputFormat = src.ImageGeneration.OutputFormat
 		tool.PartialImages = src.ImageGeneration.PartialImages
 		tool.Quality = src.ImageGeneration.Quality
 		tool.Size = src.ImageGeneration.Size
+	}
+
+	return tool
+}
+
+func convertWebSearchToTool(src llm.Tool) Tool {
+	tool := Tool{
+		Type: "web_search",
+	}
+
+	if src.WebSearch == nil {
+		return tool
+	}
+
+	if len(src.WebSearch.AllowedDomains) > 0 {
+		tool.Filters = &WebSearchFilters{
+			AllowedDomains: append([]string(nil), src.WebSearch.AllowedDomains...),
+		}
+	}
+
+	location := src.WebSearch.UserLocation
+	if location.Type != "" || location.City != "" || location.Country != "" || location.Region != "" || location.Timezone != "" {
+		locationType := location.Type
+		if locationType == "" {
+			locationType = "approximate"
+		}
+		tool.UserLocation = &WebSearchUserLocation{
+			Type:     locationType,
+			City:     location.City,
+			Country:  location.Country,
+			Region:   location.Region,
+			Timezone: location.Timezone,
+		}
 	}
 
 	return tool
@@ -320,6 +411,7 @@ func convertCustomToTool(src llm.Tool) Tool {
 	}
 	if src.ResponseCustomTool != nil {
 		tool.Name = src.ResponseCustomTool.Name
+
 		tool.Description = src.ResponseCustomTool.Description
 		if src.ResponseCustomTool.Format != nil {
 			tool.Format = &CustomToolFormat{
@@ -346,6 +438,53 @@ func convertFunctionToTool(src llm.Tool) Tool {
 	if len(src.Function.Parameters) > 0 {
 		var params map[string]any
 		if err := json.Unmarshal(src.Function.Parameters, &params); err == nil {
+			// Handle nil map panic - initialize if nil
+			if params == nil {
+				params = map[string]any{}
+			}
+
+			// OpenAI rejects object schemas that omit properties entirely.
+			// Anthropic clients may send {"type":"object"} for no-arg tools, so normalize that here.
+			if typeName, ok := params["type"].(string); ok && typeName == "object" {
+				if _, ok := params["properties"].(map[string]any); !ok {
+					params["properties"] = map[string]any{}
+				}
+			}
+
+			// For strict mode, additionalProperties must be false and all properties must be required
+			// See: https://platform.openai.com/docs/guides/function-calling#strict-mode
+			if src.Function.Strict != nil && *src.Function.Strict {
+				// Always set additionalProperties: false for strict validation
+				// Overwrite any existing value (including true) to ensure false
+				params["additionalProperties"] = false
+
+				// When strict mode is enabled, ALL properties must be listed in "required"
+				if props, ok := params["properties"].(map[string]any); ok && len(props) > 0 {
+					required := make([]string, 0, len(props))
+					// First, check if there's an existing required array and preserve it
+					if existingRequired, ok := params["required"].([]any); ok {
+						for _, r := range existingRequired {
+							if s, ok := r.(string); ok {
+								required = append(required, s)
+							}
+						}
+					}
+					// Add any missing property keys to required
+					requiredSet := make(map[string]bool)
+					for _, r := range required {
+						requiredSet[r] = true
+					}
+
+					for key := range props {
+						if !requiredSet[key] {
+							required = append(required, key)
+						}
+					}
+
+					params["required"] = required
+				}
+			}
+
 			tool.Parameters = params
 		}
 	}
@@ -367,7 +506,9 @@ func convertToolChoice(src *llm.ToolChoice) *ToolChoice {
 	} else if src.NamedToolChoice != nil {
 		// Specific tool choice
 		result.Type = &src.NamedToolChoice.Type
-		result.Name = &src.NamedToolChoice.Function.Name
+		if src.NamedToolChoice.Function.Name != "" {
+			result.Name = &src.NamedToolChoice.Function.Name
+		}
 	}
 
 	return result
@@ -394,8 +535,14 @@ func convertStreamOptions(src *llm.StreamOptions, metadata map[string]any) *Stre
 // Only one of "reasoning.effort" and "reasoning.max_tokens" can be specified.
 // Priority is given to effort when both are present.
 func convertReasoning(req *llm.Request) *Reasoning {
+	reasoningContext := ""
+	if requestExt := openAIResponsesRequestExtensions(req); requestExt != nil {
+		reasoningContext = requestExt.ReasoningContext
+	}
+
 	// Check if any reasoning-related fields are present
-	hasReasoningFields := req.ReasoningEffort != "" ||
+	hasReasoningFields := reasoningContext != "" ||
+		req.ReasoningEffort != "" ||
 		req.ReasoningBudget != nil ||
 		req.ReasoningSummary != nil
 	if !hasReasoningFields {
@@ -403,6 +550,7 @@ func convertReasoning(req *llm.Request) *Reasoning {
 	}
 
 	reasoning := &Reasoning{
+		Context:   reasoningContext,
 		Effort:    req.ReasoningEffort,
 		MaxTokens: req.ReasoningBudget,
 	}
@@ -418,4 +566,254 @@ func convertReasoning(req *llm.Request) *Reasoning {
 	}
 
 	return reasoning
+}
+
+func annotationToLLM(a Annotation, textRuneOffset int64) llm.Annotation {
+	annotation := llm.Annotation{
+		Type: a.Type,
+	}
+
+	if a.StartIndex != nil {
+		annotation.StartIndex = lo.ToPtr(*a.StartIndex + textRuneOffset)
+	}
+
+	if a.EndIndex != nil {
+		annotation.EndIndex = lo.ToPtr(*a.EndIndex + textRuneOffset)
+	}
+
+	if a.URLCitation != nil {
+		annotation.URLCitation = &llm.URLCitation{
+			URL:   a.URLCitation.URL,
+			Title: a.URLCitation.Title,
+		}
+	}
+
+	return annotation
+}
+
+func appendOutputText(textContent *strings.Builder, visibleTextRuneCount *int64, annotations []llm.Annotation, outputItem Item) []llm.Annotation {
+	if outputItem.Text == nil {
+		return annotations
+	}
+
+	textRuneOffset := *visibleTextRuneCount
+	textContent.WriteString(*outputItem.Text)
+	*visibleTextRuneCount += int64(utf8.RuneCountInString(*outputItem.Text))
+
+	if len(outputItem.Annotations) == 0 {
+		return annotations
+	}
+
+	for _, annotation := range outputItem.Annotations {
+		annotations = append(annotations, annotationToLLM(annotation, textRuneOffset))
+	}
+
+	return annotations
+}
+
+func appendResponseWebSearchCallMetadata(transformerMetadata map[string]any, outputItem Item) {
+	if transformerMetadata == nil || outputItem.Action == nil || outputItem.Action.WebSearch == nil {
+		return
+	}
+
+	src := outputItem.Action.WebSearch
+	action := &WebSearchAction{
+		Type:  src.Type,
+		Query: src.Query,
+	}
+	if len(src.Queries) > 0 {
+		action.Queries = append([]string(nil), src.Queries...)
+	}
+	if len(src.Sources) > 0 {
+		action.Sources = append([]WebSearchSource(nil), src.Sources...)
+	}
+
+	call := Item{
+		ID:     outputItem.ID,
+		Type:   outputItem.Type,
+		Status: outputItem.Status,
+		Action: NewWebSearchAction(action),
+	}
+
+	existing, _ := transformerMetadata[responsesWebSearchCallsTransformerMetadataKey].([]Item)
+	transformerMetadata[responsesWebSearchCallsTransformerMetadataKey] = append(existing, call)
+}
+
+// convertOutputToMessage converts Responses API output items into an llm.Message.
+// It aggregates text, reasoning, tool calls, image generation,
+// compaction and compaction_summary items from the response output.
+func convertOutputToMessage(output []Item, transformerMetadata map[string]any) llm.Message {
+	var (
+		contentParts         []llm.MessageContentPart
+		textContent          strings.Builder
+		reasoningContent     strings.Builder
+		reasoningSignature   *string
+		reasoningItems       []llm.ReasoningItem
+		messageID            string
+		toolCalls            []llm.ToolCall
+		annotations          []llm.Annotation
+		visibleTextRuneCount int64
+	)
+
+	flushText := func() {
+		if textContent.Len() == 0 {
+			return
+		}
+
+		contentParts = append(contentParts, llm.MessageContentPart{
+			Type: "text",
+			Text: lo.ToPtr(textContent.String()),
+		})
+		textContent.Reset()
+	}
+
+	for _, outputItem := range output {
+		switch outputItem.Type {
+		case "message":
+			if messageID == "" {
+				messageID = outputItem.ID
+			}
+
+			if outputItem.Content == nil {
+				continue
+			}
+			for _, contentItem := range outputItem.Content.Items {
+				if contentItem.Type == "output_text" {
+					annotations = appendOutputText(&textContent, &visibleTextRuneCount, annotations, contentItem)
+				}
+			}
+		case "output_text":
+			annotations = appendOutputText(&textContent, &visibleTextRuneCount, annotations, outputItem)
+		case "function_call":
+			toolCalls = append(toolCalls, llm.ToolCall{
+				ID:   outputItem.CallID,
+				Type: "function",
+				Function: llm.FunctionCall{
+					Name:      outputItem.Name,
+					Namespace: outputItem.Namespace,
+					Arguments: outputItem.Arguments,
+				},
+			})
+		case "custom_tool_call":
+			inputStr := ""
+			if outputItem.Input != nil {
+				inputStr = *outputItem.Input
+			}
+
+			toolCalls = append(toolCalls, llm.ToolCall{
+				ID:   outputItem.CallID,
+				Type: llm.ToolTypeResponsesCustomTool,
+				ResponseCustomToolCall: &llm.ResponseCustomToolCall{
+					CallID: outputItem.CallID,
+					Name:   outputItem.Name,
+					Input:  inputStr,
+				},
+			})
+		case "reasoning":
+			var itemReasoning strings.Builder
+			for _, summary := range outputItem.Summary {
+				reasoningContent.WriteString(summary.Text)
+				itemReasoning.WriteString(summary.Text)
+			}
+
+			itemSignature := ""
+			if outputItem.EncryptedContent != nil && *outputItem.EncryptedContent != "" {
+				reasoningSignature = shared.EncodeOpenAIEncryptedContent(outputItem.EncryptedContent)
+				itemSignature = lo.FromPtr(reasoningSignature)
+			}
+			if itemReasoning.Len() > 0 || itemSignature != "" {
+				reasoningItems = append(reasoningItems, llm.ReasoningItem{
+					ID:        outputItem.ID,
+					Content:   itemReasoning.String(),
+					Signature: itemSignature,
+				})
+			}
+		case "image_generation_call":
+			flushText()
+
+			imageOutputFormat := "png"
+
+			if transformerMetadata != nil {
+				if imgFmt, ok := transformerMetadata["image_output_format"].(string); ok && imgFmt != "" {
+					imageOutputFormat = imgFmt
+				}
+			}
+
+			if outputItem.Result != nil && *outputItem.Result != "" {
+				contentParts = append(contentParts, llm.MessageContentPart{
+					Type: "image_url",
+					ImageURL: &llm.ImageURL{
+						URL: `data:image/` + imageOutputFormat + `;base64,` + *outputItem.Result,
+					},
+					TransformerMetadata: map[string]any{
+						"background":    outputItem.Background,
+						"output_format": outputItem.OutputFormat,
+						"quality":       outputItem.Quality,
+						"size":          outputItem.Size,
+					},
+				})
+			}
+		case "web_search_call":
+			appendResponseWebSearchCallMetadata(transformerMetadata, outputItem)
+		case "compaction", "compaction_summary":
+			flushText()
+
+			encryptedContent := ""
+			if outputItem.EncryptedContent != nil {
+				encryptedContent = *outputItem.EncryptedContent
+			}
+
+			contentParts = append(contentParts, llm.MessageContentPart{
+				Type: outputItem.Type,
+				Compact: &llm.CompactContent{
+					ID:               outputItem.ID,
+					EncryptedContent: encryptedContent,
+					CreatedBy:        outputItem.CreatedBy,
+				},
+			})
+		case "input_image":
+			flushText()
+
+			if outputItem.ImageURL != nil && *outputItem.ImageURL != "" {
+				contentParts = append(contentParts, llm.MessageContentPart{
+					Type: "image_url",
+					ImageURL: &llm.ImageURL{
+						URL: *outputItem.ImageURL,
+					},
+				})
+			}
+		}
+	}
+
+	flushText()
+
+	msg := llm.Message{
+		ID:          messageID,
+		Role:        "assistant",
+		ToolCalls:   toolCalls,
+		Annotations: annotations,
+	}
+
+	if reasoningContent.Len() > 0 {
+		msg.ReasoningContent = lo.ToPtr(reasoningContent.String())
+	}
+
+	if reasoningSignature != nil {
+		msg.ReasoningSignature = reasoningSignature
+	}
+	if len(reasoningItems) > 0 {
+		msg.ReasoningItems = reasoningItems
+	}
+
+	if len(contentParts) == 1 && contentParts[0].Type == "text" && len(toolCalls) == 0 {
+		msg.Content = llm.MessageContent{
+			Content: contentParts[0].Text,
+		}
+	} else if len(contentParts) > 0 {
+		msg.Content = llm.MessageContent{
+			MultipleContent: contentParts,
+		}
+	}
+
+	return msg
 }

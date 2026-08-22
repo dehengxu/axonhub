@@ -64,6 +64,20 @@ func (_u *ChannelUpdate) AddDeletedAt(v int) *ChannelUpdate {
 	return _u
 }
 
+// SetType sets the "type" field.
+func (_u *ChannelUpdate) SetType(v channel.Type) *ChannelUpdate {
+	_u.mutation.SetType(v)
+	return _u
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableType(v *channel.Type) *ChannelUpdate {
+	if v != nil {
+		_u.SetType(*v)
+	}
+	return _u
+}
+
 // SetBaseURL sets the "base_url" field.
 func (_u *ChannelUpdate) SetBaseURL(v string) *ChannelUpdate {
 	_u.mutation.SetBaseURL(v)
@@ -313,6 +327,26 @@ func (_u *ChannelUpdate) ClearErrorMessage() *ChannelUpdate {
 	return _u
 }
 
+// SetAutoDisabledAt sets the "auto_disabled_at" field.
+func (_u *ChannelUpdate) SetAutoDisabledAt(v time.Time) *ChannelUpdate {
+	_u.mutation.SetAutoDisabledAt(v)
+	return _u
+}
+
+// SetNillableAutoDisabledAt sets the "auto_disabled_at" field if the given value is not nil.
+func (_u *ChannelUpdate) SetNillableAutoDisabledAt(v *time.Time) *ChannelUpdate {
+	if v != nil {
+		_u.SetAutoDisabledAt(*v)
+	}
+	return _u
+}
+
+// ClearAutoDisabledAt clears the value of the "auto_disabled_at" field.
+func (_u *ChannelUpdate) ClearAutoDisabledAt() *ChannelUpdate {
+	_u.mutation.ClearAutoDisabledAt()
+	return _u
+}
+
 // SetRemark sets the "remark" field.
 func (_u *ChannelUpdate) SetRemark(v string) *ChannelUpdate {
 	_u.mutation.SetRemark(v)
@@ -330,6 +364,24 @@ func (_u *ChannelUpdate) SetNillableRemark(v *string) *ChannelUpdate {
 // ClearRemark clears the value of the "remark" field.
 func (_u *ChannelUpdate) ClearRemark() *ChannelUpdate {
 	_u.mutation.ClearRemark()
+	return _u
+}
+
+// SetEndpoints sets the "endpoints" field.
+func (_u *ChannelUpdate) SetEndpoints(v []objects.ChannelEndpoint) *ChannelUpdate {
+	_u.mutation.SetEndpoints(v)
+	return _u
+}
+
+// AppendEndpoints appends value to the "endpoints" field.
+func (_u *ChannelUpdate) AppendEndpoints(v []objects.ChannelEndpoint) *ChannelUpdate {
+	_u.mutation.AppendEndpoints(v)
+	return _u
+}
+
+// ClearEndpoints clears the value of the "endpoints" field.
+func (_u *ChannelUpdate) ClearEndpoints() *ChannelUpdate {
+	_u.mutation.ClearEndpoints()
 	return _u
 }
 
@@ -587,6 +639,11 @@ func (_u *ChannelUpdate) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChannelUpdate) check() error {
+	if v, ok := _u.mutation.GetType(); ok {
+		if err := channel.TypeValidator(v); err != nil {
+			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Channel.type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := channel.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Channel.status": %w`, err)}
@@ -621,6 +678,9 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedDeletedAt(); ok {
 		_spec.AddField(channel.FieldDeletedAt, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.GetType(); ok {
+		_spec.SetField(channel.FieldType, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.BaseURL(); ok {
 		_spec.SetField(channel.FieldBaseURL, field.TypeString, value)
@@ -714,11 +774,28 @@ func (_u *ChannelUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(channel.FieldErrorMessage, field.TypeString)
 	}
+	if value, ok := _u.mutation.AutoDisabledAt(); ok {
+		_spec.SetField(channel.FieldAutoDisabledAt, field.TypeTime, value)
+	}
+	if _u.mutation.AutoDisabledAtCleared() {
+		_spec.ClearField(channel.FieldAutoDisabledAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Remark(); ok {
 		_spec.SetField(channel.FieldRemark, field.TypeString, value)
 	}
 	if _u.mutation.RemarkCleared() {
 		_spec.ClearField(channel.FieldRemark, field.TypeString)
+	}
+	if value, ok := _u.mutation.Endpoints(); ok {
+		_spec.SetField(channel.FieldEndpoints, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedEndpoints(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, channel.FieldEndpoints, value)
+		})
+	}
+	if _u.mutation.EndpointsCleared() {
+		_spec.ClearField(channel.FieldEndpoints, field.TypeJSON)
 	}
 	if _u.mutation.RequestsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1023,6 +1100,20 @@ func (_u *ChannelUpdateOne) AddDeletedAt(v int) *ChannelUpdateOne {
 	return _u
 }
 
+// SetType sets the "type" field.
+func (_u *ChannelUpdateOne) SetType(v channel.Type) *ChannelUpdateOne {
+	_u.mutation.SetType(v)
+	return _u
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableType(v *channel.Type) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetType(*v)
+	}
+	return _u
+}
+
 // SetBaseURL sets the "base_url" field.
 func (_u *ChannelUpdateOne) SetBaseURL(v string) *ChannelUpdateOne {
 	_u.mutation.SetBaseURL(v)
@@ -1272,6 +1363,26 @@ func (_u *ChannelUpdateOne) ClearErrorMessage() *ChannelUpdateOne {
 	return _u
 }
 
+// SetAutoDisabledAt sets the "auto_disabled_at" field.
+func (_u *ChannelUpdateOne) SetAutoDisabledAt(v time.Time) *ChannelUpdateOne {
+	_u.mutation.SetAutoDisabledAt(v)
+	return _u
+}
+
+// SetNillableAutoDisabledAt sets the "auto_disabled_at" field if the given value is not nil.
+func (_u *ChannelUpdateOne) SetNillableAutoDisabledAt(v *time.Time) *ChannelUpdateOne {
+	if v != nil {
+		_u.SetAutoDisabledAt(*v)
+	}
+	return _u
+}
+
+// ClearAutoDisabledAt clears the value of the "auto_disabled_at" field.
+func (_u *ChannelUpdateOne) ClearAutoDisabledAt() *ChannelUpdateOne {
+	_u.mutation.ClearAutoDisabledAt()
+	return _u
+}
+
 // SetRemark sets the "remark" field.
 func (_u *ChannelUpdateOne) SetRemark(v string) *ChannelUpdateOne {
 	_u.mutation.SetRemark(v)
@@ -1289,6 +1400,24 @@ func (_u *ChannelUpdateOne) SetNillableRemark(v *string) *ChannelUpdateOne {
 // ClearRemark clears the value of the "remark" field.
 func (_u *ChannelUpdateOne) ClearRemark() *ChannelUpdateOne {
 	_u.mutation.ClearRemark()
+	return _u
+}
+
+// SetEndpoints sets the "endpoints" field.
+func (_u *ChannelUpdateOne) SetEndpoints(v []objects.ChannelEndpoint) *ChannelUpdateOne {
+	_u.mutation.SetEndpoints(v)
+	return _u
+}
+
+// AppendEndpoints appends value to the "endpoints" field.
+func (_u *ChannelUpdateOne) AppendEndpoints(v []objects.ChannelEndpoint) *ChannelUpdateOne {
+	_u.mutation.AppendEndpoints(v)
+	return _u
+}
+
+// ClearEndpoints clears the value of the "endpoints" field.
+func (_u *ChannelUpdateOne) ClearEndpoints() *ChannelUpdateOne {
+	_u.mutation.ClearEndpoints()
 	return _u
 }
 
@@ -1559,6 +1688,11 @@ func (_u *ChannelUpdateOne) defaults() error {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ChannelUpdateOne) check() error {
+	if v, ok := _u.mutation.GetType(); ok {
+		if err := channel.TypeValidator(v); err != nil {
+			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Channel.type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := channel.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Channel.status": %w`, err)}
@@ -1610,6 +1744,9 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 	}
 	if value, ok := _u.mutation.AddedDeletedAt(); ok {
 		_spec.AddField(channel.FieldDeletedAt, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.GetType(); ok {
+		_spec.SetField(channel.FieldType, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.BaseURL(); ok {
 		_spec.SetField(channel.FieldBaseURL, field.TypeString, value)
@@ -1703,11 +1840,28 @@ func (_u *ChannelUpdateOne) sqlSave(ctx context.Context) (_node *Channel, err er
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(channel.FieldErrorMessage, field.TypeString)
 	}
+	if value, ok := _u.mutation.AutoDisabledAt(); ok {
+		_spec.SetField(channel.FieldAutoDisabledAt, field.TypeTime, value)
+	}
+	if _u.mutation.AutoDisabledAtCleared() {
+		_spec.ClearField(channel.FieldAutoDisabledAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.Remark(); ok {
 		_spec.SetField(channel.FieldRemark, field.TypeString, value)
 	}
 	if _u.mutation.RemarkCleared() {
 		_spec.ClearField(channel.FieldRemark, field.TypeString)
+	}
+	if value, ok := _u.mutation.Endpoints(); ok {
+		_spec.SetField(channel.FieldEndpoints, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedEndpoints(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, channel.FieldEndpoints, value)
+		})
+	}
+	if _u.mutation.EndpointsCleared() {
+		_spec.ClearField(channel.FieldEndpoints, field.TypeJSON)
 	}
 	if _u.mutation.RequestsCleared() {
 		edge := &sqlgraph.EdgeSpec{

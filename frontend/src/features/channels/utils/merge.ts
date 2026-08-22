@@ -20,17 +20,57 @@ export function normalizeOverrideParameters(params: string): string {
  * - Existing ops not matched by template are preserved
  */
 export function mergeOverrideHeaders(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
-  const result = [...existing];
+  const result: OverrideOperation[] = [];
+
+  const templateSetOpsByPath = new Map<string, number[]>();
+  template.forEach((op, index) => {
+    if (op.op === 'set' && op.path) {
+      const normalizedPath = op.path.toLowerCase();
+      const indices = templateSetOpsByPath.get(normalizedPath) || [];
+      indices.push(index);
+      templateSetOpsByPath.set(normalizedPath, indices);
+    }
+  });
+
+  for (const existingOp of existing) {
+    if (existingOp.op === 'set' && existingOp.path) {
+      const normalizedPath = existingOp.path.toLowerCase();
+      if (templateSetOpsByPath.has(normalizedPath)) {
+        continue;
+      }
+    }
+    result.push(existingOp);
+  }
 
   for (const templateOp of template) {
-    if (templateOp.op === 'set' && templateOp.path) {
-      const index = result.findIndex(
-        (op) => op.op === 'set' && op.path?.toLowerCase() === templateOp.path?.toLowerCase()
-      );
-      if (index >= 0) {
-        result[index] = templateOp;
-      } else {
-        result.push(templateOp);
+    result.push(templateOp);
+  }
+
+  return result;
+}
+
+/**
+ * Merges override body operations with template body operations.
+ * - For `set`, `set_if_absent`, and `delete` ops: match by `path`, template overrides existing
+ * - For `rename`, `copy`, and array ops: always appended from template
+ * - Existing ops not matched by template are preserved
+ */
+export function mergeOverrideOperations(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
+  const result: OverrideOperation[] = [...existing];
+
+  for (const templateOp of template) {
+    if (!isReplacingBodyOverrideOperation(templateOp)) {
+      result.push(templateOp);
+      continue;
+    }
+
+    const existingIndex = result.findIndex((op) => isReplacingBodyOverrideOperation(op) && op.path === templateOp.path);
+    if (existingIndex >= 0) {
+      result[existingIndex] = templateOp;
+      for (let i = result.length - 1; i > existingIndex; i--) {
+        if (isReplacingBodyOverrideOperation(result[i]) && result[i].path === templateOp.path) {
+          result.splice(i, 1);
+        }
       }
     } else {
       result.push(templateOp);
@@ -40,38 +80,8 @@ export function mergeOverrideHeaders(existing: OverrideOperation[], template: Ov
   return result;
 }
 
-/**
- * Merges override body operations with template body operations.
- * - For `set` and `delete` ops: match by `path`, template overrides existing
- * - For `rename` and `copy` ops: always appended from template
- * - Existing ops not matched by template are preserved
- */
-export function mergeOverrideOperations(existing: OverrideOperation[], template: OverrideOperation[]): OverrideOperation[] {
-  const result = [...existing];
-
-  for (const templateOp of template) {
-    // For rename and copy ops, always append
-    if (templateOp.op === 'rename' || templateOp.op === 'copy') {
-      result.push(templateOp);
-      continue;
-    }
-
-    // For set and delete ops, match by path
-    if ((templateOp.op === 'set' || templateOp.op === 'delete') && templateOp.path) {
-      const index = result.findIndex(
-        (op) => (op.op === 'set' || op.op === 'delete') && op.path === templateOp.path
-      );
-      if (index >= 0) {
-        result[index] = templateOp;
-      } else {
-        result.push(templateOp);
-      }
-    } else {
-      result.push(templateOp);
-    }
-  }
-
-  return result;
+function isReplacingBodyOverrideOperation(op: OverrideOperation): boolean {
+  return op.op === 'set' || op.op === 'set_if_absent' || op.op === 'delete';
 }
 
 export function mergeChannelSettingsForUpdate(
@@ -93,10 +103,16 @@ export function mergeChannelSettingsForUpdate(
     autoTrimedModelPrefixes: pick('autoTrimedModelPrefixes', existing?.autoTrimedModelPrefixes ?? []),
     hideOriginalModels: pick('hideOriginalModels', existing?.hideOriginalModels ?? false),
     hideMappedModels: pick('hideMappedModels', existing?.hideMappedModels ?? false),
+    lowercaseModelId: pick('lowercaseModelId', existing?.lowercaseModelId ?? false),
     bodyOverrideOperations: pick('bodyOverrideOperations', existing?.bodyOverrideOperations ?? []),
     headerOverrideOperations: pick('headerOverrideOperations', existing?.headerOverrideOperations ?? []),
     proxy: pick('proxy', existing?.proxy ?? null),
     transformOptions: pick('transformOptions', existing?.transformOptions ?? undefined),
+    passThroughUserAgent: pick('passThroughUserAgent', existing?.passThroughUserAgent ?? null),
+    passThroughBody: pick('passThroughBody', existing?.passThroughBody ?? null),
+    rateLimit: pick('rateLimit', existing?.rateLimit ?? null),
+    retryableStatusCodes: pick('retryableStatusCodes', existing?.retryableStatusCodes ?? []),
+    retryableErrorPatterns: pick('retryableErrorPatterns', existing?.retryableErrorPatterns ?? []),
   };
 }
 
@@ -115,7 +131,7 @@ export function mergeOverrideParameters(existing: string, template: string): str
 
     // Use compact format to match backend
     return JSON.stringify(merged);
-  } catch (error) {
+  } catch {
     // If parsing fails, return template
     return template;
   }

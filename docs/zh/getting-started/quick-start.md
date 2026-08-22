@@ -7,7 +7,7 @@
 ## 先决条件
 
 - Docker 和 Docker Compose（推荐）
-- 或者 Go 1.24+ 和 Node.js 18+ 用于开发环境设置
+- 或者 Go 1.26+ 和 Node.js 18+ 用于开发环境设置
 - 来自 AI 提供商的有效 API 密钥（OpenAI、Anthropic 等）
 
 ## 快速设置方法
@@ -324,7 +324,7 @@ server:
 
 db:
   dialect: "sqlite3"
-  dsn: "file:axonhub.db?cache=shared&_fk=1"
+  dsn: "file:axonhub.db?cache=shared&_fk=1&_pragma=journal_mode(WAL)"
 
 log:
   level: "info"
@@ -352,6 +352,9 @@ log:
 ```
 
 ## 下一步
+
+### 理解请求流程
+- [请求处理流程](request-processing.md)：理解请求从入口到上游执行的完整链路，以及模型映射、模型关联、渠道选择之间的区别
 
 ### 探索功能
 - **追踪**：设置请求追踪以实现可观测性
@@ -387,7 +390,7 @@ log:
 ### 获取帮助
 
 - 查看 [GitHub Issues](https://github.com/looplj/axonhub/issues)
-- 查看 [架构文档](../architecture/erd.md)
+- 查看 [架构文档](../development/erd.md)
 - 加入社区讨论
 
 ## 下一步是什么？

@@ -40,6 +40,29 @@ type TokenStatsByAPIKey {
   totalTokens: Int!
 }
 
+input APIKeyTokenUsageStatsInput {
+  apiKeyIds: [ID!]
+  createdAtGTE: Time
+  createdAtLTE: Time
+}
+
+type APIKeyTokenUsageStats {
+  apiKeyId: ID!
+  inputTokens: Int!
+  outputTokens: Int!
+  cachedTokens: Int!
+  reasoningTokens: Int!
+  topModels: [ModelTokenUsageStats!]!
+}
+
+type ModelTokenUsageStats {
+  modelId: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  cachedTokens: Int!
+  reasoningTokens: Int!
+}
+
 type DailyRequestStats {
   date: String!
   count: Int!
@@ -64,39 +87,11 @@ type TokenStats {
   totalInputTokensThisMonth: Int!
   totalOutputTokensThisMonth: Int!
   totalCachedTokensThisMonth: Int!
-}
 
-# Model-specific token statistics
-type ModelTokenStats {
-  modelId: String!
-  modelName: String!
-  totalInputTokens: Int!
-  totalOutputTokens: Int!
-  totalCachedTokens: Int!
-  totalTokens: Int!
-  period: String! # "day", "week", "month"
-  date: String! # ISO date format
-}
-
-type ModelTokenTrend {
-  modelId: String!
-  modelName: String!
-  date: String!
-  inputTokens: Int!
-  outputTokens: Int!
-  cachedTokens: Int!
-  totalTokens: Int!
-}
-
-type ModelTokenTrendData {
-  trends: [ModelTokenTrend!]!
-  models: [String!]!
-  dates: [String!]!
-}
-
-type ModelTokenStatsSummary {
-  currentPeriod: [ModelTokenStats!]!
-  trends: ModelTokenTrendData!
+  totalInputTokensAllTime: Int!
+  totalOutputTokensAllTime: Int!
+  totalCachedTokensAllTime: Int!
+  lastUpdated: Time
 }
 
 type TopRequestsProjects {
@@ -110,6 +105,7 @@ type ChannelSuccessRate {
   channelId: ID!
   channelName: String!
   channelType: String!
+  channelDisabled: Boolean!
   successCount: Int!
   failedCount: Int!
   totalCount: Int!
@@ -137,7 +133,9 @@ type FastestModel {
   confidenceLevel: String!
 }
 
-"""Performance statistics for a specific model on a given date"""
+"""
+Performance statistics for a specific model on a given date
+"""
 type ModelPerformanceStat {
   date: String!
   modelId: String!
@@ -146,7 +144,9 @@ type ModelPerformanceStat {
   requestCount: Int!
 }
 
-"""Performance statistics for a specific channel on a given date"""
+"""
+Performance statistics for a specific channel on a given date
+"""
 type ChannelPerformanceStat {
   date: String!
   channelId: String!
@@ -161,29 +161,95 @@ input FastestChannelsInput {
   limit: Int = 5
 }
 
+"""
+Token usage statistics grouped by channel
+"""
+type TokenStatsByChannel {
+  channelId: ID!
+  channelName: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  cachedTokens: Int!
+  reasoningTokens: Int!
+  totalTokens: Int!
+}
+
+"""
+Token usage statistics grouped by model
+"""
+type TokenStatsByModel {
+  modelId: String!
+  inputTokens: Int!
+  outputTokens: Int!
+  cachedTokens: Int!
+  reasoningTokens: Int!
+  totalTokens: Int!
+}
+
+"""
+Cost statistics grouped by channel
+"""
+type CostStatsByChannel {
+  channelName: String!
+  cost: Float!
+}
+
+"""
+Cost statistics grouped by model
+"""
+type CostStatsByModel {
+  modelId: String!
+  cost: Float!
+}
+
+"""
+Cost statistics grouped by API key
+"""
+type CostStatsByAPIKey {
+  apiKeyId: ID!
+  apiKeyName: String!
+  cost: Float!
+}
+
+"""
+Usage statistics grouped by user
+"""
+type UsageStatsByUser {
+  userId: ID!
+  userName: String!
+  requestCount: Int!
+  totalTokens: Int!
+  totalCost: Float!
+}
+
 extend type Query {
   dashboardOverview: DashboardOverview!
   requestStats: RequestStats!
-  requestStatsByChannel: [RequestStatsByChannel!]!
-  requestStatsByModel: [RequestStatsByModel!]!
-  requestStatsByAPIKey: [RequestStatsByAPIKey!]!
-  tokenStatsByAPIKey: [TokenStatsByAPIKey!]!
+  requestStatsByChannel(timeWindow: String): [RequestStatsByChannel!]!
+  requestStatsByModel(timeWindow: String): [RequestStatsByModel!]!
+  requestStatsByAPIKey(timeWindow: String): [RequestStatsByAPIKey!]!
+  tokenStatsByAPIKey(timeWindow: String): [TokenStatsByAPIKey!]!
+  apiKeyTokenUsageStats(
+    input: APIKeyTokenUsageStatsInput
+  ): [APIKeyTokenUsageStats!]!
   dailyRequestStats: [DailyRequestStats!]!
   topRequestsProjects: [TopRequestsProjects!]!
   tokenStats: TokenStats!
-
-  # Model-specific token statistics queries
-  modelTokenStats(
-    models: [String!]
-    period: String = "day" # "day", "week", "month"
-    date: String # ISO date format, defaults to today
-  ): ModelTokenStatsSummary!
-
-  channelSuccessRates: [ChannelSuccessRate!]!
+  channelSuccessRates(timeWindow: String, limit: Int): [ChannelSuccessRate!]!
   fastestChannels(input: FastestChannelsInput!): [FastestChannel!]!
   fastestModels(input: FastestChannelsInput!): [FastestModel!]!
-  """Get performance statistics for models over time"""
+  """
+  Get performance statistics for models over time
+  """
   modelPerformanceStats: [ModelPerformanceStat!]!
-  """Get performance statistics for channels over time"""
+  """
+  Get performance statistics for channels over time
+  """
   channelPerformanceStats: [ChannelPerformanceStat!]!
+  tokenStatsByChannel(timeWindow: String): [TokenStatsByChannel!]!
+  tokenStatsByModel(timeWindow: String): [TokenStatsByModel!]!
+  costStatsByChannel(timeWindow: String): [CostStatsByChannel!]!
+  costStatsByModel(timeWindow: String): [CostStatsByModel!]!
+  costStatsByAPIKey(timeWindow: String): [CostStatsByAPIKey!]!
+  usageStatsByUser(timeWindow: String): [UsageStatsByUser!]!
 }

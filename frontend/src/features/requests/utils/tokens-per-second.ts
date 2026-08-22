@@ -5,30 +5,30 @@ import { Request } from '../data/schema';
 
 export type DisplayMode = 'latency' | 'tokensPerSecond';
 
+// Minimum latency value (in milliseconds) used for tokens/second calculations
+// when a cache hit occurs (effective latency is zero or negative).
+// This ensures we display a reasonable tokens/second value instead of infinity.
+const MINIMUM_LATENCY_MS_FOR_CACHE_HITS = 10;
+
 const VALID_DISPLAY_MODES: DisplayMode[] = ['latency', 'tokensPerSecond'];
 
 /**
- * Calculate tokens per second for a given request.
- * Handles all edge cases including no usage log, zero latency, zero completion tokens,
- * and streaming vs non-streaming scenarios.
+ * Calculate the numeric tokens-per-second rate for a given request.
  *
  * @param request - The request object containing usage logs and metrics
- * @returns Formatted string like "123 tok/s" or "-" if calculation is not possible
+ * @returns The numeric rate or null if calculation is not possible
  */
-export function calculateTokensPerSecond(request: Request): string {
+export function getTokensPerSecondValue(request: Request): number | null {
   const usageLog = request.usageLogs?.edges?.[0]?.node;
   if (!usageLog || request.metricsLatencyMs == null || request.metricsLatencyMs <= 0) {
-    return '-';
+    return null;
   }
 
-  // Sum all completion token types (matching fastest performers logic)
-  const completionTokens =
-    (usageLog.completionTokens || 0) +
-    (usageLog.completionReasoningTokens || 0) +
-    (usageLog.completionAudioTokens || 0);
+  // Use completion tokens only (reasoning tokens are not included in throughput calculation)
+  const completionTokens = usageLog.completionTokens || 0;
 
   if (completionTokens === 0) {
-    return '-';
+    return null;
   }
 
   // Calculate effective latency:
@@ -36,19 +36,24 @@ export function calculateTokensPerSecond(request: Request): string {
   // For non-streaming: use full latency
   let effectiveLatencyMs = request.metricsLatencyMs;
   if (request.stream && request.metricsFirstTokenLatencyMs != null) {
-    if (request.metricsFirstTokenLatencyMs < request.metricsLatencyMs) {
+    if (request.metricsFirstTokenLatencyMs <= request.metricsLatencyMs) {
       effectiveLatencyMs = request.metricsLatencyMs - request.metricsFirstTokenLatencyMs;
     }
   }
 
+  // For cache hits (TTFT == Latency), effective latency becomes 0 or negative.
+  // Use a fixed minimum to avoid division by zero and show reasonable tokens/second.
   if (effectiveLatencyMs <= 0) {
-    return '-';
+    effectiveLatencyMs = MINIMUM_LATENCY_MS_FOR_CACHE_HITS;
   }
 
   const latencySeconds = effectiveLatencyMs / 1000;
-  const tokensPerSecond = completionTokens / latencySeconds;
+  return completionTokens / latencySeconds;
+}
 
-  return `${Math.round(tokensPerSecond)} tok/s`;
+export function calculateTokensPerSecond(request: Request): string {
+  const tokensPerSecond = getTokensPerSecondValue(request);
+  return tokensPerSecond == null ? '-' : `${Math.round(tokensPerSecond)} tok/s`;
 }
 
 /**

@@ -32,6 +32,11 @@ type Config struct {
 	// APIKeyProvider provides API keys for authentication.
 	APIKeyProvider auth.APIKeyProvider `json:"-"`
 
+	// EndpointPath is an optional custom path override for this endpoint.
+	// When set, it replaces the default API path.
+	// Must start with "/". Skips default version normalization when set.
+	EndpointPath string `json:"endpoint_path,omitempty"`
+
 	// APIVersion is the API version to use.
 	APIVersion string `json:"api_version,omitempty"`
 
@@ -101,12 +106,21 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 		return nil, fmt.Errorf("request is nil")
 	}
 
+	var apiKey string
+	if t.config.APIKeyProvider != nil {
+		apiKey = t.config.APIKeyProvider.Get(ctx)
+	}
+
 	//nolint:exhaustive // Checked.
 	switch llmReq.RequestType {
+	case llm.RequestTypeEmbedding:
+		return t.transformEmbeddingRequest(ctx, llmReq)
 	case llm.RequestTypeImage:
 		return t.buildImageGenerationRequest(ctx, llmReq)
 	case llm.RequestTypeChat, "":
 		// continue
+	case llm.RequestTypeCompact:
+		return nil, fmt.Errorf("%w: compact is only supported by OpenAI Responses API", transformer.ErrInvalidRequest)
 	default:
 		return nil, fmt.Errorf("%w: %s is not supported", transformer.ErrInvalidRequest, llmReq.RequestType)
 	}
@@ -140,14 +154,11 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 	// Prepare authentication
 	var authConfig *httpclient.AuthConfig
 
-	if t.config.APIKeyProvider != nil {
-		apiKey := t.config.APIKeyProvider.Get(ctx)
-		if apiKey != "" {
-			authConfig = &httpclient.AuthConfig{
-				Type:      "api_key",
-				APIKey:    apiKey,
-				HeaderKey: "x-goog-api-key",
-			}
+	if apiKey != "" {
+		authConfig = &httpclient.AuthConfig{
+			Type:      "api_key",
+			APIKey:    apiKey,
+			HeaderKey: "x-goog-api-key",
 		}
 	}
 
@@ -176,12 +187,18 @@ func (t *OutboundTransformer) TransformRequest(ctx context.Context, llmReq *llm.
 		Headers:               headers,
 		Body:                  body,
 		Auth:                  authConfig,
+		APIFormat:             string(llm.APIFormatGeminiContents),
 		SkipInboundQueryMerge: true,
+		Metadata:              nil,
 	}, nil
 }
 
 // buildFullRequestURL constructs the appropriate URL for the Gemini API.
 func (t *OutboundTransformer) buildFullRequestURL(llmReq *llm.Request) string {
+	if t.config.EndpointPath != "" {
+		return strings.TrimSuffix(t.config.BaseURL, "/") + t.config.EndpointPath
+	}
+
 	// Determine endpoint based on streaming
 	var action string
 	if llmReq.Stream != nil && *llmReq.Stream {
@@ -223,6 +240,11 @@ func (t *OutboundTransformer) buildFullRequestURL(llmReq *llm.Request) string {
 func (t *OutboundTransformer) TransformResponse(ctx context.Context, httpResp *httpclient.Response) (*llm.Response, error) {
 	if httpResp == nil {
 		return nil, fmt.Errorf("http response is nil")
+	}
+
+	// Check if this is an embedding request
+	if httpResp.Request != nil && httpResp.Request.APIFormat == string(llm.APIFormatGeminiEmbedding) {
+		return t.transformEmbeddingResponse(ctx, httpResp)
 	}
 
 	// Check if this is an image generation request
@@ -301,6 +323,7 @@ func clearFunctionIDsForVertexAI(req *GenerateContentRequest) {
 			if part.FunctionCall != nil {
 				part.FunctionCall.ID = ""
 			}
+
 			if part.FunctionResponse != nil {
 				part.FunctionResponse.ID = ""
 			}

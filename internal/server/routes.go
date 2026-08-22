@@ -28,11 +28,16 @@ type Handlers struct {
 	Playground     *api.PlaygroundHandlers
 	System         *api.SystemHandlers
 	Auth           *api.AuthHandlers
+	Invitation     *api.InvitationHandlers
 	Jina           *api.JinaHandlers
 	Codex          *api.CodexHandlers
+	XAI            *api.XAIHandlers
 	ClaudeCode     *api.ClaudeCodeHandlers
 	Antigravity    *api.AntigravityHandlers
+	Copilot        *api.CopilotHandlers
 	RequestContent *api.RequestContentHandlers
+	OIDC           *api.OIDCHandlers
+	RequestPreview *api.RequestPreviewHandlers
 }
 
 type Services struct {
@@ -41,9 +46,13 @@ type Services struct {
 	TraceService  *biz.TraceService
 	ThreadService *biz.ThreadService
 	AuthService   *biz.AuthService
+	SystemService *biz.SystemService
 }
 
-func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services Services) {
+func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services Services, ipAccessControl *middleware.IPAccessControlConfig) {
+	// IP 访问控制 - 全局最优先，拦截所有请求包括静态文件
+	server.Use(middleware.WithIPAccessControl(ipAccessControl))
+
 	// Serve static frontend files
 	server.NoRoute(static.Handler())
 
@@ -73,6 +82,8 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		publicGroup.GET("/favicon", handlers.System.GetFavicon)
 		// Health check endpoint - no authentication required
 		publicGroup.GET("/health", handlers.System.Health)
+		publicGroup.GET("/auth/invitations/:token", handlers.Invitation.Get)
+		publicGroup.POST("/auth/invitations/:token/register", handlers.Invitation.Register)
 	}
 
 	unSecureAdminGroup := server.Group("/admin", middleware.WithTimeout(server.Config.RequestTimeout))
@@ -84,6 +95,11 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		unSecureAdminGroup.POST("/auth/signin", handlers.Auth.SignIn)
 	}
 
+	oauthGroup := server.Group("/oauth", middleware.WithTimeout(server.Config.RequestTimeout))
+	{
+		handlers.OIDC.RegisterRoutes(oauthGroup)
+	}
+
 	adminGroup := server.Group("/admin", middleware.WithJWTAuth(services.AuthService), middleware.WithProjectID())
 	// 管理员路由 - 使用 JWT 认证
 	{
@@ -93,15 +109,26 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		adminGroup.POST("/graphql", middleware.WithTimeout(server.Config.RequestTimeout), func(c *gin.Context) {
 			handlers.Graphql.Graphql.ServeHTTP(c.Writer, c.Request)
 		})
+		adminGroup.POST("/invitations", handlers.Invitation.Create)
 
 		adminGroup.POST("/codex/oauth/start", handlers.Codex.StartOAuth)
 		adminGroup.POST("/codex/oauth/exchange", handlers.Codex.Exchange)
+		adminGroup.POST("/codex/auth/decode", handlers.Codex.DecodeAuthJSON)
+		adminGroup.POST("/xai/oauth/start", handlers.XAI.StartOAuth)
+		adminGroup.POST("/xai/oauth/exchange", handlers.XAI.Exchange)
+		adminGroup.POST("/xai/oauth/sso", handlers.XAI.DecodeSSO)
 
 		adminGroup.POST("/claudecode/oauth/start", handlers.ClaudeCode.StartOAuth)
 		adminGroup.POST("/claudecode/oauth/exchange", handlers.ClaudeCode.Exchange)
 
 		adminGroup.POST("/antigravity/oauth/start", handlers.Antigravity.StartOAuth)
 		adminGroup.POST("/antigravity/oauth/exchange", handlers.Antigravity.Exchange)
+
+		adminGroup.POST("/copilot/oauth/start", handlers.Copilot.StartOAuth)
+		adminGroup.POST("/copilot/oauth/poll", handlers.Copilot.PollOAuth)
+
+		// OIDC Manual Linking
+		adminGroup.GET("/oidc/link/:provider", handlers.OIDC.GetLinkAuthorizeURL)
 
 		// Playground API with channel specification support
 		adminGroup.POST(
@@ -116,9 +143,19 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 			middleware.WithTimeout(server.Config.RequestTimeout),
 			handlers.RequestContent.DownloadRequestContent,
 		)
+		adminGroup.GET(
+			"/requests/:request_id/preview",
+			middleware.WithTimeout(server.Config.RequestTimeout),
+			handlers.RequestPreview.PreviewRequest,
+		)
 	}
 
-	openAPIGroup := server.Group("/openapi", middleware.WithOpenAPIAuth(services.AuthService), middleware.WithTimeout(server.Config.RequestTimeout))
+	openAPIGroup := server.Group(
+		"/openapi",
+		middleware.WithIPBlocklist(services.SystemService),
+		middleware.WithOpenAPIAuth(services.AuthService),
+		middleware.WithTimeout(server.Config.RequestTimeout),
+	)
 	{
 		openAPIGroup.POST("/v1/graphql", func(c *gin.Context) {
 			handlers.OpenAPIGraphql.Graphql.ServeHTTP(c.Writer, c.Request)
@@ -126,11 +163,14 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		openAPIGroup.GET("/v1/playground", func(c *gin.Context) {
 			handlers.OpenAPIGraphql.Playground.ServeHTTP(c.Writer, c.Request)
 		})
+
+		openAPIGroup.POST("/webhook/echo", handlers.System.WebhookEcho)
 	}
 
 	apiGroup := server.Group("/",
 		middleware.WithTimeout(server.Config.LLMRequestTimeout),
-		middleware.WithAPIKeyAuth(services.AuthService),
+		middleware.WithIPBlocklist(services.SystemService),
+		middleware.WithAPIKeyConfig(services.AuthService, nil),
 		middleware.WithSource(request.SourceAPI),
 		middleware.WithThread(server.Config.Trace, services.ThreadService),
 		middleware.WithTrace(server.Config.Trace, services.TraceService),
@@ -139,14 +179,21 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 	{
 		openaiGroup := apiGroup.Group("/v1")
 		openaiGroup.POST("/chat/completions", handlers.OpenAI.ChatCompletion)
+		openaiGroup.POST("/completions", handlers.OpenAI.Completion)
+		openaiGroup.POST("/responses/compact", handlers.OpenAI.CompactResponse)
 		openaiGroup.POST("/responses", handlers.OpenAI.CreateResponse)
 		openaiGroup.GET("/models", handlers.OpenAI.ListModels)
+		openaiGroup.GET("/models/*model", handlers.OpenAI.RetrieveModel)
 		openaiGroup.POST("/embeddings", handlers.OpenAI.CreateEmbedding)
+		openaiGroup.POST("/moderations", handlers.OpenAI.CreateModeration)
 		openaiGroup.POST("/images/generations", handlers.OpenAI.CreateImage)
 		openaiGroup.POST("/images/edits", handlers.OpenAI.CreateImageEdit)
 		openaiGroup.POST("/videos", handlers.OpenAI.CreateVideo)
 		openaiGroup.GET("/videos/:id", handlers.OpenAI.GetVideo)
 		openaiGroup.DELETE("/videos/:id", handlers.OpenAI.DeleteVideo)
+		openaiGroup.POST("/audio/speech", handlers.OpenAI.CreateSpeech)
+		openaiGroup.POST("/audio/transcriptions", handlers.OpenAI.CreateTranscription)
+		openaiGroup.POST("/audio/translations", handlers.OpenAI.CreateTranslation)
 		// DO NOT SUPPORT IMAGE VARIATION
 		// openaiGroup.POST("/images/variations", handlers.OpenAI.CreateImageVariation)
 
@@ -184,6 +231,7 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 
 		geminiGroup := server.Group("/gemini/:gemini-api-version",
 			middleware.WithTimeout(server.Config.LLMRequestTimeout),
+			middleware.WithIPBlocklist(services.SystemService),
 			middleware.WithGeminiKeyAuth(services.AuthService),
 			middleware.WithSource(request.SourceAPI),
 			middleware.WithThread(server.Config.Trace, services.ThreadService),
@@ -195,6 +243,7 @@ func SetupRoutes(server *Server, handlers Handlers, client *ent.Client, services
 		// Alias for Gemini API
 		geminiAliasGroup := server.Group("/v1beta",
 			middleware.WithTimeout(server.Config.LLMRequestTimeout),
+			middleware.WithIPBlocklist(services.SystemService),
 			middleware.WithGeminiKeyAuth(services.AuthService),
 			middleware.WithSource(request.SourceAPI),
 			middleware.WithThread(server.Config.Trace, services.ThreadService),

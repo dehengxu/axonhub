@@ -14,19 +14,42 @@ function containsRegexChars(pattern: string): boolean {
   return REGEX_SPECIAL_CHARS_RE.test(pattern);
 }
 
+// The channel UI documents only (?i) for case-insensitive model filters.
+// Leave other regexp2 inline modifiers to backend-only/API usage so preview
+// validation does not imply broader UI support than intended for model IDs.
+const SUPPORTED_INLINE_MODIFIER_FLAGS = new Set(['i']);
+
 /**
- * Adds ^ prefix and $ suffix if not already present (accounting for common inline
- * modifier groups like (?i), (?m), (?s) that may precede the anchor).
+ * Compiles a pattern after translating backend-style leading inline modifiers
+ * like (?i) into JavaScript RegExp flags.
  */
-function ensureAnchored(pattern: string): string {
-  // Detect leading ^ possibly preceded by inline modifier groups, e.g. (?i)^
-  const hasStartAnchor = pattern.startsWith('^') || /^\(\?[a-z]+\)\^/.test(pattern);
-  const hasEndAnchor = pattern.endsWith('$');
+function compilePattern(pattern: string): RegExp {
+  const { flags, body } = splitInlineModifier(pattern);
+  const normalizedBody = body.replace(/^\^/, '').replace(/\$$/, '');
+  return new RegExp(`^(?:${normalizedBody})$`, flags);
+}
 
-  if (!hasStartAnchor) pattern = '^' + pattern;
-  if (!hasEndAnchor) pattern = pattern + '$';
+function splitInlineModifier(pattern: string): { flags: string; body: string } {
+  if (!pattern.startsWith('(?')) {
+    return { flags: '', body: pattern };
+  }
 
-  return pattern;
+  const end = pattern.indexOf(')');
+  if (end <= 2) {
+    return { flags: '', body: pattern };
+  }
+
+  const modifier = pattern.slice(2, end);
+  const hasUnsupportedModifier = [...modifier].some((flag) => !SUPPORTED_INLINE_MODIFIER_FLAGS.has(flag));
+  if (!/^[a-z]+$/.test(modifier) || hasUnsupportedModifier) {
+    return { flags: '', body: pattern };
+  }
+
+  const flags = [...new Set(modifier)].join('');
+  return {
+    flags,
+    body: pattern.slice(end + 1),
+  };
 }
 
 /**
@@ -34,13 +57,27 @@ function ensureAnchored(pattern: string): string {
  */
 export function matchesModelPattern(model: string, pattern: string): boolean {
   if (!pattern) return true;
+  if (pattern === '*') return true;
 
   if (!containsRegexChars(pattern)) {
     return model === pattern;
   }
 
   try {
-    return new RegExp(ensureAnchored(pattern)).test(model);
+    return compilePattern(pattern).test(model);
+  } catch {
+    return false;
+  }
+}
+
+export function isValidModelPattern(pattern: string): boolean {
+  if (!pattern) return true;
+  if (pattern === '*') return true;
+  if (!containsRegexChars(pattern)) return true;
+
+  try {
+    compilePattern(pattern);
+    return true;
   } catch {
     return false;
   }
@@ -52,5 +89,6 @@ export function matchesModelPattern(model: string, pattern: string): boolean {
  */
 export function filterModelsByPattern(models: string[], pattern: string): string[] {
   if (!pattern) return [];
+  if (pattern === '*') return models;
   return models.filter((model) => matchesModelPattern(model, pattern));
 }

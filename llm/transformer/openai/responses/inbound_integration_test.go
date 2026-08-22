@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/looplj/axonhub/llm"
@@ -29,16 +30,25 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 
 				// Verify basic request properties
 				require.Equal(t, "deepseek-chat", result.Model)
+				require.Equal(t, llm.RequestTypeChat, result.RequestType)
 				require.Equal(t, llm.APIFormatOpenAIResponse, result.APIFormat)
 
 				// Verify messages
-				require.Len(t, result.Messages, 7)
+				require.Len(t, result.Messages, 8)
 				require.Equal(t, "user", result.Messages[0].Role)
 
 				// For single input_text, content should be a simple string (optimized path)
 				require.NotNil(t, result.Messages[0].Content.Content)
 				require.Equal(t, "My name is Alice.", *result.Messages[0].Content.Content)
 				require.Nil(t, result.Messages[0].Content.MultipleContent)
+
+				// Verify compaction message (index 6, between last assistant and last user)
+				compactionMsg := result.Messages[6]
+				require.Equal(t, "assistant", compactionMsg.Role)
+				require.Len(t, compactionMsg.Content.MultipleContent, 1)
+				require.Equal(t, "compaction", compactionMsg.Content.MultipleContent[0].Type)
+				require.NotNil(t, compactionMsg.Content.MultipleContent[0].Compact)
+				require.Equal(t, "gAAAAABpxygtxqpBeKM2Wvlv2Owja3cpZk2rbpgr8iXCl9Zhl7JAJCVy7nIP===", compactionMsg.Content.MultipleContent[0].Compact.EncryptedContent)
 			},
 		},
 		{
@@ -56,6 +66,7 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 				t.Helper()
 
 				require.Equal(t, "gpt-5.1-codex-mini", result.Model)
+				require.Equal(t, llm.RequestTypeChat, result.RequestType)
 				require.Equal(t, llm.APIFormatOpenAIResponse, result.APIFormat)
 
 				// Verify messages: system (instructions) + user + assistant (custom_tool_call) + tool
@@ -111,6 +122,7 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 
 				// Verify basic request properties
 				require.Equal(t, "gpt-5.1-codex-mini", result.Model)
+				require.Equal(t, llm.RequestTypeChat, result.RequestType)
 				require.Equal(t, llm.APIFormatOpenAIResponse, result.APIFormat)
 
 				// Verify messages: system + user + assistant(reasoning+function_call) + tool
@@ -129,7 +141,7 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 				require.NotNil(t, result.Messages[2].ReasoningContent)
 				require.Contains(t, *result.Messages[2].ReasoningContent, "我需要检查暂存区的内容")
 				require.NotNil(t, result.Messages[2].ReasoningSignature)
-				require.Contains(t, *result.Messages[2].ReasoningSignature, "encrypted_content")
+				require.Contains(t, *result.Messages[2].ReasoningSignature, "gAAAA")
 				require.Len(t, result.Messages[2].ToolCalls, 1)
 				require.Equal(t, "call_00_bVbIarCdMYjXCUsTd9MEJVia", result.Messages[2].ToolCalls[0].ID)
 				require.Equal(t, "shell_command", result.Messages[2].ToolCalls[0].Function.Name)
@@ -174,6 +186,7 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 			err = xtest.LoadTestData(t, tt.expectedFile, &expected)
 			require.NoError(t, err)
 
+			expected.RequestType = llm.RequestTypeChat
 			expected.APIFormat = llm.APIFormatOpenAIResponse
 
 			// Copy TransformerMetadata from result as it contains dynamic fields (include, prompt_cache_key, etc.)
@@ -185,6 +198,67 @@ func TestInboundTransformer_TransformRequest_WithTestData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInboundTransformer_TransformResponse_AttachesMessageAnnotationsToFirstSplitTextItem(t *testing.T) {
+	transformer := NewInboundTransformer()
+
+	llmResp := &llm.Response{
+		ID:      "resp_annotations_writeback",
+		Object:  "chat.completion",
+		Created: 1759161016,
+		Model:   "gpt-4o",
+		Choices: []llm.Choice{{
+			Index: 0,
+			Message: &llm.Message{
+				ID:   "msg_annotations_writeback",
+				Role: "assistant",
+				Content: llm.MessageContent{
+					MultipleContent: []llm.MessageContentPart{
+						{Type: "text", Text: lo.ToPtr("Alpha ")},
+						{Type: "text", Text: lo.ToPtr("Beta")},
+					},
+				},
+				Annotations: []llm.Annotation{{
+					Type:       "url_citation",
+					StartIndex: lo.ToPtr(int64(6)),
+					EndIndex:   lo.ToPtr(int64(10)),
+					URLCitation: &llm.URLCitation{
+						URL:   "https://example.com/beta",
+						Title: "Beta Source",
+					},
+				}},
+			},
+		}},
+	}
+
+	result, err := transformer.TransformResponse(t.Context(), llmResp)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	var resp Response
+	err = json.Unmarshal(result.Body, &resp)
+	require.NoError(t, err)
+	require.Len(t, resp.Output, 1)
+
+	output := resp.Output[0]
+	require.Equal(t, "message", output.Type)
+	contentItems := output.GetContentItems()
+	require.Len(t, contentItems, 2)
+	require.Equal(t, "Alpha ", contentItems[0].Text)
+	require.Equal(t, "Beta", contentItems[1].Text)
+	require.Len(t, contentItems[0].Annotations, 1)
+	require.Empty(t, contentItems[1].Annotations)
+
+	annotation := contentItems[0].Annotations[0]
+	require.Equal(t, "url_citation", annotation.Type)
+	require.NotNil(t, annotation.StartIndex)
+	require.NotNil(t, annotation.EndIndex)
+	require.EqualValues(t, 6, *annotation.StartIndex)
+	require.EqualValues(t, 10, *annotation.EndIndex)
+	require.NotNil(t, annotation.URLCitation)
+	require.Equal(t, "https://example.com/beta", annotation.URLCitation.URL)
+	require.Equal(t, "Beta Source", annotation.URLCitation.Title)
 }
 
 func TestInboundTransformer_TransformResponse_WithTestData(t *testing.T) {

@@ -90,10 +90,35 @@ export const channelTagsRegexAssociationSchema = z.object({
 });
 export type ChannelTagsRegexAssociation = z.infer<typeof channelTagsRegexAssociationSchema>;
 
+export type FilterCondition = {
+  type: 'condition' | 'group';
+  logic?: string;
+  conditions?: FilterCondition[];
+  field?: string;
+  operator?: string;
+  value?: string | number | boolean;
+};
+
+export const filterConditionSchema: z.ZodType<FilterCondition> = z.object({
+  type: z.enum(['condition', 'group']).default('condition'),
+  logic: z.string().optional(),
+  conditions: z.array(z.lazy(() => filterConditionSchema)).optional().default([]),
+  field: z.string().optional(),
+  operator: z.string().optional(),
+  value: z.any().optional(),
+});
+
+export const modelAssociationWhenSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  condition: filterConditionSchema.optional().nullable(),
+});
+export type ModelAssociationWhen = z.infer<typeof modelAssociationWhenSchema>;
+
 export const modelAssociationSchema = z.object({
   type: z.enum(['channel_model', 'channel_regex', 'model', 'regex', 'channel_tags_model', 'channel_tags_regex']),
   priority: z.number().min(0).max(100).optional().default(0),
   disabled: z.boolean().optional().default(false),
+  when: modelAssociationWhenSchema.optional().nullable(),
   channelModel: channelModelAssociationSchema.optional().nullable(),
   channelRegex: channelRegexAssociationSchema.optional().nullable(),
   regex: regexAssociationSchema.optional().nullable(),
@@ -103,8 +128,19 @@ export const modelAssociationSchema = z.object({
 });
 export type ModelAssociation = z.infer<typeof modelAssociationSchema>;
 
+export function normalizeModelRoutingPolicyValue(value?: string | null): string {
+  if (!value || value === 'system_default') {
+    return 'default';
+  }
+
+  return value;
+}
+
 export const modelSettingsSchema = z.object({
+  disableDeveloperSettingsInheritance: z.boolean().optional().default(false),
   associations: z.array(modelAssociationSchema).optional().default([]),
+  loadBalancerStrategy: z.enum(['default', 'adaptive', 'failover', 'circuit-breaker', 'round-robin']).optional().default('default'),
+  traceStickyMode: z.enum(['default', 'disabled', 'prefer_previous_channel']).optional().default('default'),
 });
 export type ModelSettings = z.infer<typeof modelSettingsSchema>;
 
@@ -141,6 +177,9 @@ export const createModelInputSchema = z.object({
 export type CreateModelInput = z.infer<typeof createModelInputSchema>;
 
 export const updateModelInputSchema = z.object({
+  developer: z.string().min(1, 'Developer is required').optional(),
+  modelID: z.string().min(1, 'Model ID is required').optional(),
+  type: modelTypeSchema.optional(),
   name: z.string().min(1, 'Name is required').optional(),
   icon: z.string().min(1, 'Icon is required').optional(),
   group: z.string().min(1, 'Group is required').optional(),
